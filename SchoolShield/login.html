@@ -1,16 +1,105 @@
 <!doctype html>
-<html lang="en">
+<html>
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>SchoolShield — Sign In</title>
+    <title>SchoolShield — Sign in</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #062a34, #0a735a);
+            display: grid;
+            place-items: center
+        }
+
+        .auth {
+            width: min(430px, calc(100% - 30px));
+            background: #fff;
+            border-radius: 18px;
+            padding: 30px;
+            box-shadow: 0 25px 80px #0004
+        }
+
+        .auth-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 25px
+        }
+
+        .auth-brand img {
+            width: 46px
+        }
+
+        .auth-brand strong {
+            font-size: 20px
+        }
+
+        .auth h1 {
+            font-size: 24px;
+            margin: 0 0 6px
+        }
+
+        .auth p {
+            font-size: 11px;
+            color: #71838a;
+            line-height: 1.6
+        }
+
+        .auth label {
+            display: block;
+            font-size: 9px;
+            font-weight: 700;
+            margin: 17px 0 6px
+        }
+
+        .auth .select,
+        .auth .input {
+            padding: 12px
+        }
+
+        .auth .btn {
+            width: 100%;
+            margin-top: 20px;
+            padding: 12px
+        }
+
+        .demo {
+            margin-top: 14px;
+            background: #f3f8f6;
+            border-radius: 9px;
+            padding: 10px;
+            font-size: 9px;
+            color: #567
+        }
+    </style>
 </head>
 
-<body data-page="sign-in" data-role="principal" data-root="">
-    <div id="app"></div>
-    <script src="app.js"></script>
+<body>
+    <main class="auth">
+        <div class="auth-brand"><img src="assets/schoolshield-logo.png">
+            <div><strong>SchoolShield</strong><small style="display:block;color:#71838a;font-size:9px">School safety &
+                    management</small></div>
+        </div>
+        <h1>Welcome back</h1>
+        <p>Sign in to your role workspace. Access is controlled by your assigned role.</p>
+        <form id="loginForm"><label>Email address</label><input class="input" id="email" type="email" required
+                placeholder="name@school.co.za"><label>Password</label><input class="input" id="password"
+                type="password" required placeholder="••••••••"><label>Role</label><select class="select" id="role">
+                <option value="principal">Principal</option>
+                <option value="deputy">Deputy Principal</option>
+                <option value="sgb">SGB Member</option>
+                <option value="security">Security Officer</option>
+                <option value="parent">Parent / Guardian</option>
+                <option value="clerk">School Clerk</option>
+                <option value="teacher">Teacher</option>
+            </select><button class="btn primary" type="submit">Sign in</button></form>
+        <div class="demo">Prototype: choose any role to preview its permitted workspace. Sessions end when the tab is
+            closed.</div>
+    </main>
+    <script>document.getElementById('loginForm').addEventListener('submit', e => { e.preventDefault(); sessionStorage.setItem('schoolshieldRole', document.getElementById('role').value); location.href = 'dashboard.html' });</script>
 </body>
 
 </html>
