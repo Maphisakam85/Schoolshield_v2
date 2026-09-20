@@ -1,79 +1,51 @@
-<!doctype html>
-<html>
-
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>SchoolShield — Register</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        body {
-            min-height: 100vh;
-            background: linear-gradient(135deg, #062a34, #0a735a);
-            display: grid;
-            place-items: center
-        }
-
-        .auth {
-            width: min(520px, calc(100% - 30px));
-            background: #fff;
-            border-radius: 18px;
-            padding: 30px;
-            box-shadow: 0 25px 80px #0004
-        }
-
-        .auth-brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 20px
-        }
-
-        .auth-brand img {
-            width: 46px
-        }
-
-        .auth h1 {
-            font-size: 23px;
-            margin: 0 0 6px
-        }
-
-        .auth p {
-            font-size: 11px;
-            color: #71838a
-        }
-
-        .auth label {
-            display: block;
-            font-size: 9px;
-            font-weight: 700;
-            margin: 13px 0 6px
-        }
-
-        .form-grid {
-            margin-top: 12px
-        }
+        body { min-height: 100vh; background: linear-gradient(135deg, #062a34, #0a735a); display: grid; place-items: center }
+        .auth { width: min(520px, calc(100% - 30px)); background: #fff; border-radius: 18px; padding: 30px; box-shadow: 0 25px 80px #0004 }
+        .auth-brand { display:flex; align-items:center; gap:10px; margin-bottom:20px }.auth-brand img { width:46px }.auth h1 { font-size:23px; margin:0 0 6px }
+        .auth p { font-size:11px; color:#71838a; line-height:1.6 }.auth label { display:block; font-size:9px; font-weight:700; margin:13px 0 6px }.form-grid { margin-top:12px }
     </style>
 </head>
-
 <body>
     <main class="auth">
-        <div class="auth-brand"><img src="assets/schoolshield-logo.png"><b>SchoolShield</b></div>
+        <div class="auth-brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield logo"><b>SchoolShield</b></div>
         <h1>Create an account</h1>
-        <p>Account creation is followed by verification and role assignment by an authorised administrator.</p>
-        <div class="form-grid"><label>Full name<input class="input" placeholder="Full name"></label><label>Email<input
-                    class="input" placeholder="name@school.co.za"></label><label>Password<input class="input"
-                    type="password" placeholder="Create password"></label><label>Confirm password<input class="input"
-                    type="password" placeholder="Confirm password"></label><label>Requested role<select class="select">
-                    <option>Parent / Guardian</option>
-                    <option>Teacher</option>
-                    <option>School Clerk</option>
-                    <option>Security Officer</option>
-                </select></label></div><button class="btn primary" style="width:100%;margin-top:18px">Create
-            account</button>
-        <p style="text-align:center;margin-top:18px"><a href="login.html" style="color:#087550;font-weight:700">Back to
-                sign in</a></p>
+        <p>Tell us which school you belong to. An authorised school administrator must approve every membership and role request.</p>
+        <form class="form-grid" id="registrationForm">
+            <label>School name<input class="input" id="schoolName" required placeholder="e.g. Riverside Secondary School"></label>
+            <label>School code<input class="input" id="schoolCode" required placeholder="Provided by your school, e.g. RSS-001"></label>
+            <label>Full name<input class="input" id="fullName" required autocomplete="name" placeholder="Full name"></label>
+            <label>Email<input class="input" id="email" required type="email" autocomplete="email" placeholder="name@school.co.za"></label>
+            <label>Password<input class="input" id="password" required autocomplete="new-password" type="password" placeholder="Create password"></label>
+            <label>Confirm password<input class="input" id="confirmPassword" required autocomplete="new-password" type="password" placeholder="Confirm password"></label>
+            <label>Requested role<select class="select" id="requestedRole" required><option>Parent / Guardian</option><option>Teacher</option><option>School Clerk</option><option>Security Officer</option><option>SGB Member</option></select></label>
+        </form>
+        <button class="btn primary" id="createAccount" type="button" style="width:100%;margin-top:18px">Request account access</button>
+        <p style="text-align:center;margin-top:18px"><a href="login.html" style="color:#087550;font-weight:700">Back to sign in</a></p>
     </main>
+    <script>
+        document.getElementById('createAccount').addEventListener('click', () => {
+            const form = document.getElementById('registrationForm');
+            if (!form.reportValidity()) return;
+            if (document.getElementById('password').value !== document.getElementById('confirmPassword').value) return alert('The passwords do not match.');
+            const request = {
+                id: `REQ-${Date.now()}`,
+                schoolName: document.getElementById('schoolName').value.trim(), schoolCode: document.getElementById('schoolCode').value.trim().toUpperCase(),
+                name: document.getElementById('fullName').value.trim(), email: document.getElementById('email').value.trim().toLowerCase(),
+                requestedRole: document.getElementById('requestedRole').value, status: 'Pending school administrator approval', createdAt: new Date().toISOString()
+            };
+            const requests = JSON.parse(localStorage.getItem('schoolshieldMembershipRequests') || '[]');
+            requests.push(request);
+            localStorage.setItem('schoolshieldMembershipRequests', JSON.stringify(requests));
+            alert(`Account request received for ${request.schoolName} (${request.schoolCode}). An authorised administrator will verify your school membership and assign access.`);
+            location.href = 'login.html';
+        });
+    </script>
 </body>
-
 </html>

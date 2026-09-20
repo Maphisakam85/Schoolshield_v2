@@ -4,4 +4,4 @@ HTML/CSS/JS only. Every module is a real physical HTML page shared by roles. Rol
 
 Roles: Principal, Deputy Principal, SGB Member, Security Officer, Parent/Guardian, School Clerk, Teacher.
 
-Session behaviour: closing the browser tab ends the prototype session. Use the role selector on login to preview each permission set.
+Session behaviour: closing the browser tab ends the prototype session. Use one of the Botshabelo school codes and role-based demo emails listed in [demo-credentials.md](demo-credentials.md) to preview each permission set.
