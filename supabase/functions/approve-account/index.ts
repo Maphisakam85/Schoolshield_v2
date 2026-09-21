@@ -33,7 +33,8 @@ Deno.serve(async (request) => {
   const requestId = String(body.request_id || "");
   const approvedRole = String(body.role || "");
   const action = String(body.action || "approve");
-  if (!requestId || !["approve", "reject"].includes(action) || (action === "approve" && !["teacher", "security", "parent", "sgb", "deputy", "clerk", "principal"].includes(approvedRole))) {
+  const delivery = String(body.delivery || "email");
+  if (!requestId || !["approve", "reject"].includes(action) || !["email", "setup_link"].includes(delivery) || (action === "approve" && !["teacher", "security", "parent", "sgb", "deputy", "clerk", "principal"].includes(approvedRole))) {
     return json({ error: "A request and valid action are required" }, 400);
   }
 
@@ -73,17 +74,32 @@ Deno.serve(async (request) => {
     }
   } catch (_) { /* Fall back to the site's login path below. */ }
   if (!redirectTo && origin) redirectTo = `${origin}/login.html`;
-  const { data: invite, error: inviteError } = await admin.auth.admin.inviteUserByEmail(pending.email, {
+  const inviteOptions = {
     data: { display_name: pending.display_name, school_code: school.code, school_name: school.name },
     redirectTo,
-  });
-  if (inviteError || !invite.user) return json({ error: inviteError?.message || "Could not send invite" }, 400);
+  };
+  let invitedUser;
+  let setupLink: string | undefined;
+  if (delivery === "setup_link") {
+    const { data: generated, error: generateError } = await admin.auth.admin.generateLink({
+      type: "invite",
+      email: pending.email,
+      options: inviteOptions,
+    });
+    if (generateError || !generated.user || !generated.properties?.action_link) return json({ error: generateError?.message || "Could not create a setup link" }, 400);
+    invitedUser = generated.user;
+    setupLink = generated.properties.action_link;
+  } else {
+    const { data: invite, error: inviteError } = await admin.auth.admin.inviteUserByEmail(pending.email, inviteOptions);
+    if (inviteError || !invite.user) return json({ error: inviteError?.message || "Could not send invite" }, 400);
+    invitedUser = invite.user;
+  }
 
-  await admin.auth.admin.updateUserById(invite.user.id, {
+  await admin.auth.admin.updateUserById(invitedUser.id, {
     app_metadata: { school_code: school.code, role: approvedRole },
   });
   const { error: profileError } = await admin.from("profiles").upsert({
-    id: invite.user.id,
+    id: invitedUser.id,
     school_id: pending.school_id,
     role: approvedRole,
     display_name: pending.display_name,
@@ -98,5 +114,5 @@ Deno.serve(async (request) => {
   }).eq("id", pending.id);
   await admin.from("account_request_notifications").update({ read_at: new Date().toISOString() }).eq("request_id", pending.id);
 
-  return json({ ok: true, message: "Account approved. An invitation email has been sent." });
+  return json({ ok: true, setup_link: setupLink, message: delivery === "setup_link" ? "Account approved. Open the setup link to complete onboarding." : "Account approved. An invitation email has been sent." });
 });

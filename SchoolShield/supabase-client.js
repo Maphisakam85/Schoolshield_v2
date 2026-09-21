@@ -7,4 +7,4 @@ if (window.SCHOOLSHIELD_SUPABASE_CONFIG && window.supabase) {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
     });
   }
-}
+}                                                                                                                                                      

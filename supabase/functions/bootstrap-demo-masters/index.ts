@@ -21,6 +21,12 @@ function secretKey() {
 Deno.serve(async (request) => {
   if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { auth: { autoRefreshToken: false, persistSession: false } });
+  const token = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "");
+  if (!token) return Response.json({ error: "Sign in is required" }, { status: 401 });
+  const { data: authData, error: authError } = await admin.auth.getUser(token);
+  if (authError || !authData.user) return Response.json({ error: "Invalid session" }, { status: 401 });
+  const { data: caller } = await admin.from("profiles").select("role").eq("id", authData.user.id).maybeSingle();
+  if (caller?.role !== "principal") return Response.json({ error: "Only a principal can provision demonstration accounts" }, { status: 403 });
   const { data: userPage } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
   const usersByEmail = new Map((userPage?.users || []).map((user) => [user.email?.toLowerCase(), user]));
   const { data: schoolRows } = await admin.from("schools").select("id, code");

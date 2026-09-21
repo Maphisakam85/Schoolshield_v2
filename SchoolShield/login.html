@@ -139,7 +139,7 @@
           placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
           type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
           class="input" id="password" autocomplete="current-password" type="password" required
-          placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button></form>
+          placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button><button class="btn ghost" id="showForgotPassword" type="button">Forgot password?</button></form>
     <form id="requestForm" hidden><label>Choose your school<select class="input" id="requestSchoolCode" required>
           <option value="">Loading schools…</option>
         </select></label><label>Full name<input class="input" id="requestName" required autocomplete="name"
@@ -160,6 +160,20 @@
           id="invitePassword" type="password" autocomplete="new-password" minlength="8" required></label><button
         class="btn primary" type="submit">Complete setup</button>
     </form>
+    <form id="forgotPasswordForm" hidden>
+      <p class="demo">Enter your account email and we will send a secure password-reset link. For privacy, the same
+        confirmation is shown whether or not the email is registered.</p>
+      <label>Email address<input class="input" id="forgotPasswordEmail" type="email" required autocomplete="email"
+          placeholder="Your account email"></label><button class="btn primary" type="submit">Send reset link</button><button
+        class="btn ghost" id="cancelForgotPassword" type="button">Back to sign in</button>
+    </form>
+    <form id="resetPasswordForm" hidden>
+      <p class="demo"><b>Choose a new password.</b> This reset link is temporary and can only be used once.</p>
+      <label>New password<input class="input" id="resetPassword" type="password" required autocomplete="new-password"
+          minlength="8" placeholder="At least 8 characters"></label><label>Confirm new password<input class="input"
+          id="resetPasswordConfirm" type="password" required autocomplete="new-password" minlength="8"
+          placeholder="Repeat your new password"></label><button class="btn primary" type="submit">Reset password</button>
+    </form>
     <div class="demo"><b>Initial school administrators</b><br><code>principal@&lt;school-domain&gt;</code> and
       <code>clerk@&lt;school-domain&gt;</code><br>Prototype password: <b>Test@123</b>. Change it after first sign-in.
     </div>
@@ -178,16 +192,21 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-client.js"></script>
   <script>
-    const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), inviteForm = document.getElementById('inviteForm');
-    const show = form => { loginForm.hidden = form !== loginForm; requestForm.hidden = form !== requestForm; inviteForm.hidden = form !== inviteForm; document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
+    const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), inviteForm = document.getElementById('inviteForm'), forgotPasswordForm = document.getElementById('forgotPasswordForm'), resetPasswordForm = document.getElementById('resetPasswordForm');
+    const show = form => { [loginForm, requestForm, inviteForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
     document.getElementById('showLogin').onclick = () => show(loginForm); document.getElementById('showRequest').onclick = () => show(requestForm);
     const showError = (message, ok = false) => { errorBox.style.color = ok ? '#087443' : '#b42318'; errorBox.textContent = message; errorBox.style.display = 'block' };
     async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,school:schools(id,code,name)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
     loginForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); try { const schoolCode = document.getElementById('schoolCode').value.trim().toUpperCase(), { data, error } = await client.auth.signInWithPassword({ email: document.getElementById('email').value.trim().toLowerCase(), password: document.getElementById('password').value }); if (error || !data.user) throw new Error(error?.message || 'Sign-in failed.'); await createSession(data.user, schoolCode); location.href = 'dashboard.html' } catch (err) { showError(err.message || 'We could not sign you in.') } };
+    document.getElementById('showForgotPassword').onclick = () => show(forgotPasswordForm); document.getElementById('cancelForgotPassword').onclick = () => show(loginForm);
+    forgotPasswordForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); const redirectTo = `${location.origin}${location.pathname}`; const { error } = await client.auth.resetPasswordForEmail(document.getElementById('forgotPasswordEmail').value.trim().toLowerCase(), { redirectTo }); if (error) return showError(error.message); forgotPasswordForm.reset(); show(loginForm); showError('If that email belongs to an account, a password-reset link has been sent.', true) };
+    resetPasswordForm.onsubmit = async event => { event.preventDefault(); const password = document.getElementById('resetPassword').value, confirmation = document.getElementById('resetPasswordConfirm').value; if (password !== confirmation) return showError('The passwords do not match.'); const { error } = await client.auth.updateUser({ password }); if (error) return showError(error.message); await client.auth.signOut(); history.replaceState({}, document.title, location.pathname); resetPasswordForm.reset(); show(loginForm); showError('Password reset successfully. Sign in with your new password.', true) };
     requestForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); const { error } = await client.rpc('request_school_account', { p_school_code: document.getElementById('requestSchoolCode').value.trim().toUpperCase(), p_display_name: document.getElementById('requestName').value.trim(), p_email: document.getElementById('requestEmail').value.trim().toLowerCase(), p_requested_role: document.getElementById('requestRole').value }); if (error) return showError(error.message); requestForm.reset(); document.getElementById('requestSuccessModal').hidden = false };
     document.getElementById('closeRequestSuccess').onclick = () => { document.getElementById('requestSuccessModal').hidden = true; show(loginForm); showError('Request submitted. Sign in after you receive your approval invitation.', true) };
     client?.rpc('list_school_signup_options').then(({ data, error }) => { const select = document.getElementById('requestSchoolCode'); if (error || !data) { select.innerHTML = '<option value="">Schools are unavailable</option>'; return } select.innerHTML = '<option value="">Select your school</option>' + data.map(school => `<option value="${school.code}">${school.name}</option>`).join('') });
-    client?.auth.getSession().then(async ({ data: { session } }) => { if (session && /type=invite|access_token/.test(location.hash + location.search)) { const { data: { user } } = await client.auth.getUser(); document.getElementById('inviteName').value = user?.user_metadata?.display_name || ''; show(inviteForm) } });
+    const recoveryUrl = () => /type=recovery/.test(location.hash + location.search);
+    client?.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY' && session) show(resetPasswordForm) });
+    client?.auth.getSession().then(async ({ data: { session } }) => { if (!session) return; if (recoveryUrl()) return show(resetPasswordForm); if (/type=invite/.test(location.hash + location.search)) { const { data: { user } } = await client.auth.getUser(); document.getElementById('inviteName').value = user?.user_metadata?.display_name || ''; show(inviteForm) } });
     inviteForm.onsubmit = async event => { event.preventDefault(); const { error: passwordError } = await client.auth.updateUser({ password: document.getElementById('invitePassword').value }); if (passwordError) return showError(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('inviteName').value.trim(), p_phone: document.getElementById('invitePhone').value.trim(), p_address: document.getElementById('inviteAddress').value.trim(), p_emergency_contact: document.getElementById('inviteEmergency').value.trim() }); if (profileError) return showError(profileError.message); await client.auth.signOut(); show(loginForm); showError('Account setup is complete. Sign in with your email, password and school code.', true) };
   </script>
 </body>

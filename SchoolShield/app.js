@@ -16,40 +16,19 @@ const ROLE_NAMES = {
   teacher: "Teacher",
 };
 
-/* The person behind each role in this prototype. Ownership rules (which class
- * a teacher owns, which learner a parent is linked to) use these names. */
-const USER_NAME = {
-  principal: "Ms Mokoena",
-  deputy: "Mr Naidoo",
-  sgb: "Mr Pillay",
-  security: "Sello Ndlovu",
-  parent: "Thabo Molefe",
-  clerk: "Lerato Jacobs",
-  teacher: "Mpho Mokoena",
-};
-
-const DEFAULT_SCHOOL = {
-  name: "Riverside Secondary School",
-  code: "RSS-001",
-  principal: "Ms Mokoena",
-};
-
-/* A signed-in person works within exactly one school tenant. This browser
- * prototype keeps each school's demo data under a separate storage key. A
- * deployed version must apply the same school boundary on the server. */
+/* A signed-in person works within exactly one Supabase school tenant. */
 function activeSchool() {
   try {
     const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
     if (session?.schoolCode && session?.schoolName) {
-      return { ...DEFAULT_SCHOOL, name: session.schoolName, code: session.schoolCode };
+      return { name: session.schoolName, code: session.schoolCode };
     }
-  } catch (err) { /* Fall back to the original demo school. */ }
-  return DEFAULT_SCHOOL;
+  } catch (err) { /* The sign-in guard redirects before any workspace is rendered. */ }
+  return { name: "", code: "" };
 }
 let SCHOOL = activeSchool();
 
 const TERM = "Term 2";
-const SEED_VERSION = 12;
 
 /* ------------------------------ permissions ------------------------------
  * Leadership deliberately does NOT carry "student-records" (the flat editable
@@ -192,872 +171,18 @@ const ICON = {
   settings: "⚙", megaphone: "📣", medical: "✚", calendar: "▣",
   folder: "🗂", record: "📄", scores: "▥", chat: "💬",
 };
-/* ------------------------------ seed data -------------------------------- */
-const seed = {
-  classes: [
-    {
-      id: "5A",
-      grade: "Grade 5",
-  teacher: "Joseph Mabaso",
-      room: "Block B · B12",
-    },
-    {
-      id: "5B",
-      grade: "Grade 5",
-      teacher: "Rachel Sithole",
-      room: "Block B · B14",
-    },
-    {
-      id: "8A",
-      grade: "Grade 8",
-      teacher: "Joseph Mabaso",
-      room: "Block C · C03",
-    },
-    {
-      id: "8B",
-      grade: "Grade 8",
-      teacher: "Thandi Dube",
-      room: "Block C · C05",
-    },
-    {
-      id: "10A",
-      grade: "Grade 10",
-      teacher: "Naledi Khumalo",
-      room: "Block D · D01",
-    },
-    {
-      id: "10C",
-      grade: "Grade 10",
-      teacher: "Peter Naidoo",
-      room: "Block D · D06",
-    },
-  ],
-  learners: [
-    {
-      id: "STU-1001",
-      name: "Amogelang Mokoena",
-      grade: "Grade 5",
-      class: "5A",
-      parent: "Thabo Molefe",
-      relation: "Father",
-      phone: "082 555 0101",
-      attendance: 96,
-      average: 78,
-      status: "Active",
-    },
-    {
-      id: "STU-1002",
-      name: "Lethabo Dube",
-      grade: "Grade 5",
-      class: "5A",
-      parent: "Naledi Dube",
-      relation: "Mother",
-      phone: "082 555 0102",
-      attendance: 94,
-      average: 71,
-      status: "Active",
-    },
-    {
-      id: "STU-1005",
-      name: "Siyabonga Zulu",
-      grade: "Grade 5",
-      class: "5A",
-      parent: "Grace Zulu",
-      relation: "Guardian",
-      phone: "082 555 0105",
-      attendance: 88,
-      average: 64,
-      status: "Active",
-    },
-    {
-      id: "STU-1006",
-      name: "Ayanda Nkosi",
-      grade: "Grade 5",
-      class: "5B",
-      parent: "Themba Nkosi",
-      relation: "Father",
-      phone: "082 555 0106",
-      attendance: 92,
-      average: 69,
-      status: "Active",
-    },
-    {
-      id: "STU-1007",
-      name: "Refilwe Sithole",
-      grade: "Grade 5",
-      class: "5B",
-      parent: "Rachel Sithole",
-      relation: "Mother",
-      phone: "082 555 0107",
-      attendance: 97,
-      average: 84,
-      status: "Active",
-    },
-    {
-      id: "STU-1008",
-      name: "Kagiso Mahlangu",
-      grade: "Grade 5",
-      class: "5B",
-      parent: "Bongani Mahlangu",
-      relation: "Father",
-      phone: "082 555 0108",
-      attendance: 74,
-      average: 47,
-      status: "At Risk",
-    },
-    {
-      id: "STU-1009",
-      name: "Lerato Mgcina",
-      grade: "Grade 8",
-      class: "8A",
-      parent: "Zanele Mgcina",
-      relation: "Mother",
-      phone: "082 555 0109",
-      attendance: 95,
-      average: 76,
-      status: "Active",
-    },
-    {
-      id: "STU-1010",
-      name: "Tebogo Radebe",
-      grade: "Grade 8",
-      class: "8A",
-      parent: "Sipho Radebe",
-      relation: "Father",
-      phone: "082 555 0110",
-      attendance: 90,
-      average: 66,
-      status: "Active",
-    },
-    {
-      id: "STU-1011",
-      name: "Naledi Sithole",
-      grade: "Grade 8",
-      class: "8A",
-      parent: "Joseph Sithole",
-      relation: "Guardian",
-      phone: "082 555 0111",
-      attendance: 86,
-      average: 58,
-      status: "Active",
-    },
-    {
-      id: "STU-1003",
-      name: "Karabo Ndlovu",
-      grade: "Grade 8",
-      class: "8B",
-      parent: "Sipho Ndlovu",
-      relation: "Father",
-      phone: "082 555 0103",
-      attendance: 93,
-      average: 72,
-      status: "Active",
-    },
-    {
-      id: "STU-1012",
-      name: "Owethu Jacobs",
-      grade: "Grade 8",
-      class: "8B",
-      parent: "Lerato Jacobs",
-      relation: "Mother",
-      phone: "082 555 0112",
-      attendance: 91,
-      average: 69,
-      status: "Active",
-    },
-    {
-      id: "STU-1013",
-      name: "Mandla Xaba",
-      grade: "Grade 8",
-      class: "8B",
-      parent: "Nomsa Xaba",
-      relation: "Mother",
-      phone: "082 555 0113",
-      attendance: 79,
-      average: 44,
-      status: "At Risk",
-    },
-    {
-      id: "STU-1004",
-      name: "Neo Maseko",
-      grade: "Grade 10",
-      class: "10A",
-      parent: "Mpho Maseko",
-      relation: "Father",
-      phone: "082 555 0104",
-      attendance: 96,
-      average: 81,
-      status: "Active",
-    },
-    {
-      id: "STU-1014",
-      name: "Zanele Khumalo",
-      grade: "Grade 10",
-      class: "10A",
-      parent: "Naledi Khumalo",
-      relation: "Mother",
-      phone: "082 555 0114",
-      attendance: 94,
-      average: 74,
-      status: "Active",
-    },
-    {
-      id: "STU-1015",
-      name: "Rethabile Mokoena",
-      grade: "Grade 10",
-      class: "10A",
-      parent: "Thato Mokoena",
-      relation: "Guardian",
-      phone: "082 555 0115",
-      attendance: 89,
-      average: 63,
-      status: "Active",
-    },
-    {
-      id: "STU-1016",
-      name: "Sanele Dlamini",
-      grade: "Grade 10",
-      class: "10C",
-      parent: "Lerato Dlamini",
-      relation: "Mother",
-      phone: "082 555 0116",
-      attendance: 92,
-      average: 70,
-      status: "Active",
-    },
-    {
-      id: "STU-1017",
-      name: "Katlego Naidoo",
-      grade: "Grade 10",
-      class: "10C",
-      parent: "Peter Naidoo",
-      relation: "Father",
-      phone: "082 555 0117",
-      attendance: 90,
-      average: 68,
-      status: "Active",
-    },
-    {
-      id: "STU-1018",
-      name: "Ntombi Sithole",
-      grade: "Grade 10",
-      class: "10C",
-      parent: "Andile Sithole",
-      relation: "Father",
-      phone: "082 555 0118",
-      attendance: 83,
-      average: 55,
-      status: "Active",
-    },
-  ],
-  assessments: [
-    {
-      id: "ASM-501",
-      class: "5A",
-      grade: "Grade 5",
-      subject: "Mathematics",
-      title: "Test 2",
-      term: "Term 2",
-      date: "05 Sep 2026",
-      status: "submitted",
-      submittedBy: "Mpho Mokoena",
-      scores: { "STU-1001": 82, "STU-1002": 74, "STU-1005": 63 },
-    },
-    {
-      id: "ASM-502",
-      class: "5B",
-      grade: "Grade 5",
-      subject: "Natural Sciences",
-      title: "Test 1",
-      term: "Term 2",
-      date: "04 Sep 2026",
-      status: "submitted",
-      submittedBy: "Rachel Sithole",
-      scores: { "STU-1006": 68, "STU-1007": 86, "STU-1008": 45 },
-    },
-    {
-      id: "ASM-801",
-      class: "8A",
-      grade: "Grade 8",
-      subject: "Mathematics",
-      title: "Test 1",
-      term: "Term 2",
-      date: "03 Sep 2026",
-      status: "submitted",
-      submittedBy: "Joseph Mabaso",
-      scores: { "STU-1009": 77, "STU-1010": 65, "STU-1011": 57 },
-    },
-    {
-      id: "ASM-802",
-      class: "8B",
-      grade: "Grade 8",
-      subject: "Mathematics",
-      title: "Test 2",
-      term: "Term 2",
-      date: "—",
-      status: "draft",
-      submittedBy: "Thandi Dube",
-      scores: { "STU-1003": 71, "STU-1012": 68, "STU-1013": 43 },
-    },
-    {
-      id: "ASM-1001",
-      class: "10A",
-      grade: "Grade 10",
-      subject: "Life Sciences",
-      title: "Test 1",
-      term: "Term 2",
-      date: "02 Sep 2026",
-      status: "submitted",
-      submittedBy: "Naledi Khumalo",
-      scores: { "STU-1004": 83, "STU-1014": 75, "STU-1015": 62 },
-    },
-    {
-      id: "ASM-1002",
-      class: "10C",
-      grade: "Grade 10",
-      subject: "Mathematics",
-      title: "Test 2",
-      term: "Term 2",
-      date: "01 Sep 2026",
-      status: "submitted",
-      submittedBy: "Peter Naidoo",
-      scores: { "STU-1016": 71, "STU-1017": 67, "STU-1018": 54 },
-    },
-  ],
-  reports: [
-    {
-      id: "RPT-5A-T2",
-      class: "5A",
-      grade: "Grade 5",
-      term: "Term 2",
-      status: "compiled",
-      marksSubmittedOn: "05 Sep 2026",
-      compiledOn: "08 Sep 2026",
-      finalisedOn: "",
-      publishedOn: "",
-    },
-    {
-      id: "RPT-5B-T2",
-      class: "5B",
-      grade: "Grade 5",
-      term: "Term 2",
-      status: "awaiting-marks",
-      marksSubmittedOn: "",
-      compiledOn: "",
-      finalisedOn: "",
-      publishedOn: "",
-    },
-    {
-      id: "RPT-8A-T2",
-      class: "8A",
-      grade: "Grade 8",
-      term: "Term 2",
-      status: "compiled",
-      marksSubmittedOn: "03 Sep 2026",
-      compiledOn: "09 Sep 2026",
-      finalisedOn: "",
-      publishedOn: "",
-    },
-    {
-      id: "RPT-8B-T2",
-      class: "8B",
-      grade: "Grade 8",
-      term: "Term 2",
-      status: "awaiting-marks",
-      marksSubmittedOn: "",
-      compiledOn: "",
-      finalisedOn: "",
-      publishedOn: "",
-    },
-    {
-      id: "RPT-10A-T2",
-      class: "10A",
-      grade: "Grade 10",
-      term: "Term 2",
-      status: "finalised",
-      marksSubmittedOn: "02 Sep 2026",
-      compiledOn: "07 Sep 2026",
-      finalisedOn: "10 Sep 2026",
-      publishedOn: "",
-    },
-    {
-      id: "RPT-10C-T2",
-      class: "10C",
-      grade: "Grade 10",
-      term: "Term 2",
-      status: "published",
-      marksSubmittedOn: "01 Sep 2026",
-      compiledOn: "06 Sep 2026",
-      finalisedOn: "09 Sep 2026",
-      publishedOn: "12 Sep 2026",
-    },
-  ],
-  announcements: [
-    {
-      id: "ANN-2041",
-      title: "Parent meeting schedule",
-      audience: "All parents",
-      recipients: 18,
-      delivery: "In-app + SMS",
-      author: "Ms Mokoena",
-      date: "14 Sep 2026",
-    },
-    {
-      id: "ANN-2040",
-      title: "Grade 5 safety briefing",
-      audience: "Grade 5 parents",
-      recipients: 6,
-      delivery: "In-app notification",
-      author: "Ms Mokoena",
-      date: "13 Sep 2026",
-    },
-    {
-      id: "ANN-2039",
-      title: "Staff development day",
-      audience: "All staff",
-      recipients: 12,
-      delivery: "In-app notification",
-      author: "Ms Mokoena",
-      date: "11 Sep 2026",
-    },
-  ],
-  visitors: [
-    {
-      id: "VIS-1042",
-      name: "Thabo Molefe",
-      host: "Ms Mokoena",
-      purpose: "Parent meeting",
-      in: "08:12",
-      out: "—",
-      status: "Inside",
-      type: "Parent",
-    },
-    {
-      id: "VIS-1041",
-      name: "Lerato Dlamini",
-      host: "Mr Naidoo",
-      purpose: "Delivery",
-      in: "08:05",
-      out: "09:03",
-      status: "Checked Out",
-      type: "Service Provider",
-    },
-    {
-      id: "VIS-1040",
-      name: "Mpho Khumalo",
-      host: "Mrs Jacobs",
-      purpose: "Appointment",
-      in: "07:54",
-      out: "—",
-      status: "Inside",
-      type: "Visitor",
-    },
-    {
-      id: "VIS-1039",
-      name: "Sipho Ndlovu",
-      host: "Admin Office",
-      purpose: "Document collection",
-      in: "07:40",
-      out: "08:25",
-      status: "Checked Out",
-      type: "Visitor",
-    },
-  ],
-  incidents: [
-    {
-      id: "INC-2026-018",
-      date: "10 Sep 2026",
-      time: "10:18",
-      category: "Safety",
-      location: "Main Gate",
-      priority: "High",
-      status: "Open",
-      officer: "S Ndlovu",
-      description: "Unidentified vehicle stopped at the entrance.",
-    },
-    {
-      id: "INC-2026-017",
-      date: "10 Sep 2026",
-      time: "09:42",
-      category: "Medical",
-      location: "Grade 5 Block",
-      priority: "Medium",
-      status: "Under Investigation",
-      officer: "T Mokoena",
-      description: "Learner reported feeling unwell.",
-    },
-    {
-      id: "INC-2026-016",
-      date: "09 Sep 2026",
-      time: "14:20",
-      category: "Security",
-      location: "Sports Field",
-      priority: "Critical",
-      status: "Resolved",
-      officer: "P Dube",
-      description: "Gate access alarm triggered.",
-    },
-  ],
-  notifications: [
-    {
-      id: "NTF-8841",
-      time: "10:18",
-      category: "Emergency",
-      priority: "Critical",
-      title: "Security alert",
-      description: "Unidentified vehicle stopped at the entrance.",
-      read: false,
-    },
-    {
-      id: "NTF-8840",
-      time: "09:42",
-      category: "Incident",
-      priority: "High",
-      title: "Medical incident reported",
-      description: "Assistance requested at Grade 5 Block.",
-      read: false,
-    },
-    {
-      id: "NTF-8839",
-      time: "08:55",
-      category: "Visitor",
-      priority: "Medium",
-      title: "Visitor overstay",
-      description: "VIS-1042 has remained on campus for an extended period.",
-      read: true,
-    },
-  ],
-  staff: [
-    {
-      id: "EMP-001",
-      name: "Mpho Mokoena",
-      role: "Teacher",
-      department: "Grade 5 · 5A",
-      status: "Active",
-    },
-    {
-      id: "EMP-002",
-      name: "Thandi Dube",
-      role: "Teacher",
-      department: "Grade 8 · 8B",
-      status: "Active",
-    },
-    {
-      id: "EMP-003",
-      name: "Rachel Sithole",
-      role: "Teacher",
-      department: "Grade 5 · 5B",
-      status: "Active",
-    },
-    {
-      id: "EMP-004",
-      name: "Joseph Mabaso",
-      role: "Teacher",
-      department: "Grade 8 · 8A",
-      status: "Active",
-    },
-    {
-      id: "EMP-005",
-      name: "Naledi Khumalo",
-      role: "Teacher",
-      department: "Grade 10 · 10A",
-      status: "Active",
-    },
-    {
-      id: "EMP-006",
-      name: "Peter Naidoo",
-      role: "Teacher",
-      department: "Grade 10 · 10C",
-      status: "Active",
-    },
-    {
-      id: "EMP-007",
-      name: "Sello Ndlovu",
-      role: "Security Officer",
-      department: "Security",
-      status: "Active",
-    },
-    {
-      id: "EMP-008",
-      name: "Lerato Jacobs",
-      role: "Clerk",
-      department: "Administration",
-      status: "Active",
-    },
-  ],
-  security: [
-    {
-      id: "SEC-001",
-      name: "Sello Ndlovu",
-      employee: "EMP-031",
-      shift: "06:00–14:00",
-      site: "Main Gate",
-      status: "On Duty",
-    },
-    {
-      id: "SEC-002",
-      name: "Thato Mokoena",
-      employee: "EMP-032",
-      shift: "14:00–22:00",
-      site: "Main Gate",
-      status: "Scheduled",
-    },
-    {
-      id: "SEC-003",
-      name: "Palesa Dube",
-      employee: "EMP-033",
-      shift: "06:00–14:00",
-      site: "Sports Field",
-      status: "On Duty",
-    },
-  ],
-  sickNotices: [
-    {
-      id: "SN-3301",
-      submittedBy: "Thabo Molefe",
-      person: "Amogelang Mokoena",
-      date: "10 Sep 2026",
-      reason: "Medical appointment",
-      status: "Open",
-    },
-    {
-      id: "SN-3300",
-      submittedBy: "Mpho Mokoena",
-      person: "Mpho Mokoena",
-      date: "09 Sep 2026",
-      reason: "Illness",
-      status: "Resolved",
-    },
-  ],
-  appointments: [
-    {
-      id: "APT-501",
-      title: "Parent meeting",
-      with: "Ms Mokoena",
-      date: "11 Sep 2026",
-      time: "10:00",
-      status: "Scheduled",
-    },
-    {
-      id: "APT-502",
-      title: "SGB safety review",
-      with: "Principal",
-      date: "12 Sep 2026",
-      time: "14:00",
-      status: "Scheduled",
-    },
-    {
-      id: "APT-503",
-      title: "Learner support",
-      with: "Grade 5 Team",
-      date: "13 Sep 2026",
-      time: "09:30",
-      status: "Open",
-    },
-  ],
-  teacherChat: [
-    {
-      id: "Mpho Mokoena",
-      role: "Teacher · Grade 5A",
-      initials: "MM",
-      messages: [
-        {
-          from: "them",
-          text: "Good morning. The 5A mathematics marks have been submitted to the clerk.",
-        },
-        {
-          from: "me",
-          text: "Thank you, Ms Mokoena. I will review the class summary before the report is finalised.",
-        },
-      ],
-    },
-    {
-      id: "Thandi Dube",
-      role: "Teacher · Grade 8B",
-      initials: "TD",
-      messages: [
-        {
-          from: "them",
-          text: "Grade 8B mathematics test is written, marks still being captured.",
-        },
-      ],
-    },
-    {
-      id: "Rachel Sithole",
-      role: "Teacher · Grade 5B",
-      initials: "RS",
-      messages: [
-        {
-          from: "them",
-          text: "Learner attendance for 5B has improved this week.",
-        },
-      ],
-    },
-  ],
-  parentChat: [
-    {
-      id: "Thabo Molefe",
-      role: "Parent · Amogelang Mokoena (5A)",
-      initials: "TM",
-      messages: [
-        {
-          from: "them",
-          text: "Good morning. Could we discuss the latest mathematics assessment?",
-        },
-        {
-          from: "me",
-          text: "Of course. The Term 2 report will be available here once it is published.",
-        },
-      ],
-    },
-    {
-      id: "Naledi Dube",
-      role: "Parent · Lethabo Dube (5A)",
-      initials: "ND",
-      messages: [
-        {
-          from: "them",
-          text: "Thank you for the update on the reading programme.",
-        },
-      ],
-    },
-    {
-      id: "Grace Zulu",
-      role: "Guardian · Siyabonga Zulu (5A)",
-      initials: "GZ",
-      messages: [],
-    },
-  ],
-};
-
-/* A usable senior-school register: Grades 8–12 each have two classes and at
- * least fifteen learners per class. Keeping this generated data beside the
- * seed makes every role view, KPI and class calculation use the same register. */
-const SENIOR_CLASS_SEED = [
-  ["8A", "Grade 8", "Mpho Mokoena", "Block C · C03"],
-  ["8B", "Grade 8", "Thandi Dube", "Block C · C05"],
-  ["9A", "Grade 9", "Zinhle Mthembu", "Block C · C08"],
-  ["9B", "Grade 9", "Sibusiso Ndlovu", "Block C · C10"],
-  ["10A", "Grade 10", "Naledi Khumalo", "Block D · D01"],
-  ["10C", "Grade 10", "Peter Naidoo", "Block D · D06"],
-  ["11A", "Grade 11", "Lindiwe Dlamini", "Block D · D09"],
-  ["11B", "Grade 11", "Kagiso Molefe", "Block D · D11"],
-  ["12A", "Grade 12", "Nompilo Zulu", "Block E · E02"],
-  ["12B", "Grade 12", "Themba Radebe", "Block E · E04"],
-];
-const SAMPLE_FIRST_NAMES = [
-  "Anele", "Banele", "Cebisa", "Dineo", "Enhle", "Fikile", "Gontse", "Hlumelo", "Inathi", "Jabulani", "Keletso", "Lerato", "Mandla", "Nandi", "Onalenna",
-];
-const SAMPLE_SURNAMES = ["Mokoena", "Dube", "Zulu", "Nkosi", "Mahlangu", "Mgcina", "Radebe", "Ndlovu", "Xaba", "Khumalo", "Maseko", "Dlamini", "Naidoo", "Sithole", "Molefe"];
-/* This is a senior-school workspace: remove all primary-grade records before
- * the shared class register is expanded. */
-const isSeniorGrade = (item) => Number(String(item.grade || "").replace(/\D/g, "")) >= 8;
-seed.classes = seed.classes.filter(isSeniorGrade);
-seed.learners = seed.learners.filter(isSeniorGrade);
-seed.assessments = seed.assessments.filter(isSeniorGrade);
-seed.reports = seed.reports.filter(isSeniorGrade);
-seed.announcements = seed.announcements.filter((item) => !item.audience.includes("Grade 5"));
-seed.staff = seed.staff.filter((item) => !item.department.includes("Grade 5"));
-seed.sickNotices = seed.sickNotices.filter((item) => !["Amogelang Mokoena", "Mpho Mokoena"].includes(item.person));
-seed.appointments = seed.appointments.filter((item) => !item.with.includes("Grade 5"));
-seed.incidents = seed.incidents.filter((item) => !item.location.includes("Grade 5"));
-seed.notifications = seed.notifications.filter((item) => !item.description.includes("Grade 5"));
-for (const [id, grade, teacher, room] of SENIOR_CLASS_SEED) {
-  if (!seed.classes.some((schoolClass) => schoolClass.id === id))
-    seed.classes.push({ id, grade, teacher, room });
-  const current = seed.learners.filter((learner) => learner.class === id).length;
-  for (let index = current; index < 15; index += 1) {
-    const sequence = seed.learners.length + 1200;
-    const firstName = SAMPLE_FIRST_NAMES[(sequence + index) % SAMPLE_FIRST_NAMES.length];
-    const surname = SAMPLE_SURNAMES[(sequence * 3 + index) % SAMPLE_SURNAMES.length];
-    const name = `${firstName} ${surname}`;
-    seed.learners.push({
-      id: `STU-${sequence}`,
-      name,
-      grade,
-      class: id,
-      parent: `${SAMPLE_FIRST_NAMES[(sequence + 5) % SAMPLE_FIRST_NAMES.length]} ${surname}`,
-      relation: index % 3 === 0 ? "Guardian" : index % 2 === 0 ? "Father" : "Mother",
-      phone: `082 555 ${String(sequence).slice(-4)}`,
-      attendance: 78 + ((sequence * 7) % 21),
-      average: 45 + ((sequence * 11) % 46),
-      status: index % 7 === 0 ? "At Risk" : "Active",
-    });
-  }
-}
-/* Keep the demo parent linked to a real Grade 8 learner. */
-if (seed.learners[0]) seed.learners[0].parent = "Thabo Molefe";
-seed.learners.forEach((learner) => {
-  learner.attendanceDays = 60;
-  learner.initialAbsentDays = Math.round(((100 - learner.attendance) / 100) * learner.attendanceDays);
-  learner.absentDays = learner.initialAbsentDays;
-});
-seed.attendanceRegisters = [];
-for (const [, grade, teacher] of SENIOR_CLASS_SEED) {
-  if (!seed.staff.some((member) => member.name === teacher))
-    seed.staff.push({
-      id: `EMP-${String(seed.staff.length + 1).padStart(3, "0")}`,
-      name: teacher,
-      role: "Teacher",
-      department: `${grade} · ${SENIOR_CLASS_SEED.find((item) => item[2] === teacher)[0]}`,
-      status: "Active",
-    });
-}
+/* -------------------------- workspace data source ------------------------- */
+// Operational data is loaded from and saved to Supabase. The empty shape only
+// protects a newly created, as-yet-unpopulated school workspace.
+const WORKSPACE_VERSION = 13;
 const SUBJECTS_BY_PHASE = {
   junior: ["Mathematics", "Natural Sciences", "English", "Sesotho", "Social Sciences", "Technology", "Life Orientation"],
   senior: ["Mathematics", "Physics", "Life Sciences", "Sesotho", "English", "Life Orientation", "Computer Applications Technology", "History"],
 };
-for (const schoolClass of seed.classes.filter(isSeniorGrade)) {
-  const gradeNumber = Number(schoolClass.grade.replace(/\D/g, ""));
-  const subjects = gradeNumber <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
-  for (const subject of subjects) {
-    if (seed.assessments.some((assessment) => assessment.class === schoolClass.id && assessment.subject === subject)) continue;
-    const scores = {};
-    seed.learners.filter((learner) => learner.class === schoolClass.id).forEach((learner, index) => {
-      scores[learner.id] = 45 + ((index * 9 + subject.length * 3 + gradeNumber) % 51);
-    });
-    seed.assessments.push({
-      id: `ASM-${schoolClass.id}-${subject.replace(/[^A-Z]/gi, "").slice(0, 5).toUpperCase()}`,
-      class: schoolClass.id,
-      grade: schoolClass.grade,
-      subject,
-      title: "Term 2 Assessment",
-      term: TERM,
-      date: "17 Sep 2026",
-      status: "submitted",
-      submittedBy: schoolClass.teacher,
-      scores,
-    });
-  }
-  if (!seed.reports.some((report) => report.class === schoolClass.id)) {
-    seed.reports.push({ id: `RPT-${schoolClass.id}-T2`, class: schoolClass.id, grade: schoolClass.grade, term: TERM, status: "awaiting-marks", marksSubmittedOn: "", compiledOn: "", finalisedOn: "", publishedOn: "" });
-  }
+function emptyWorkspace() {
+  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
 }
-for (const assessment of seed.assessments) {
-  seed.learners.filter((learner) => learner.class === assessment.class).forEach((learner, index) => {
-    if (assessment.scores[learner.id] === undefined) assessment.scores[learner.id] = 48 + ((index * 7 + assessment.subject.length) % 48);
-  });
-}
-/* Shared, role-scoped conversations for the senior-school register. */
-seed.teacherChat = SENIOR_CLASS_SEED.map(([classId, grade, teacher]) => ({
-  id: teacher,
-  class: classId,
-  role: `Teacher · ${grade} ${classId}`,
-  initials: initials(teacher),
-  messages: [{ from: "them", text: `Good morning. ${classId} class work is ready for leadership review.`, date: "17 Sep 2026" }],
-}));
-seed.parentChat = seed.learners.map((learner) => ({
-  id: learner.parent,
-  learnerId: learner.id,
-  class: learner.class,
-  role: `${learner.relation} · ${learner.name} (${learner.class})`,
-  initials: initials(learner.parent),
-  messages: [{ from: "them", text: `Good day. I would like an update about ${learner.name}'s progress.`, date: "17 Sep 2026" }],
-}));
-seed.notifications = [
-  { id: "NTF-PAR-01", time: "08:00", category: "School update", priority: "Medium", title: "Term 2 parent meeting", description: "A parent meeting is scheduled for Thursday at 17:30.", scope: "parents", read: false },
-  { id: "NTF-PAR-02", time: "07:15", category: "Whole school", priority: "High", title: "Weather safety update", description: "Severe weather procedures are in place for all families today.", scope: "whole-school", read: false },
-];
+
 /* ------------------------------ state layer ------------------------------ */
 function getState() {
   let stored = null;
@@ -1066,15 +191,21 @@ function getState() {
   } catch (err) {
     stored = null;
   }
-  if (!stored || stored.__v !== SEED_VERSION) {
-    stored = JSON.parse(JSON.stringify(seed));
-    stored.__v = SEED_VERSION;
+  if (!stored || typeof stored !== "object") {
+    stored = emptyWorkspace();
     save(stored);
     return stored;
   }
-  for (const [key, value] of Object.entries(seed)) {
-    if (stored[key] === undefined) stored[key] = value;
-  }
+  Object.assign(stored, emptyWorkspace(), stored, { __v: WORKSPACE_VERSION });
+  let migratedLegacyTimes = false;
+  (stored.notifications || []).forEach((notice) => {
+    if (notice.time === "Now" && !notice.createdAt) {
+      notice.createdAt = notificationTimestamp();
+      delete notice.time;
+      migratedLegacyTimes = true;
+    }
+  });
+  if (migratedLegacyTimes) save(stored);
   return stored;
 }
 
@@ -1099,8 +230,8 @@ async function connectCloudWorkspace(user, profile, school) {
     return;
   }
   if (["principal", "deputy", "clerk"].includes(profile.role)) {
-    const seedState = getState();
-    const { error: insertError } = await client.from("school_workspaces").insert({ school_id: school.id, payload: seedState, updated_by: user.id });
+    const initialState = getState();
+    const { error: insertError } = await client.from("school_workspaces").insert({ school_id: school.id, payload: initialState, version: WORKSPACE_VERSION, updated_by: user.id });
     if (!insertError) window.schoolshieldCloudWorkspaceReady = true;
   }
 }
@@ -1123,8 +254,8 @@ function userName() {
   try {
     const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
     if (session?.displayName) return session.displayName;
-  } catch (err) { /* Demo identity below. */ }
-  return USER_NAME[role()] || ROLE_NAMES[role()];
+  } catch (err) { /* The sign-in guard redirects before any workspace is rendered. */ }
+  return ROLE_NAMES[role()] || "Member";
 }
 function page() {
   return document.body.dataset.page || "dashboard";
@@ -1505,7 +636,7 @@ function shell(body, title) {
       : isLeadership()
         ? "Class-level oversight"
         : "Role-based access";
-  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${ROLE_NAMES[r].slice(0, 2).toUpperCase()}</div><div><b>${ROLE_NAMES[r]}</b><small>${scope}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${title}</h2></div><div class="top-actions"><button class="icon-btn" id="globalBell" title="Notifications">◈</button><div class="profile"><div class="avatar">${ROLE_NAMES[r].slice(0, 2).toUpperCase()}</div><div><b>${userName()}</b><small>${SCHOOL.name}</small></div></div></div></header>${alertToast()}<section class="content">${body}</section></main></div>`;
+  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${ROLE_NAMES[r].slice(0, 2).toUpperCase()}</div><div><b>${ROLE_NAMES[r]}</b><small>${scope}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${title}</h2></div><div class="top-actions"><button class="icon-btn notification-toggle" id="globalBell" title="Open notifications" aria-label="Open notifications">🔔</button><div class="profile"><div class="avatar">${ROLE_NAMES[r].slice(0, 2).toUpperCase()}</div><div><b>${userName()}</b><small>${SCHOOL.name}</small></div></div></div></header>${alertToast()}<section class="content">${body}</section></main></div>`;
 }
 function stat(label, value, sub) {
   return `<div class="stat-card"><div class="stat-icon">▦</div><div><div class="stat-value">${value}</div><div class="stat-label">${label}</div><small>${sub}</small></div></div>`;
@@ -2712,7 +1843,7 @@ function notifications() {
   const s = getState();
   const visible = notificationsForRole();
   return shell(
-    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.title}</b>${badge(n.priority)}</div><p>${n.description}</p><small>${n.category} · ${n.time} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.title}</b>${badge(n.priority)}</div><p>${n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
@@ -2755,6 +1886,19 @@ function todayLabel() {
   ];
   const d = new Date();
   return d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
+}
+function notificationTimestamp() {
+  return new Date().toISOString();
+}
+function notificationTime(notice) {
+  const created = notice?.createdAt ? new Date(notice.createdAt) : null;
+  if (!created || Number.isNaN(created.getTime())) return notice?.time || "No time recorded";
+  const seconds = Math.max(0, Math.floor((Date.now() - created.getTime()) / 1000));
+  if (seconds < 60) return "Just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
+  if (seconds < 172800) return "Yesterday";
+  return created.toLocaleDateString([], { day: "numeric", month: "short", year: created.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
 }
 
 /* ------------------------------- downloads ------------------------------- */
@@ -2814,7 +1958,7 @@ function learnerReportMarkup(learner) {
   const subHeaders = terms.map(() => "<th>Mark %</th><th>Level</th>").join("");
   const subjectRows = subjects.map((subject) => `<tr><td>${subject}</td>${terms.map((term) => { const mark = reportMark(learner, subject, term); return `<td>${mark}</td><td>${achievementLevel(mark)}</td>`; }).join("")}</tr>`).join("");
   const averages = terms.map((term) => Math.round(mean(subjects.map((subject) => reportMark(learner, subject, term)))));
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${learner.name} ${TERM} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div><div class="brand">${SCHOOL.name}</div><div class="small">Academic term report · ${SCHOOL.code}</div><div class="small">Generated ${todayLabel()}</div></div><div class="stamp">RIVERSIDE<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${learner.name} · ${learner.id}<br>Parent / guardian: ${learner.parent}</div><div class="box"><b>Grade / class</b><br>${learner.grade} · ${learner.class}<br>Class teacher: ${classInfo.teacher}</div><div class="box"><b>Attendance</b><br>${learner.attendance}% · ${daysAbsent(learner)} days absent</div><div class="box"><b>Report period</b><br>${terms.join(" · ")} · 2026<br>Status: ${standingFor(learner)}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${average}</td><td>${achievementLevel(average)}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended."}<br><span class="small">Sick notices recorded this term: ${sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None"}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${learner.name} ${TERM} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div><div class="brand">${SCHOOL.name}</div><div class="small">Academic term report · ${SCHOOL.code}</div><div class="small">Generated ${todayLabel()}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${learner.name} · ${learner.id}<br>Parent / guardian: ${learner.parent}</div><div class="box"><b>Grade / class</b><br>${learner.grade} · ${learner.class}<br>Class teacher: ${classInfo.teacher}</div><div class="box"><b>Attendance</b><br>${learner.attendance}% · ${daysAbsent(learner)} days absent</div><div class="box"><b>Report period</b><br>${terms.join(" · ")} · 2026<br>Status: ${standingFor(learner)}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${average}</td><td>${achievementLevel(average)}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended."}<br><span class="small">Sick notices recorded this term: ${sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None"}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
 }
 let pdfLibraryPromise;
 function loadPdfLibrary() {
@@ -3007,7 +2151,7 @@ function action(type, el) {
   else if (type === "assign-teacher") assignTeacher();
   else if (type === "submit-teacher-assignment") submitTeacherAssignment();
   else if (type === "approve-teacher-assignment") approveTeacherAssignment(el.dataset.assignment);
-  else if (type === "approve-account-request") approveAccountRequest(el.dataset.request);
+  else if (type === "approve-account-request") approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
   else if (type === "reject-account-request") rejectAccountRequest(el.dataset.request);
   else if (type === "refresh-account-requests") loadAccountRequests();
   else if (type === "close-modal") el.closest(".modal-backdrop")?.remove();
@@ -3197,7 +2341,7 @@ function saveIncident() {
     state.notifications.unshift({
       id: "NTF-" + Date.now().toString().slice(-6),
       incidentId: id,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      createdAt: notificationTimestamp(),
       category: "Incident",
       scope: "system",
       priority: inputValue("incidentPriority"),
@@ -3332,7 +2476,7 @@ function saveSickNotice() {
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
     refreshClassAttendance(state, learnerRecord.class);
-    state.notifications.unshift({ id: "NTF-SICK-" + Date.now().toString().slice(-6), time: "Now", category: "Sick notice", priority: "High", title: "Sick notice requires attention", description: `${learnerRecord.name} was reported sick by ${notice.submittedBy} for ${date}. Attendance has been marked sick pending your review.`, scope: "teacher", recipient: teacherForClass(learnerRecord.class), sickNoticeId: notice.id, read: false });
+    state.notifications.unshift({ id: "NTF-SICK-" + Date.now().toString().slice(-6), createdAt: notificationTimestamp(), category: "Sick notice", priority: "High", title: "Sick notice requires attention", description: `${learnerRecord.name} was reported sick by ${notice.submittedBy} for ${date}. Attendance has been marked sick pending your review.`, scope: "teacher", recipient: teacherForClass(learnerRecord.class), sickNoticeId: notice.id, read: false });
   });
   sessionStorage.setItem("schoolshieldLastSickNotice", getState().sickNotices[0]?.id || "");
   finishForm();
@@ -3436,7 +2580,9 @@ function viewNotification(id) {
   $(".incident-toast")?.remove();
   const comments = (notice.comments || []).map((comment) => `<div class="report-row"><span><b>${comment.author}</b><small>${comment.date}</small></span><span>${comment.text}</span></div>`).join("") || '<p class="muted">No follow-up comments yet.</p>';
   const principalControls = role() === "principal" ? `<label>Comment or request details<textarea class="textarea" id="notificationComment" placeholder="Ask the reporter for further information or record a follow-up..."></textarea></label><div class="modal-foot"><button class="btn primary" data-action="comment-notification" data-notification="${id}">Send follow-up</button></div>` : "";
-  modal(notice.title, `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notice.time}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`);
+  const drawer = $("#notificationCenter");
+  if (drawer) drawer.style.display = "none";
+  modal(notice.title, `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`);
 }
 function commentNotification(id) {
   const text = inputValue("notificationComment");
@@ -3669,7 +2815,7 @@ function approveTeacherAssignment(id) {
     schoolClass.teacher = assignment.teacher;
     assignment.status = "Approved";
     assignment.approvedBy = userName();
-    state.notifications.unshift({ id: `NTF-${Date.now().toString().slice(-6)}`, time: "Now", category: "Class update", priority: "Medium", title: `New class teacher for ${schoolClass.class || schoolClass.id}`, description: `${assignment.teacher} is now the class teacher for ${schoolClass.grade} ${schoolClass.id}.`, scope: "parents", class: schoolClass.id, read: false });
+    state.notifications.unshift({ id: `NTF-${Date.now().toString().slice(-6)}`, createdAt: notificationTimestamp(), category: "Class update", priority: "Medium", title: `New class teacher for ${schoolClass.class || schoolClass.id}`, description: `${assignment.teacher} is now the class teacher for ${schoolClass.grade} ${schoolClass.id}.`, scope: "parents", class: schoolClass.id, read: false });
   });
   render();
 }
@@ -3717,8 +2863,8 @@ function setReportStatus(classId, status) {
     if (status === "compiled") report.compiledOn = todayLabel();
     if (status === "finalised") report.finalisedOn = todayLabel();
     if (status === "published") report.publishedOn = todayLabel();
-    if (status === "compiled" && schoolClass) state.notifications.unshift({ id: "NTF-REPORT-" + Date.now(), title: `${classId} learner reports ready for review`, description: `The clerk compiled ${TERM} reports for your class. Review every learner report before release.`, category: "Reports", priority: "Medium", time: todayLabel(), read: false, scope: "teacher", class: classId, recipient: schoolClass.teacher });
-    if (status === "published" && schoolClass) state.notifications.unshift({ id: "NTF-PARENT-REPORT-" + Date.now(), title: `${TERM} learner reports released`, description: `Your child’s ${TERM} academic report is now available to view and download.`, category: "Reports", priority: "Medium", time: todayLabel(), read: false, scope: "parents", class: classId });
+    if (status === "compiled" && schoolClass) state.notifications.unshift({ id: "NTF-REPORT-" + Date.now(), title: `${classId} learner reports ready for review`, description: `The clerk compiled ${TERM} reports for your class. Review every learner report before release.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "teacher", class: classId, recipient: schoolClass.teacher });
+    if (status === "published" && schoolClass) state.notifications.unshift({ id: "NTF-PARENT-REPORT-" + Date.now(), title: `${TERM} learner reports released`, description: `Your child’s ${TERM} academic report is now available to view and download.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "parents", class: schoolClass.id });
   });
   render();
 }
@@ -3738,7 +2884,7 @@ function releaseLearnerReport(classId, learnerId) {
     if (!report || !learner || !report.learnerReviews?.[learnerId] || !["finalised", "published"].includes(report.status)) return;
     report.releasedLearners = report.releasedLearners || {};
     report.releasedLearners[learnerId] = todayLabel();
-    state.notifications.unshift({ id: "NTF-LEARNER-REPORT-" + Date.now(), title: `${TERM} report available for ${learner.name}`, description: `${learner.name}'s reviewed term report is ready to view and download.`, category: "Reports", priority: "Medium", time: todayLabel(), read: false, scope: "parents", learnerId });
+    state.notifications.unshift({ id: "NTF-LEARNER-REPORT-" + Date.now(), title: `${TERM} report available for ${learner.name}`, description: `${learner.name}'s reviewed term report is ready to view and download.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "parents", learnerId });
     const total = state.learners.filter((item) => item.class === classId).length;
     if (Object.keys(report.releasedLearners).length >= total) {
       report.status = "published";
@@ -3900,20 +3046,29 @@ async function loadAccountRequests() {
   window.schoolshieldPendingAccountAlerts = 0;
   if (error) { rows.innerHTML = `<tr><td colspan="5" class="muted">${error.message}</td></tr>`; return; }
   const roles = ["parent", "teacher", "security", "sgb", "deputy", "clerk", "principal"];
-  rows.innerHTML = data?.length ? data.map((request) => `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`).join("") : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
+  rows.innerHTML = data?.length ? data.map((request) => `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`).join("") : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
   $$('[data-action="approve-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
   $$('[data-action="reject-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
 }
 
-async function approveAccountRequest(id) {
+async function approveAccountRequest(id, delivery = "email") {
   const client = window.schoolshieldSupabase, approvedRole = $(`[data-approval-role="${id}"]`)?.value;
   if (!client || !approvedRole) return;
   const { data: { session } } = await client.auth.getSession();
   const loginPath = location.pathname.replace(/[^/]+$/, "login.html");
-  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, redirect_to: `${location.origin}${loginPath}` }) });
+  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, delivery, redirect_to: `${location.origin}${loginPath}` }) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) return alert(result.error || "Could not approve this account.");
-  modal("Account approved", `<p><b>The account has been approved.</b> An invitation was sent to the applicant’s email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  if (delivery === "setup_link" && result.setup_link) {
+    const link = String(result.setup_link);
+    let trustedLink = "";
+    try { if (new URL(link).host === new URL(window.SCHOOLSHIELD_SUPABASE_CONFIG.url).host) trustedLink = link.replace(/&/g, "&amp;").replace(/"/g, "&quot;"); } catch (_) { /* Do not render an invalid link. */ }
+    if (trustedLink) {
+      modal("Account approved", `<p><b>The account has been approved.</b> No email was sent. Open this one-time setup link to test the applicant onboarding page.</p><div class="modal-foot"><a class="btn primary" href="${trustedLink}" target="_blank" rel="noopener">Open setup page</a><button class="btn ghost" data-action="close-modal">Done</button></div>`);
+    } else alert("The account was approved, but the setup link could not be displayed safely.");
+  } else {
+    modal("Account approved", `<p><b>The account has been approved.</b> An invitation was sent to the applicant's email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  }
   loadAccountRequests();
 }
 
@@ -3996,13 +3151,13 @@ function initWorkspaceChrome() {
   if (!$("#notificationCenter")) {
     const drawer = document.createElement("aside");
     drawer.id = "notificationCenter";
-    drawer.style.cssText = "display:none;position:fixed;right:22px;top:78px;width:min(380px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;z-index:50;background:#fff;border:1px solid #dce6e8;border-radius:14px;box-shadow:0 18px 45px rgba(4,34,42,.18);padding:14px";
+    drawer.style.cssText = "display:none;position:fixed;right:22px;top:78px;width:min(380px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;z-index:60;background:#fff;border:1px solid #dce6e8;border-radius:14px;box-shadow:0 18px 45px rgba(4,34,42,.18);padding:14px";
     document.body.appendChild(drawer);
   }
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.description}</small><small>${notice.category} · ${notice.time}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
