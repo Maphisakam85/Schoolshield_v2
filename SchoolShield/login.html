@@ -1,64 +1,195 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>SchoolShield — Sign in</title>
-    <link rel="stylesheet" href="styles.css">
-    <style>
-        body { min-height: 100vh; background: linear-gradient(135deg, #062a34, #0a735a); display: grid; place-items: center }
-        .auth { width: min(430px, calc(100% - 30px)); background: #fff; border-radius: 18px; padding: 30px; box-shadow: 0 25px 80px #0004 }
-        .auth-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 25px }
-        .auth-brand img { width: 46px }.auth-brand strong { font-size: 20px }.auth h1 { font-size: 24px; margin: 0 0 6px }
-        .auth p { font-size: 11px; color: #71838a; line-height: 1.6 }.auth label { display: block; font-size: 9px; font-weight: 700; margin: 17px 0 6px }
-        .auth .input { padding: 12px }.auth .btn { width: 100%; margin-top: 20px; padding: 12px }
-        .demo { margin-top: 14px; background: #f3f8f6; border-radius: 9px; padding: 10px; font-size: 9px; color: #567 }
-        .demo ul { margin: 6px 0 0; padding-left: 16px }.demo code { font-size: inherit }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SchoolShield — Sign in</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #062a34, #0a735a);
+      display: grid;
+      place-items: center
+    }
+
+    .auth {
+      width: min(430px, calc(100% - 30px));
+      background: #fff;
+      border-radius: 18px;
+      padding: 30px;
+      box-shadow: 0 25px 80px #0004
+    }
+
+    .auth-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 25px
+    }
+
+    .auth-brand img {
+      width: 46px
+    }
+
+    .auth-brand strong {
+      font-size: 20px
+    }
+
+    .auth h1 {
+      font-size: 24px;
+      margin: 0 0 6px
+    }
+
+    .auth p {
+      font-size: 11px;
+      color: #71838a;
+      line-height: 1.6
+    }
+
+    .auth label {
+      display: block;
+      font-size: 9px;
+      font-weight: 700;
+      margin: 17px 0 6px
+    }
+
+    .auth .input {
+      padding: 12px;
+      width: 100%
+    }
+
+    .auth .btn {
+      width: 100%;
+      margin-top: 14px;
+      padding: 12px
+    }
+
+    .demo {
+      margin-top: 14px;
+      background: #f3f8f6;
+      border-radius: 9px;
+      padding: 10px;
+      font-size: 10px;
+      color: #567
+    }
+
+    .auth-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 20px 0 4px
+    }
+
+    .auth-tabs .btn {
+      margin: 0
+    }
+
+    .auth-tabs .ghost {
+      border: 1px solid #d5e3df;
+      background: #fff
+    }
+
+    .auth-modal {
+      position: fixed;
+      inset: 0;
+      background: #061f28aa;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      z-index: 20
+    }
+
+    .auth-modal[hidden] {
+      display: none
+    }
+
+    .auth-modal-card {
+      width: min(390px, 100%);
+      background: #fff;
+      border-radius: 16px;
+      padding: 26px;
+      box-shadow: 0 20px 70px #0005
+    }
+
+    .auth-modal-card h2 {
+      margin: 0 0 8px;
+      font-size: 20px
+    }
+
+    .auth-modal-card .btn {
+      margin-top: 18px
+    }
+  </style>
 </head>
+
 <body>
-    <main class="auth">
-        <div class="auth-brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield logo"><div><strong>SchoolShield</strong><small style="display:block;color:#71838a;font-size:9px">School safety &amp; management</small></div></div>
-        <h1>Welcome back</h1>
-        <p>Sign in to your school workspace. Your role is assigned to your account and cannot be chosen here.</p>
-        <form id="loginForm">
-            <label>School code<input class="input" id="schoolCode" required autocomplete="organization" placeholder="e.g. SMM-001" value="SMM-001"></label>
-            <label>Email address<input class="input" id="email" type="email" required autocomplete="email" placeholder="name@school.co.za"></label>
-            <label>Password<input class="input" id="password" autocomplete="current-password" type="password" required placeholder="Password"></label>
-            <button class="btn primary" type="submit">Sign in</button>
-        </form>
-        <div class="demo"><b>Botshabelo demo schools</b><ul><li>Setjhaba-Se-Maketse Combined School — <code>SMM-001</code></li><li>Lenyora La Thuto Secondary School — <code>LLT-002</code></li><li>Seemahale Secondary School — <code>SEE-003</code></li><li>Leratong Secondary School — <code>LER-004</code></li><li>Ntemoseng Secondary School — <code>NTE-005</code></li></ul>Use <code>principal</code>, <code>teacher</code>, <code>clerk</code>, <code>security</code>, <code>deputy</code>, <code>sgb</code>, or <code>parent</code> @ that school's test domain. Password: <b>Test@123</b></div>
-        <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px"></div>
-    </main>
-    <script>
-        const testSchools = [
-            { schoolCode: 'SMM-001', schoolName: 'Setjhaba-Se-Maketse Combined School', domain: 'setjhabasemaketse.test' },
-            { schoolCode: 'LLT-002', schoolName: 'Lenyora La Thuto Secondary School', domain: 'lenyoralathuto.test' },
-            { schoolCode: 'SEE-003', schoolName: 'Seemahale Secondary School', domain: 'seemahale.test' },
-            { schoolCode: 'LER-004', schoolName: 'Leratong Secondary School', domain: 'leratong.test' },
-            { schoolCode: 'NTE-005', schoolName: 'Ntemoseng Secondary School', domain: 'ntemoseng.test' }
-        ];
-        const testAccounts = testSchools.flatMap(school =>
-            ['principal', 'deputy', 'clerk', 'teacher', 'security', 'parent', 'sgb'].map(role => ({
-                ...school, role, email: `${role}@${school.domain}`, password: 'Test@123'
-            }))
-        );
-        document.getElementById('loginForm').addEventListener('submit', event => {
-            event.preventDefault();
-            const schoolCode = document.getElementById('schoolCode').value.trim().toUpperCase();
-            const email = document.getElementById('email').value.trim().toLowerCase();
-            const password = document.getElementById('password').value;
-            const account = testAccounts.find(item => item.schoolCode === schoolCode && item.email === email && item.password === password);
-            const error = document.getElementById('loginError');
-            if (!account) {
-                error.textContent = 'We could not find an active account for that school code, email address and password.';
-                error.style.display = 'block';
-                return;
-            }
-            sessionStorage.setItem('schoolshieldSession', JSON.stringify({ schoolCode: account.schoolCode, schoolName: account.schoolName, role: account.role, email: account.email }));
-            sessionStorage.setItem('schoolshieldRole', account.role);
-            location.href = 'dashboard.html';
-        });
-    </script>
+  <main class="auth">
+    <div class="auth-brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield logo">
+      <div><strong>SchoolShield</strong><small style="display:block;color:#71838a;font-size:9px">School safety &amp;
+          management</small></div>
+    </div>
+    <h1>Welcome back</h1>
+    <p>Sign in to your school workspace. New accounts are reviewed by that school’s principal or clerk before access is
+      granted.</p>
+    <div class="auth-tabs"><button class="btn small primary" id="showLogin" type="button">Sign in</button><button
+        class="btn small ghost" id="showRequest" type="button">Create account</button></div>
+    <form id="loginForm"><label>School code<input class="input" id="schoolCode" required autocomplete="organization"
+          placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
+          type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
+          class="input" id="password" autocomplete="current-password" type="password" required
+          placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button></form>
+    <form id="requestForm" hidden><label>Choose your school<select class="input" id="requestSchoolCode" required>
+          <option value="">Loading schools…</option>
+        </select></label><label>Full name<input class="input" id="requestName" required autocomplete="name"
+          placeholder="Your full name"></label><label>Email address<input class="input" id="requestEmail" type="email"
+          required autocomplete="email" placeholder="Your email address"></label><label>Account type<select
+          class="input" id="requestRole">
+          <option value="parent">Parent / Guardian</option>
+          <option value="teacher">Teacher</option>
+          <option value="security">Security Officer</option>
+        </select></label><button class="btn primary" type="submit">Request account approval</button></form>
+    <form id="inviteForm" hidden>
+      <p class="demo"><b>Your account has been approved.</b> Complete your details and choose a password to finish
+        setup.</p><label>Full name<input class="input" id="inviteName" autocomplete="name"
+          required></label><label>Mobile number<input class="input" id="invitePhone" autocomplete="tel" required
+          placeholder="e.g. 082 000 0000"></label><label>Home address (optional)<input class="input" id="inviteAddress"
+          autocomplete="street-address"></label><label>Emergency contact (optional)<input class="input"
+          id="inviteEmergency" placeholder="Name and mobile number"></label><label>New password<input class="input"
+          id="invitePassword" type="password" autocomplete="new-password" minlength="8" required></label><button
+        class="btn primary" type="submit">Complete setup</button>
+    </form>
+    <div class="demo"><b>Initial school administrators</b><br><code>principal@&lt;school-domain&gt;</code> and
+      <code>clerk@&lt;school-domain&gt;</code><br>Prototype password: <b>Test@123</b>. Change it after first sign-in.
+    </div>
+    <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px"></div>
+  </main>
+  <div class="auth-modal" id="requestSuccessModal" hidden role="dialog" aria-modal="true"
+    aria-labelledby="requestSuccessTitle">
+    <div class="auth-modal-card">
+      <h2 id="requestSuccessTitle">Request submitted</h2>
+      <p>Your chosen school’s principal or clerk will review your request. If approved, you will receive an invitation
+        at the email address you provided.</p><button class="btn primary" id="closeRequestSuccess" type="button">Back to
+        sign in</button>
+    </div>
+  </div>
+  <script src="supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-client.js"></script>
+  <script>
+    const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), inviteForm = document.getElementById('inviteForm');
+    const show = form => { loginForm.hidden = form !== loginForm; requestForm.hidden = form !== requestForm; inviteForm.hidden = form !== inviteForm; document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
+    document.getElementById('showLogin').onclick = () => show(loginForm); document.getElementById('showRequest').onclick = () => show(requestForm);
+    const showError = (message, ok = false) => { errorBox.style.color = ok ? '#087443' : '#b42318'; errorBox.textContent = message; errorBox.style.display = 'block' };
+    async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,school:schools(id,code,name)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
+    loginForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); try { const schoolCode = document.getElementById('schoolCode').value.trim().toUpperCase(), { data, error } = await client.auth.signInWithPassword({ email: document.getElementById('email').value.trim().toLowerCase(), password: document.getElementById('password').value }); if (error || !data.user) throw new Error(error?.message || 'Sign-in failed.'); await createSession(data.user, schoolCode); location.href = 'dashboard.html' } catch (err) { showError(err.message || 'We could not sign you in.') } };
+    requestForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); const { error } = await client.rpc('request_school_account', { p_school_code: document.getElementById('requestSchoolCode').value.trim().toUpperCase(), p_display_name: document.getElementById('requestName').value.trim(), p_email: document.getElementById('requestEmail').value.trim().toLowerCase(), p_requested_role: document.getElementById('requestRole').value }); if (error) return showError(error.message); requestForm.reset(); document.getElementById('requestSuccessModal').hidden = false };
+    document.getElementById('closeRequestSuccess').onclick = () => { document.getElementById('requestSuccessModal').hidden = true; show(loginForm); showError('Request submitted. Sign in after you receive your approval invitation.', true) };
+    client?.rpc('list_school_signup_options').then(({ data, error }) => { const select = document.getElementById('requestSchoolCode'); if (error || !data) { select.innerHTML = '<option value="">Schools are unavailable</option>'; return } select.innerHTML = '<option value="">Select your school</option>' + data.map(school => `<option value="${school.code}">${school.name}</option>`).join('') });
+    client?.auth.getSession().then(async ({ data: { session } }) => { if (session && /type=invite|access_token/.test(location.hash + location.search)) { const { data: { user } } = await client.auth.getUser(); document.getElementById('inviteName').value = user?.user_metadata?.display_name || ''; show(inviteForm) } });
+    inviteForm.onsubmit = async event => { event.preventDefault(); const { error: passwordError } = await client.auth.updateUser({ password: document.getElementById('invitePassword').value }); if (passwordError) return showError(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('inviteName').value.trim(), p_phone: document.getElementById('invitePhone').value.trim(), p_address: document.getElementById('inviteAddress').value.trim(), p_emergency_contact: document.getElementById('inviteEmergency').value.trim() }); if (profileError) return showError(profileError.message); await client.auth.signOut(); show(loginForm); showError('Account setup is complete. Sign in with your email, password and school code.', true) };
+  </script>
 </body>
+
 </html>

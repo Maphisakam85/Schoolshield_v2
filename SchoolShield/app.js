@@ -1,10 +1,5 @@
 /* SchoolShield — role-based school management prototype.
- *
- * Every HTML shell loads this single bundle and render() builds the workspace
- * permitted for the signed-in role (stored in sessionStorage). Individual
- * records are only shown once a class has been selected, so leadership sees
- * class-level summaries first and drills down from there.
- */
+
 
 /* ------------------------------ DOM helpers ------------------------------ */
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -51,23 +46,10 @@ function activeSchool() {
   } catch (err) { /* Fall back to the original demo school. */ }
   return DEFAULT_SCHOOL;
 }
-const SCHOOL = activeSchool();
+let SCHOOL = activeSchool();
 
 const TERM = "Term 2";
 const SEED_VERSION = 12;
-
-/* Demo identities are deliberately tied to the people used in the seeded
- * conversations. They make it possible to test the same conversation from
- * both sides by signing in under the relevant role. */
-const TEST_USERS = {
-  principal: { name: "Ms Mokoena", email: "principal@riverside.test", password: "Test@123" },
-  deputy: { name: "Mr Naidoo", email: "deputy@riverside.test", password: "Test@123" },
-  clerk: { name: "Lerato Jacobs", email: "clerk@riverside.test", password: "Test@123" },
-  teacher: { name: "Mpho Mokoena", email: "teacher@riverside.test", password: "Test@123" },
-  security: { name: "Sello Ndlovu", email: "security@riverside.test", password: "Test@123" },
-  parent: { name: "Thabo Molefe", email: "parent@riverside.test", password: "Test@123" },
-  sgb: { name: "Mr Pillay", email: "sgb@riverside.test", password: "Test@123" },
-};
 
 /* ------------------------------ permissions ------------------------------
  * Leadership deliberately does NOT carry "student-records" (the flat editable
@@ -175,6 +157,7 @@ const NAV = [
   ["announcements", "Announcements", "announcements.html", "megaphone"],
   ["sick-notices", "Sick Notices", "sick-notices.html", "medical"],
   ["appointments", "Appointments", "appointments.html", "calendar"],
+  ["account-requests", "Account Requests", "account-requests.html", "users"],
   ["student-records", "Student Records", "student-records.html", "folder"],
   ["student-record", "Student Record", "student-record.html", "record"],
   ["student-reports", "Student Reports", "student-reports.html", "report"],
@@ -191,6 +174,15 @@ const NAV = [
     "shield",
   ],
   ["settings", "Settings", "settings.html", "settings"],
+];
+
+const NAV_GROUPS = [
+  { label: "Overview", ids: ["leadership", "notifications"] },
+  { label: "People", ids: ["learners", "class-records", "parents", "staff", "account-requests", "student-records", "student-record"] },
+  { label: "Learning", ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"] },
+  { label: "Safety & wellbeing", ids: ["visitors", "incidents", "security", "security-officers", "sick-notices", "sick-notice"] },
+  { label: "Communication", ids: ["announcements", "appointments", "teacher-chat", "parent-chat"] },
+  { label: "Administration", ids: ["settings"] },
 ];
 
 /* -------------------------------- icons ---------------------------------- */
@@ -1088,6 +1080,29 @@ function getState() {
 
 function save(state) {
   localStorage.setItem(`schoolshield:${SCHOOL.code}`, JSON.stringify(state));
+  if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
+    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+    window.schoolshieldSupabase.from("school_workspaces")
+      .update({ payload: state, updated_by: session.userId || null })
+      .eq("school_id", session.schoolId)
+      .then(({ error }) => { if (error) console.warn("School workspace sync failed", error.message); });
+  }
+}
+
+async function connectCloudWorkspace(user, profile, school) {
+  const client = window.schoolshieldSupabase;
+  if (!client || profile.role === "parent") return;
+  const { data, error } = await client.from("school_workspaces").select("payload").eq("school_id", school.id).maybeSingle();
+  if (!error && data?.payload && Object.keys(data.payload).length) {
+    localStorage.setItem(`schoolshield:${school.code}`, JSON.stringify(data.payload));
+    window.schoolshieldCloudWorkspaceReady = true;
+    return;
+  }
+  if (["principal", "deputy", "clerk"].includes(profile.role)) {
+    const seedState = getState();
+    const { error: insertError } = await client.from("school_workspaces").insert({ school_id: school.id, payload: seedState, updated_by: user.id });
+    if (!insertError) window.schoolshieldCloudWorkspaceReady = true;
+  }
 }
 
 function persist(mutator) {
@@ -1105,6 +1120,10 @@ function role() {
   return sessionStorage.getItem("schoolshieldRole") || "principal";
 }
 function userName() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
+    if (session?.displayName) return session.displayName;
+  } catch (err) { /* Demo identity below. */ }
   return USER_NAME[role()] || ROLE_NAMES[role()];
 }
 function page() {
@@ -1114,6 +1133,7 @@ function param(name) {
   return new URLSearchParams(location.search).get(name);
 }
 function allowed(target = page()) {
+  if (target === "account-requests") return ["principal", "clerk"].includes(role());
   return (ACCESS[role()] || []).includes(target);
 }
 function go(url) {
@@ -1449,6 +1469,7 @@ function statusBadge(status) {
 }
 function navHasNewUpdates(id) {
   if (id === "notifications") return notificationsForRole().some((notice) => !notice.read);
+  if (id === "account-requests") return (window.schoolshieldPendingAccountAlerts || 0) > 0;
   if (id === "sick-notices" && role() === "teacher") {
     return getState().sickNotices.some((notice) => {
       const learnerRecord = learners().find((learner) => learner.name === notice.person);
@@ -1458,15 +1479,23 @@ function navHasNewUpdates(id) {
   return false;
 }
 function nav() {
-  const r = role();
-  return NAV.filter((n) => ACCESS[r]?.includes(n[0]))
-    .map(
+  const dashboardLink = NAV.find((item) => item[0] === "dashboard");
+  const dashboard = dashboardLink && allowed("dashboard") ? (() => {
+    const [id, label, url, ic] = dashboardLink;
+    return `<a href="${url}" class="nav-item dashboard-nav ${page() === id ? "active" : ""}">${icon(ic)}<span>${label}</span></a>`;
+  })() : "";
+  return dashboard + NAV_GROUPS.map((group, groupIndex) => {
+    const links = group.ids.map((id) => NAV.find((item) => item[0] === id)).filter((item) => item && allowed(item[0]));
+    if (!links.length) return "";
+    const isCurrentGroup = links.some(([id]) => page() === id);
+    const open = isCurrentGroup || (groupIndex === 0 && page() === "dashboard");
+    return `<details class="nav-group" ${open ? "open" : ""}><summary>${group.label}<span>⌄</span></summary>${links.map(
       ([id, label, url, ic]) => {
         const hasUpdates = navHasNewUpdates(id);
         return `<a href="${url}" class="nav-item ${page() === id ? "active" : ""} ${hasUpdates ? "has-updates" : ""}" title="${hasUpdates ? label + ": new updates" : label}" aria-label="${hasUpdates ? label + ", new updates" : label}">${icon(ic)}<span>${label}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
       },
-    )
-    .join("");
+    ).join("")}</details>`;
+  }).join("");
 }
 function shell(body, title) {
   const r = role();
@@ -1842,7 +1871,7 @@ function learnerProfileBody(learner, opts = {}) {
   const academic = `<section class="panel"><div class="panel-head"><div><h3>Academic record</h3><p>Captured assessment scores for ${learner.class}</p></div></div>${table(["Assessment", "This learner", "Class average", "Standing"], scoreRows, "No assessments captured yet")}</section>`;
   const published = publishedReportsForClass(learner.class, learner.id);
   const reports = `<section class="panel"><div class="panel-head"><div><h3>Published reports</h3><p>Finalised reports released to the parent</p></div></div>${published.length ? published.map((rep) => `<div class="report-row"><span><b>${rep.term} learner report</b><small>Published ${rep.publishedOn} · ${learner.class}</small></span><button class="btn small" data-action="download-report" data-class="${learner.class}" data-learner="${learner.id}">Download PDF</button></div>`).join("") : '<p class="muted">No report has been published for this class yet. Reports appear here once the teacher finalises and releases them.</p>'}</section>`;
-  const history = `<section class="panel"><div class="panel-head"><div><h3>Report history</h3><p>Select a grade and term to download the academic record available up to that term.</p></div></div><div class="form-grid"><label>Grade<select class="select" id="historyGrade">${[8, 9, 10, 11, 12].map((grade) => `<option value="${grade}" ${learner.grade === "Grade " + grade ? "selected" : ""}>Grade ${grade}</option>`).join("")}</select></label><label>Term<select class="select" id="historyTerm"><option value="1">Term 1</option><option value="2">Term 2</option><option value="3">Term 3</option><option value="4">Term 4</option></select></label></div><div class="panel-foot"><button class="btn primary" data-action="download-history" data-learner="${learner.id}">Download selected report</button></div></section>`;
+  const history = `<section class="panel"><div class="panel-head"><div><h3>Report history</h3><p>Select a grade and term to view or download the academic record available up to that term.</p></div></div><div class="form-grid"><label>Grade<select class="select" id="historyGrade">${[8, 9, 10, 11, 12].map((grade) => `<option value="${grade}" ${learner.grade === "Grade " + grade ? "selected" : ""}>Grade ${grade}</option>`).join("")}</select></label><label>Term<select class="select" id="historyTerm"><option value="1">Term 1</option><option value="2">Term 2</option><option value="3">Term 3</option><option value="4">Term 4</option></select></label></div><div class="panel-foot"><button class="btn ghost" data-action="view-history" data-learner="${learner.id}">View selected report</button><button class="btn primary" data-action="download-history" data-learner="${learner.id}">Download PDF</button></div></section>`;
   const footer = opts.request
     ? `<section class="panel"><div class="panel-head"><div><h3>Need a class-wide report?</h3><p>Request a compiled report for the whole class from the clerk.</p></div><button class="btn primary" data-action="request-report" data-class="${learner.class}">Request class report</button></div></section>`
     : "";
@@ -2321,7 +2350,7 @@ function submitDailyWeek(classId, weekStart) {
 }
 
 /* --------------------------------- chat ---------------------------------- */
-function chatLayout(title, eyebrow, desc, conversations, storeKey) {
+function chatLayout(title, eyebrow, desc, conversations, storeKey, ownStoredSide = "me") {
   if (!conversations.length)
     return generic(
       title,
@@ -2348,7 +2377,7 @@ function chatLayout(title, eyebrow, desc, conversations, storeKey) {
     (active.messages || [])
       .map(
         (m) => {
-          const mine = m.from === "me";
+          const mine = m.from === ownStoredSide;
           return `<div class="chat-message ${mine ? "outgoing" : "incoming"}"><div class="msg ${mine ? "mine" : "other"}"><span>${m.text}</span><small>${m.date || "Now"}${mine ? " ✓✓" : ""}</small></div></div>`;
         },
       )
@@ -2358,7 +2387,7 @@ function chatLayout(title, eyebrow, desc, conversations, storeKey) {
     title,
     eyebrow,
     desc,
-    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}">Send</button></div></section></div>`,
+    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="${ownStoredSide}">Send</button></div></section></div>`,
   );
 }
 
@@ -2372,6 +2401,7 @@ function teacherChat() {
       "Direct, private channel between the principal and each teacher.",
       list,
       "teacherChat",
+      "me",
     );
   }
   const storedIndex = getState().teacherChat.findIndex((conversation) => conversation.id === userName());
@@ -2389,6 +2419,7 @@ function teacherChat() {
     "Direct, private channel between you and the principal. Parents cannot access this channel.",
     [peer],
     "teacherChat",
+    "them",
   );
 }
 
@@ -2406,6 +2437,7 @@ function parentChat() {
       "Private channel between you and the parents of learners in your classes. Leadership cannot access this channel.",
       list,
       "parentChat",
+      "me",
     );
   }
   const child =
@@ -2430,6 +2462,7 @@ function parentChat() {
     "Private channel between you and your child's class teacher.",
     [peer],
     "parentChat",
+    "them",
   );
 }
 
@@ -2783,13 +2816,60 @@ function learnerReportMarkup(learner) {
   const averages = terms.map((term) => Math.round(mean(subjects.map((subject) => reportMark(learner, subject, term)))));
   return `<!doctype html><html><head><meta charset="utf-8"><title>${learner.name} ${TERM} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div><div class="brand">${SCHOOL.name}</div><div class="small">Academic term report · ${SCHOOL.code}</div><div class="small">Generated ${todayLabel()}</div></div><div class="stamp">RIVERSIDE<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${learner.name} · ${learner.id}<br>Parent / guardian: ${learner.parent}</div><div class="box"><b>Grade / class</b><br>${learner.grade} · ${learner.class}<br>Class teacher: ${classInfo.teacher}</div><div class="box"><b>Attendance</b><br>${learner.attendance}% · ${daysAbsent(learner)} days absent</div><div class="box"><b>Report period</b><br>${terms.join(" · ")} · 2026<br>Status: ${standingFor(learner)}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${average}</td><td>${achievementLevel(average)}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended."}<br><span class="small">Sick notices recorded this term: ${sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None"}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
 }
-function downloadReport(classId, learnerId) {
+let pdfLibraryPromise;
+function loadPdfLibrary() {
+  if (window.jspdf?.jsPDF) return Promise.resolve(window.jspdf.jsPDF);
+  if (pdfLibraryPromise) return pdfLibraryPromise;
+  pdfLibraryPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    script.onload = () => window.jspdf?.jsPDF ? resolve(window.jspdf.jsPDF) : reject(new Error("PDF library unavailable"));
+    script.onerror = () => reject(new Error("Could not load PDF library"));
+    document.head.appendChild(script);
+  });
+  return pdfLibraryPromise;
+}
+
+async function downloadPdf(filename, title, lines) {
+  try {
+    const JsPdf = await loadPdfLibrary();
+    const documentPdf = new JsPdf({ unit: "mm", format: "a4" });
+    const margin = 16, width = 178, pageBottom = 280;
+    let y = 18;
+    documentPdf.setFont("helvetica", "bold");
+    documentPdf.setFontSize(16); documentPdf.text(SCHOOL.name, margin, y); y += 9;
+    documentPdf.setFontSize(12); documentPdf.text(title, margin, y); y += 10;
+    documentPdf.setDrawColor(8, 117, 80); documentPdf.line(margin, y, margin + width, y); y += 8;
+    documentPdf.setFont("helvetica", "normal"); documentPdf.setFontSize(10);
+    lines.forEach((line) => {
+      const wrapped = documentPdf.splitTextToSize(String(line), width);
+      if (y + wrapped.length * 5 > pageBottom) { documentPdf.addPage(); y = 18; }
+      documentPdf.text(wrapped, margin, y); y += wrapped.length * 5 + 2;
+    });
+    documentPdf.save(filename);
+  } catch (error) { alert("The PDF could not be created. Please check your internet connection and try again."); }
+}
+
+function historyReportDetails(learnerId) {
+  const learner = learnerById(learnerId), grade = inputValue("historyGrade"), selectedTerm = Number(inputValue("historyTerm"));
+  if (!learner || !grade || !selectedTerm) return null;
+  const terms = Array.from({ length: selectedTerm }, (_, index) => `Term ${index + 1}`);
+  const subjects = Number(grade) <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
+  const lines = [`Learner: ${learner.name} (${learner.id})`, `Grade ${grade} · 2026`, `Included: ${terms.join(", ")}`, "", "Subject performance"];
+  subjects.forEach((subject, index) => lines.push(`${subject} — ${terms.map((term, termIndex) => `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`).join(" · ")}`));
+  lines.push("", `Attendance: ${learner.attendance}%`, `Current standing: ${standingFor(learner)}`);
+  return { learner, grade, selectedTerm, lines };
+}
+
+async function downloadReport(classId, learnerId) {
   const report = reportForClass(classId);
   const pupil = learnerId ? learnerById(learnerId) : null;
   const classInfo = classById(classId);
   if (!report) return;
   if (pupil) {
-    downloadHtmlFile(`${pupil.id}-${TERM.toLowerCase().replace(/\s+/g, "-")}-report.html`, learnerReportMarkup(pupil));
+    const reportLines = [`Learner: ${pupil.name} (${pupil.id})`, `Grade / class: ${pupil.grade} · ${pupil.class}`, `Class teacher: ${classInfo.teacher}`, `Attendance: ${pupil.attendance}%`, `Overall average: ${pupil.average}%`, `Standing: ${standingFor(pupil)}`, "", "Assessments:"];
+    assessmentsForClass(classId).forEach((assessment) => reportLines.push(`${assessment.subject} ${assessment.title}: ${assessment.scores?.[pupil.id] ?? "Not captured"}%`));
+    await downloadPdf(`${pupil.id}-${TERM.toLowerCase().replace(/\s+/g, "-")}-report.pdf`, `${report.term} learner report`, reportLines);
     return;
   }
   const lines = [
@@ -2837,12 +2917,13 @@ function downloadReport(classId, learnerId) {
       "Pass rate: " + classStats(classId).passRate + "%",
     );
   }
-  downloadTextFile(
+  await downloadPdf(
     (pupil ? pupil.id : "class-" + classId) +
       "-" +
       report.term.toLowerCase().replace(/\s+/g, "-") +
-      "-report.txt",
-    lines.join("\n"),
+      "-report.pdf",
+    `${report.term} class report`,
+    lines,
   );
 }
 function previewLearnerReport(classId, learnerId) {
@@ -2852,7 +2933,11 @@ function previewLearnerReport(classId, learnerId) {
   modal(`${learner.name} — report preview`, `<p class="muted">This is the report that will be sent only to ${learner.parent}, the learner’s registered parent / guardian, after teacher release.</p><iframe title="Learner report preview" src="data:text/html;charset=utf-8,${source}" style="width:100%;height:68vh;border:1px solid #dce6e8;border-radius:8px;background:white"></iframe><div class="modal-foot"><button class="btn primary" data-action="download-report" data-class="${classId}" data-learner="${learnerId}">Download learner report</button></div>`);
 }
 
-function downloadHistory(learnerId) {
+async function downloadHistory(learnerId) {
+  const selected = historyReportDetails(learnerId);
+  if (!selected) return;
+  await downloadPdf(`${selected.learner.id}-grade-${selected.grade}-term-${selected.selectedTerm}-report-history.pdf`, "Academic report history", selected.lines);
+  return;
   const learner = learnerById(learnerId);
   const grade = inputValue("historyGrade");
   const selectedTerm = Number(inputValue("historyTerm"));
@@ -2866,6 +2951,11 @@ function downloadHistory(learnerId) {
   });
   lines.push("", `Attendance: ${learner.attendance}%`, `Current standing: ${standingFor(learner)}`);
   downloadTextFile(`${learner.id}-grade-${grade}-term-${selectedTerm}-report-history.txt`, lines.join("\n"));
+}
+function viewHistory(learnerId) {
+  const selected = historyReportDetails(learnerId);
+  if (!selected) return;
+  modal(`${selected.learner.name} — selected report`, `<div style="white-space:pre-wrap;line-height:1.7;padding:6px">${selected.lines.join("\n")}</div><div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${learnerId}">Download PDF</button></div>`);
 }
 function downloadIncidentReport() {
   const incidents = getState().incidents;
@@ -2901,6 +2991,7 @@ function action(type, el) {
   else if (type === "download-report") downloadReport(classId, learnerId);
   else if (type === "preview-learner-report") previewLearnerReport(classId, learnerId);
   else if (type === "download-history") downloadHistory(el.dataset.learner);
+  else if (type === "view-history") viewHistory(el.dataset.learner);
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
   else if (type === "submit-marks") saveTestScores(classId, "teacher");
@@ -2916,6 +3007,10 @@ function action(type, el) {
   else if (type === "assign-teacher") assignTeacher();
   else if (type === "submit-teacher-assignment") submitTeacherAssignment();
   else if (type === "approve-teacher-assignment") approveTeacherAssignment(el.dataset.assignment);
+  else if (type === "approve-account-request") approveAccountRequest(el.dataset.request);
+  else if (type === "reject-account-request") rejectAccountRequest(el.dataset.request);
+  else if (type === "refresh-account-requests") loadAccountRequests();
+  else if (type === "close-modal") el.closest(".modal-backdrop")?.remove();
   else if (type === "save-assessment") saveAssessment();
   else if (type === "request-report")
     {
@@ -2944,7 +3039,7 @@ function action(type, el) {
   else if (type === "publish-report") setReportStatus(classId, "published");
   else if (type === "send-announcement") sendAnnouncement();
   else if (type === "open-chat") go(el.dataset.url);
-  else if (type === "send-message") sendMessage(el.dataset.store, el.dataset.chat);
+  else if (type === "send-message") sendMessage(el.dataset.store, el.dataset.chat, el.dataset.sender);
   else if (type === "add-learner")
     modal(
       "Add learner",
@@ -3682,20 +3777,20 @@ function sendAnnouncement() {
   render();
 }
 
-function sendMessage(storeKey, chatIndex = 0) {
+function sendMessage(storeKey, chatIndex = 0, sender = "me") {
   const input = $("#chatInput");
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
   if (Array.isArray(getState()[storeKey])) {
     persist((state) => {
       const conversation = state[storeKey][Number(chatIndex)] || state[storeKey][0];
-      if (conversation) conversation.messages.push({ from: "me", text, date: todayLabel() });
+      if (conversation) conversation.messages.push({ from: sender, text, date: todayLabel() });
     });
   } else {
     persist((state) => {
       state.chatExtras = state.chatExtras || {};
       state.chatExtras[storeKey] = state.chatExtras[storeKey] || [];
-      state.chatExtras[storeKey].push({ from: "me", text, date: todayLabel() });
+      state.chatExtras[storeKey].push({ from: sender, text, date: todayLabel() });
     });
   }
   render();
@@ -3768,6 +3863,7 @@ function render() {
   else if (p === "sick-notices") html = sickNotices();
   else if (p === "sick-notice") html = parentSickNoticePage();
   else if (p === "appointments") html = appointments();
+  else if (p === "account-requests") html = accountRequests();
   else if (p === "student-records") html = studentRecords();
   else if (p === "student-record") html = studentRecord();
   else if (p === "student-reports") html = studentReports();
@@ -3779,6 +3875,58 @@ function render() {
   else html = dashboard();
   $("#app").innerHTML = html;
   bind();
+}
+
+function accountRequests() {
+  return shell(`<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends an invitation email; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`, "Account Requests");
+}
+
+async function loadAccountRequestDashboardAlert() {
+  const client = window.schoolshieldSupabase;
+  if (!client || !["principal", "clerk"].includes(role())) return;
+  const { count } = await client.from("account_request_notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+  window.schoolshieldPendingAccountAlerts = count || 0;
+  if (!count || page() !== "dashboard") return;
+  const content = $(".content");
+  if (!content || $("#accountApprovalDashboardAlert")) return;
+  content.insertAdjacentHTML("afterbegin", `<section class="panel" id="accountApprovalDashboardAlert" style="border-left:4px solid #e6a400"><div class="panel-head"><div><span class="pill">Action required</span><h3>${count} new account request${count === 1 ? "" : "s"}</h3><p>A parent, teacher or security officer is waiting for approval.</p></div><a class="btn primary" href="account-requests.html">Review requests</a></div></section>`);
+}
+
+async function loadAccountRequests() {
+  const client = window.schoolshieldSupabase, rows = $("#accountRequestRows");
+  if (!client || !rows) return;
+  const { data, error } = await client.from("account_requests").select("id, display_name, email, requested_role, created_at").eq("status", "pending").order("created_at");
+  await client.from("account_request_notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+  window.schoolshieldPendingAccountAlerts = 0;
+  if (error) { rows.innerHTML = `<tr><td colspan="5" class="muted">${error.message}</td></tr>`; return; }
+  const roles = ["parent", "teacher", "security", "sgb", "deputy", "clerk", "principal"];
+  rows.innerHTML = data?.length ? data.map((request) => `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`).join("") : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
+  $$('[data-action="approve-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
+  $$('[data-action="reject-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
+}
+
+async function approveAccountRequest(id) {
+  const client = window.schoolshieldSupabase, approvedRole = $(`[data-approval-role="${id}"]`)?.value;
+  if (!client || !approvedRole) return;
+  const { data: { session } } = await client.auth.getSession();
+  const loginPath = location.pathname.replace(/[^/]+$/, "login.html");
+  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, redirect_to: `${location.origin}${loginPath}` }) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return alert(result.error || "Could not approve this account.");
+  modal("Account approved", `<p><b>The account has been approved.</b> An invitation was sent to the applicant’s email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  loadAccountRequests();
+}
+
+async function rejectAccountRequest(id) {
+  if (!confirm("Reject this account request? The applicant will not receive an invitation.")) return;
+  const client = window.schoolshieldSupabase;
+  if (!client) return;
+  const { data: { session } } = await client.auth.getSession();
+  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, action: "reject" }) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) return alert(result.error || "Could not reject this request.");
+  modal("Account request rejected", `<p>The request has been rejected and no account invitation was sent.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  loadAccountRequests();
 }
 
 function initWorkspaceChrome() {
@@ -3870,13 +4018,16 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  if (page() === "account-requests") loadAccountRequests();
+  if (page() === "dashboard") loadAccountRequestDashboardAlert();
   if (page() === "dashboard") {
     const quickHeading = $$("h3").find((heading) => heading.textContent === "Quick access");
     const quickPanel = quickHeading && quickHeading.closest("section");
     const dashboardPanels = $(".dashboard-grid");
     if (quickPanel && dashboardPanels) dashboardPanels.before(quickPanel);
   }
-  $("#logout")?.addEventListener("click", () => {
+  $("#logout")?.addEventListener("click", async () => {
+    await window.schoolshieldSupabase?.auth.signOut();
     sessionStorage.removeItem("schoolshieldRole");
     sessionStorage.removeItem("schoolshieldSession");
     location.href = "login.html";
@@ -3931,18 +4082,38 @@ function bind() {
   $("#chatInput")?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const store = $("[data-action='send-message']")?.dataset.store;
-      const chat = $("[data-action='send-message']")?.dataset.chat;
-      sendMessage(store, chat);
+      const sendButton = $("[data-action='send-message']");
+      sendMessage(sendButton?.dataset.store, sendButton?.dataset.chat, sendButton?.dataset.sender);
     }
   });
   setTimeout(showPendingSickNoticePopup, 0);
 }
 
-/* Workspace pages require an identity context. Login creates this session;
- * the legacy role key is retained only so existing demo links still work. */
-if (!sessionStorage.getItem("schoolshieldSession") && !sessionStorage.getItem("schoolshieldRole")) {
-  location.replace("login.html");
-} else {
+/* A configured Supabase client is the source of truth. The legacy session path
+ * remains solely for opening the original browser-only demo without config. */
+async function startWorkspace() {
+  const client = window.schoolshieldSupabase;
+  if (client) {
+    const { data: { session } } = await client.auth.getSession();
+    if (!session?.user) return location.replace("login.html");
+    const { data: profile } = await client.from("profiles")
+      .select("role, display_name, school:schools(id, code, name)")
+      .eq("id", session.user.id).maybeSingle();
+    const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school;
+    if (!profile || !school) {
+      await client.auth.signOut();
+      return location.replace("login.html");
+    }
+    sessionStorage.setItem("schoolshieldSession", JSON.stringify({ userId: session.user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, role: profile.role, displayName: profile.display_name, email: session.user.email }));
+    sessionStorage.setItem("schoolshieldRole", profile.role);
+    SCHOOL = activeSchool();
+    await connectCloudWorkspace(session.user, profile, school);
+    if (["principal", "clerk"].includes(profile.role)) {
+      const { count } = await client.from("account_request_notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+      window.schoolshieldPendingAccountAlerts = count || 0;
+    }
+  }
+  if (!sessionStorage.getItem("schoolshieldSession") && !sessionStorage.getItem("schoolshieldRole")) return location.replace("login.html");
   render();
 }
+startWorkspace();

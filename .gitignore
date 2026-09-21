@@ -1,0 +1,7 @@
+# Supabase credentials are local deployment configuration, never source code.
+.env
+.env.local
+.env.*.local
+
+# Supabase CLI generated state.
+supabase/.temp/

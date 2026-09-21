@@ -1,0 +1,10 @@
+<h2>Welcome to SchoolShield</h2>
+<p>Hello {{ .Data.display_name }},</p>
+<p>Your SchoolShield account has been approved for <strong>{{ .Data.school_name }}</strong>.</p>
+<p>
+  <strong>Sign-in email:</strong> {{ .Email }}<br>
+  <strong>School code:</strong> {{ .Data.school_code }}
+</p>
+<p>Use the button below to set your password, then sign in with the email and school code above.</p>
+<p><a href="{{ .ConfirmationURL }}">Set your password</a></p>
+<p>If you did not request this account, you can ignore this email.</p>

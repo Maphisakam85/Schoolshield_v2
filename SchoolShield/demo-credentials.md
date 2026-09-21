@@ -1,6 +1,6 @@
 # SchoolShield prototype — demo credentials
 
-All prototype accounts use the password `Test@123`. These credentials are only for the local prototype; they must not be used in a live deployment.
+The principal and clerk accounts below are authenticated Supabase prototype accounts. Their password is `Test@123`; change it before any real deployment. Other role patterns remain browser-demo examples until they are requested and approved by a principal or clerk.
 
 | School | School code | Test domain |
 | --- | --- | --- |
@@ -11,6 +11,11 @@ All prototype accounts use the password `Test@123`. These credentials are only f
 | Ntemoseng Secondary School | `NTE-005` | `ntemoseng.test` |
 
 For each school, sign in with the applicable school code and an email in its test domain.
+
+| Provisioned account | Email pattern | Approval rights |
+| --- | --- | --- |
+| Principal | `principal@<school-domain>` | Can approve account requests |
+| School clerk | `clerk@<school-domain>` | Can approve account requests |
 
 | Account type | Email pattern | Role assigned by the system |
 | --- | --- | --- |
