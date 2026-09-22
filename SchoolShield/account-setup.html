@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SchoolShield - Complete account setup</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body{min-height:100vh;background:linear-gradient(135deg,#062a34,#0a735a);display:grid;place-items:center;padding:20px}.setup-card{width:min(480px,100%);background:#fff;border-radius:18px;padding:30px;box-shadow:0 25px 80px #0004}.setup-brand{display:flex;align-items:center;gap:10px;margin-bottom:24px}.setup-brand img{width:46px}.setup-brand strong{font-size:20px}.setup-card h1{font-size:24px;margin:0 0 6px}.setup-card p{font-size:12px;color:#71838a;line-height:1.6}.setup-card label{display:block;font-size:10px;font-weight:700;margin:16px 0 6px}.setup-card .input{padding:12px}.setup-card .btn{width:100%;margin-top:18px;padding:12px}.setup-note{margin-top:14px;background:#f3f8f6;border-radius:9px;padding:10px;font-size:10px;color:#567}.setup-error{display:none;font-size:12px;margin-top:12px}
+  </style>
+</head>
+<body>
+  <main class="setup-card">
+    <div class="setup-brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield logo"><div><strong>SchoolShield</strong><small style="display:block;color:#71838a;font-size:9px">School safety &amp; management</small></div></div>
+    <h1>Complete your account</h1>
+    <p>Confirm your details and create a password. You will then be taken to the sign-in page.</p>
+    <form id="setupForm" hidden>
+      <label>Full name<input class="input" id="setupName" required autocomplete="name"></label>
+      <label>Mobile number<input class="input" id="setupPhone" required autocomplete="tel" placeholder="e.g. 082 000 0000"></label>
+      <label>Home address (optional)<input class="input" id="setupAddress" autocomplete="street-address"></label>
+      <label>Emergency contact (optional)<input class="input" id="setupEmergency" placeholder="Name and mobile number"></label>
+      <label>New password<input class="input" id="setupPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="At least 8 characters"></label>
+      <label>Confirm password<input class="input" id="setupConfirmPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Repeat your password"></label>
+      <button class="btn primary" type="submit">Complete setup</button>
+    </form>
+    <div class="setup-note" id="setupWaiting">Validating your secure setup link…</div>
+    <div class="setup-error" id="setupError"></div>
+  </main>
+  <script src="supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-client.js"></script>
+  <script>
+    const client = window.schoolshieldSupabase, form = document.getElementById('setupForm'), waiting = document.getElementById('setupWaiting'), errorBox = document.getElementById('setupError');
+    const fail = message => { waiting.hidden = true; errorBox.textContent = message; errorBox.style.display = 'block' };
+    const reveal = async session => { if (!session) return fail('This setup link is invalid or has expired. Ask your school administrator for a new invitation.'); const { data: { user } } = await client.auth.getUser(); document.getElementById('setupName').value = user?.user_metadata?.display_name || ''; waiting.hidden = true; form.hidden = false; };
+    client?.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') reveal(session) });
+    client?.auth.getSession().then(({ data: { session } }) => reveal(session));
+    form.onsubmit = async event => { event.preventDefault(); const password = document.getElementById('setupPassword').value; if (password !== document.getElementById('setupConfirmPassword').value) return fail('The passwords do not match.'); const { error: passwordError } = await client.auth.updateUser({ password }); if (passwordError) return fail(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('setupName').value.trim(), p_phone: document.getElementById('setupPhone').value.trim(), p_address: document.getElementById('setupAddress').value.trim(), p_emergency_contact: document.getElementById('setupEmergency').value.trim() }); if (profileError) return fail(profileError.message); await client.auth.signOut(); location.replace('login.html?setup=complete'); };
+  </script>
+</body>
+</html>

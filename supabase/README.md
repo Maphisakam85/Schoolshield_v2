@@ -40,8 +40,9 @@ All files in `school-documents` must use this path pattern:
 Use [invite.html](email-templates/invite.html) as the Supabase **Invite user**
 email template. It displays the approved user's sign-in email and school code.
 In Supabase Dashboard, set the deployed SchoolShield site as the Site URL and
-add its `login.html` address to the Auth redirect allow-list. The same URL is
-used for invitation setup and password-reset links.
+add both `login.html` and `account-setup.html` to the Auth redirect allow-list.
+The setup page is used by invitation links; the login page is used by
+password-reset links.
 
 The front end uses Supabase Auth and persists each school's prototype workspace
 in `public.school_workspaces`. Configure custom SMTP before production: the

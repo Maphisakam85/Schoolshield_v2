@@ -180,7 +180,7 @@ const SUBJECTS_BY_PHASE = {
   senior: ["Mathematics", "Physics", "Life Sciences", "Sesotho", "English", "Life Orientation", "Computer Applications Technology", "History"],
 };
 function emptyWorkspace() {
-  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
+  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], staffChangeRequests: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
 }
 
 /* ------------------------------ state layer ------------------------------ */
@@ -196,7 +196,9 @@ function getState() {
     save(stored);
     return stored;
   }
-  Object.assign(stored, emptyWorkspace(), stored, { __v: WORKSPACE_VERSION });
+  // Merge into a new object. Mutating `stored` while using it as a later
+  // Object.assign source erased populated arrays (for example parent learners).
+  stored = { ...emptyWorkspace(), ...stored, __v: WORKSPACE_VERSION };
   let migratedLegacyTimes = false;
   (stored.notifications || []).forEach((notice) => {
     if (notice.time === "Now" && !notice.createdAt) {
@@ -214,25 +216,64 @@ function save(state) {
   if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
     const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
     window.schoolshieldSupabase.from("school_workspaces")
-      .update({ payload: state, updated_by: session.userId || null })
-      .eq("school_id", session.schoolId)
+      .upsert({ school_id: session.schoolId, payload: state, version: WORKSPACE_VERSION, updated_by: session.userId || null }, { onConflict: "school_id" })
       .then(({ error }) => { if (error) console.warn("School workspace sync failed", error.message); });
   }
 }
 
+async function refreshCloudWorkspace(renderAfterRefresh = false) {
+  const client = window.schoolshieldSupabase;
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  if (!client || !session.schoolId) return false;
+  if (session.role === "parent") {
+    const { data: { session: authSession } } = await client.auth.getSession();
+    if (!authSession?.access_token) return false;
+    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
+    const response = await fetch(`${config.url}/functions/v1/parent-workspace`, {
+      method: "POST",
+      headers: { apikey: config.publishableKey, Authorization: `Bearer ${authSession.access_token}` },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.payload) {
+      window.schoolshieldParentWorkspaceError = data?.error || `Request failed (${response.status})`;
+      console.warn("Parent workspace could not be refreshed", window.schoolshieldParentWorkspaceError);
+      return false;
+    }
+    window.schoolshieldParentWorkspaceError = "";
+    const key = `schoolshield:${session.schoolCode}`;
+    const incoming = JSON.stringify(data.payload);
+    const changed = localStorage.getItem(key) !== incoming;
+    localStorage.setItem(key, incoming);
+    window.schoolshieldParentLearnerLinked = Boolean(data.linked);
+    if (changed && renderAfterRefresh) render();
+    return changed;
+  }
+  const { data, error } = await client.from("school_workspaces").select("payload, version, updated_at").eq("school_id", session.schoolId).maybeSingle();
+  if (error || !data?.payload || !Object.keys(data.payload).length) return false;
+  const key = `schoolshield:${session.schoolCode}`;
+  const incoming = JSON.stringify(data.payload);
+  const changed = localStorage.getItem(key) !== incoming;
+  localStorage.setItem(key, incoming);
+  window.schoolshieldCloudWorkspaceReady = true;
+  if (changed && renderAfterRefresh) render();
+  return changed;
+}
+
 async function connectCloudWorkspace(user, profile, school) {
   const client = window.schoolshieldSupabase;
-  if (!client || profile.role === "parent") return;
-  const { data, error } = await client.from("school_workspaces").select("payload").eq("school_id", school.id).maybeSingle();
-  if (!error && data?.payload && Object.keys(data.payload).length) {
-    localStorage.setItem(`schoolshield:${school.code}`, JSON.stringify(data.payload));
-    window.schoolshieldCloudWorkspaceReady = true;
+  if (!client) return;
+  if (profile.role === "parent") {
+    await refreshCloudWorkspace();
     return;
   }
+  if (await refreshCloudWorkspace()) return;
   if (["principal", "deputy", "clerk"].includes(profile.role)) {
     const initialState = getState();
-    const { error: insertError } = await client.from("school_workspaces").insert({ school_id: school.id, payload: initialState, version: WORKSPACE_VERSION, updated_by: user.id });
-    if (!insertError) window.schoolshieldCloudWorkspaceReady = true;
+    const { error: insertError } = await client.from("school_workspaces").upsert({ school_id: school.id, payload: initialState, version: WORKSPACE_VERSION, updated_by: user.id }, { onConflict: "school_id", ignoreDuplicates: true });
+    if (!insertError) {
+      window.schoolshieldCloudWorkspaceReady = true;
+      await refreshCloudWorkspace();
+    }
   }
 }
 
@@ -470,6 +511,17 @@ function parentDirectory() {
 function parentsForClass(classId) {
   return parentDirectory().filter((p) => p.classes.includes(classId));
 }
+function parentLearner() {
+  return learners().find((learner) => learner.parent === userName()) || learners()[0] || null;
+}
+function parentLinkRequired(title = "Your learner") {
+  return generic(
+    title,
+    "Parent / guardian",
+    "Your account is active, but it has not yet been linked to a learner record.",
+    '<section class="panel"><h3>Learner link needed</h3><p class="muted">Please ask the school clerk to link your parent account to your learner. Once it is linked, your learner record, notices and teacher chat will appear here.</p><div class="panel-foot"><button class="btn primary" data-action="refresh-parent-workspace">Refresh learner link</button></div></section>',
+  );
+}
 
 /* ----------------------------- domain: audience --------------------------- */
 /* Announcement audiences and how many people each one reaches. */
@@ -615,11 +667,11 @@ function nav() {
     const [id, label, url, ic] = dashboardLink;
     return `<a href="${url}" class="nav-item dashboard-nav ${page() === id ? "active" : ""}">${icon(ic)}<span>${label}</span></a>`;
   })() : "";
-  return dashboard + NAV_GROUPS.map((group, groupIndex) => {
+  return dashboard + NAV_GROUPS.map((group) => {
     const links = group.ids.map((id) => NAV.find((item) => item[0] === id)).filter((item) => item && allowed(item[0]));
     if (!links.length) return "";
     const isCurrentGroup = links.some(([id]) => page() === id);
-    const open = isCurrentGroup || (groupIndex === 0 && page() === "dashboard");
+    const open = isCurrentGroup || links.some(([id]) => navHasNewUpdates(id));
     return `<details class="nav-group" ${open ? "open" : ""}><summary>${group.label}<span>⌄</span></summary>${links.map(
       ([id, label, url, ic]) => {
         const hasUpdates = navHasNewUpdates(id);
@@ -766,7 +818,8 @@ function dashboard() {
   );
 }
 function parentDashboard() {
-  const child = learners().find((learner) => learner.parent === userName()) || learners()[0];
+  const child = parentLearner();
+  if (!child) return parentLinkRequired("Parent dashboard");
   const childClass = classStats(child.class);
   const alerts = notificationsForRole();
   const published = publishedReportsForClass(child.class, child.id);
@@ -1030,8 +1083,9 @@ function studentRecord() {
   const r = role();
   const child =
     r === "parent"
-      ? learners().find((l) => l.parent === userName()) || learners()[0]
+      ? parentLearner()
       : learnerById(param("learner")) || learners()[0];
+  if (!child) return parentLinkRequired("Student Record");
   const stats = schoolStats();
   return generic(
     "Student Record",
@@ -1571,8 +1625,8 @@ function parentChat() {
       "me",
     );
   }
-  const child =
-    learners().find((l) => l.parent === userName()) || learners()[0];
+  const child = parentLearner();
+  if (!child) return parentLinkRequired("Parent–Teacher Chat");
   const parentChatIndex = getState().parentChat.findIndex((conversation) => conversation.learnerId === child.id);
   const storedParentChat = getState().parentChat[parentChatIndex];
   const peer = {
@@ -1630,11 +1684,16 @@ function announcements() {
 function staff() {
   const s = getState();
   const canManage = ["principal", "deputy", "clerk"].includes(role());
+  const requests = s.staffChangeRequests || [];
+  const mine = requests.filter((request) => request.requestedBy === userName() && request.status === "Pending");
+  const reviewQueue = ["principal", "deputy"].includes(role()) ? requests.filter((request) => request.status === "Pending") : [];
+  const approvals = reviewQueue.length ? `<section class="panel"><div class="panel-head"><div><h3>Staff changes awaiting dual approval</h3><p>Clerk changes only update the register after both the principal and deputy approve.</p></div></div>${table(["Change", "Requested by", "Principal", "Deputy", ""], reviewQueue.map((request) => `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} staff member</b><small>${request.proposed.name} · ${request.proposed.role}</small></td><td>${request.requestedBy}<small>${request.requestedOn}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.approvals[role()] ? '<span class="muted">Your approval recorded</span>' : `<button class="btn small primary" data-action="approve-staff-change" data-staff-change="${request.id}">Approve</button>`}</td></tr>`))}</section>` : "";
+  const submitted = role() === "clerk" && mine.length ? `<section class="panel"><div class="panel-head"><div><h3>My pending staff changes</h3><p>These changes are not live until the principal and deputy both approve.</p></div></div>${table(["Change", "Principal", "Deputy", "Requested"], mine.map((request) => `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} · ${request.proposed.name}</b><small>${request.proposed.role} · ${request.proposed.department}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.requestedOn}</td></tr>`))}</section>` : "";
   return generic(
     "Staff",
     "People management",
     "Teaching, administration and support staff.",
-    `<section class="panel">${table(
+    `${approvals}${submitted}<section class="panel">${table(
       ["Employee", "Role", "Department", "Status", ""],
       s.staff.map(
         (x) =>
@@ -1769,7 +1828,8 @@ function sickNotice() {
   );
 }
 function parentSickNoticePage() {
-  const eligibleLearners = learners().filter((learner) => learner.parent === userName());
+  const linkedLearner = parentLearner();
+  const eligibleLearners = linkedLearner ? [linkedLearner] : [];
   const submitted = getState().sickNotices.filter((notice) => notice.submittedBy === userName());
   const latestId = sessionStorage.getItem("schoolshieldLastSickNotice");
   const latest = submitted.find((notice) => notice.id === latestId);
@@ -2154,6 +2214,7 @@ function action(type, el) {
   else if (type === "approve-account-request") approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
   else if (type === "reject-account-request") rejectAccountRequest(el.dataset.request);
   else if (type === "refresh-account-requests") loadAccountRequests();
+  else if (type === "refresh-parent-workspace") refreshCloudWorkspace(true);
   else if (type === "close-modal") el.closest(".modal-backdrop")?.remove();
   else if (type === "save-assessment") saveAssessment();
   else if (type === "request-report")
@@ -2196,7 +2257,7 @@ function action(type, el) {
   else if (type === "add-staff")
     modal(
       "Add staff member",
-      `<div class="form-grid"><label>Full name<input class="input" id="staffName"></label><label>Role<select class="select" id="staffRole"><option>Teacher</option><option>Clerk</option><option>Security Officer</option></select></label><label>Department<input class="input" id="staffDepartment"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff">Save staff member</button></div>`,
+      `<div class="form-grid"><label>Full name<input class="input" id="staffName"></label><label>Role<select class="select" id="staffRole"><option>Teacher</option><option>Clerk</option><option>Security Officer</option></select></label><label>Department<input class="input" id="staffDepartment"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff">${role() === "clerk" ? "Submit for dual approval" : "Save staff member"}</button></div>`,
     );
   else if (type === "add-appointment")
     modal(
@@ -2207,6 +2268,7 @@ function action(type, el) {
   else if (type === "save-incident") saveIncident();
   else if (type === "save-learner") saveLearner();
   else if (type === "save-staff") saveStaff();
+  else if (type === "approve-staff-change") approveStaffChange(el.dataset.staffChange);
   else if (type === "manage-staff") manageStaffRecord(el.dataset.staff, [...el.closest("tbody").querySelectorAll('[data-action="manage-staff"]')].indexOf(el));
   else if (type === "manage-parent") manageParent(el.dataset.learner);
   else if (type === "save-parent") saveParent(el.dataset.learner);
@@ -2251,9 +2313,10 @@ function alertToast() {
 }
 function notificationsForRole() {
   const notices = getState().notifications;
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "teacher" || notice.recipient === userName());
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher");
-  const child = learners().find((learner) => learner.parent === userName());
+  if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
+  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && (notice.scope !== "teacher" || notice.recipient === userName()));
+  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
+  const child = parentLearner();
   return notices.filter(
     (notice) => (notice.scope === "parents" && (!notice.class || (child && notice.class === child.class))) || notice.scope === "whole-school" || (child && notice.learnerId === child.id),
   );
@@ -2381,15 +2444,9 @@ function saveStaff() {
   const staffRole = inputValue("staffRole");
   const department = inputValue("staffDepartment");
   if (!requireValues([name, staffRole, department])) return;
-  persist((state) =>
-    state.staff.push({
-      id: "EMP-" + Date.now().toString().slice(-5),
-      name,
-      role: staffRole,
-      department,
-      status: "Active",
-    }),
-  );
+  const proposed = { id: "EMP-" + Date.now().toString().slice(-5), name, role: staffRole, department, status: "Active" };
+  if (role() === "clerk") return submitStaffChange("add", proposed);
+  persist((state) => state.staff.push(proposed));
   finishForm();
 }
 function manageParent(learnerId) {
@@ -2410,23 +2467,54 @@ function saveParent(learnerId) {
 function manageStaff(id) {
   const member = getState().staff.find((item) => item.id === id);
   if (!member) return;
-  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${id}">Save changes</button></div>`);
+  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${id}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`);
 }
 function manageStaffRecord(id, index) {
   const member = Number.isInteger(Number(index)) ? getState().staff[Number(index)] : getState().staff.find((item) => item.id === id);
   if (!member) return;
-  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${member.id}" data-staff-index="${index}">Save changes</button></div>`);
+  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${member.id}" data-staff-index="${index}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`);
 }
 function saveStaffChanges(id, index) {
+  const current = Number.isInteger(Number(index)) ? getState().staff[Number(index)] : getState().staff.find((item) => item.id === id);
+  if (!current) return;
+  const proposed = { ...current, name: inputValue("editStaffName"), role: inputValue("editStaffRole"), department: inputValue("editStaffDepartment"), status: inputValue("editStaffStatus") };
+  if (role() === "clerk") return submitStaffChange("edit", proposed, current);
   persist((state) => {
     const member = Number.isInteger(Number(index)) ? state.staff[Number(index)] : state.staff.find((item) => item.id === id);
     if (!member) return;
-    member.name = inputValue("editStaffName");
-    member.role = inputValue("editStaffRole");
-    member.department = inputValue("editStaffDepartment");
-    member.status = inputValue("editStaffStatus");
+    Object.assign(member, proposed);
   });
   finishForm();
+}
+function submitStaffChange(type, proposed, previous = null) {
+  persist((state) => {
+    state.staffChangeRequests = state.staffChangeRequests || [];
+    const request = { id: `SCR-${Date.now().toString().slice(-7)}`, type, staffId: proposed.id, proposed, previous, requestedBy: userName(), requestedOn: todayLabel(), status: "Pending", approvals: { principal: false, deputy: false } };
+    state.staffChangeRequests.unshift(request);
+    state.notifications.unshift({ id: `NTF-STAFF-${Date.now().toString().slice(-6)}`, createdAt: notificationTimestamp(), category: "Staff approval", priority: "Medium", title: "Staff change requires approval", description: `${request.requestedBy} submitted a ${type} request for ${proposed.name}. Principal and deputy approval are both required.`, scope: "leadership", staffChangeId: request.id, read: false });
+  });
+  $$(".modal-backdrop").forEach((element) => element.remove());
+  modal("Staff change submitted", `<p>Your ${type === "add" ? "new staff member" : "staff edit"} is pending approval from both the principal and deputy. The live staff register has not changed.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+}
+function approveStaffChange(id) {
+  if (!["principal", "deputy"].includes(role())) return;
+  let completed = false;
+  persist((state) => {
+    const request = (state.staffChangeRequests || []).find((item) => item.id === id && item.status === "Pending");
+    if (!request || request.approvals[role()]) return;
+    request.approvals[role()] = true;
+    if (!request.approvals.principal || !request.approvals.deputy) return;
+    if (request.type === "add") state.staff.push(request.proposed);
+    else {
+      const member = state.staff.find((item) => item.id === request.staffId);
+      if (member) Object.assign(member, request.proposed);
+    }
+    request.status = "Approved";
+    request.completedOn = todayLabel();
+    completed = true;
+  });
+  modal(completed ? "Staff change applied" : "Approval recorded", completed ? "<p>Both leadership approvals are recorded and the live staff register has been updated.</p>" : "<p>Your approval has been recorded. The register will update after the other leader approves.</p>");
+  render();
 }
 function saveAppointment() {
   const title = inputValue("appointmentTitle");
@@ -3055,8 +3143,8 @@ async function approveAccountRequest(id, delivery = "email") {
   const client = window.schoolshieldSupabase, approvedRole = $(`[data-approval-role="${id}"]`)?.value;
   if (!client || !approvedRole) return;
   const { data: { session } } = await client.auth.getSession();
-  const loginPath = location.pathname.replace(/[^/]+$/, "login.html");
-  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, delivery, redirect_to: `${location.origin}${loginPath}` }) });
+  const setupPath = location.pathname.replace(/[^/]+$/, "account-setup.html");
+  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, delivery, redirect_to: `${location.origin}${setupPath}` }) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) return alert(result.error || "Could not approve this account.");
   if (delivery === "setup_link" && result.setup_link) {
@@ -3173,6 +3261,12 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  if (!window.__schoolshieldCloudRefreshListener) {
+    window.__schoolshieldCloudRefreshListener = true;
+    const refreshWhenVisible = () => { if (document.visibilityState === "visible") refreshCloudWorkspace(true); };
+    window.addEventListener("focus", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+  }
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
   if (page() === "dashboard") {

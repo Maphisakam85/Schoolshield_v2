@@ -69,11 +69,11 @@ Deno.serve(async (request) => {
   let redirectTo: string | undefined;
   try {
     const requestedRedirect = new URL(String(body.redirect_to || ""));
-    if (requestedRedirect.origin === origin && requestedRedirect.pathname.endsWith("/login.html")) {
+    if (requestedRedirect.origin === origin && requestedRedirect.pathname.endsWith("/account-setup.html")) {
       redirectTo = requestedRedirect.toString();
     }
-  } catch (_) { /* Fall back to the site's login path below. */ }
-  if (!redirectTo && origin) redirectTo = `${origin}/login.html`;
+  } catch (_) { /* Fall back to the site's account-setup path below. */ }
+  if (!redirectTo && origin) redirectTo = `${origin}/account-setup.html`;
   const inviteOptions = {
     data: { display_name: pending.display_name, school_code: school.code, school_name: school.name },
     redirectTo,

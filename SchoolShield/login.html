@@ -208,6 +208,7 @@
     client?.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY' && session) show(resetPasswordForm) });
     client?.auth.getSession().then(async ({ data: { session } }) => { if (!session) return; if (recoveryUrl()) return show(resetPasswordForm); if (/type=invite/.test(location.hash + location.search)) { const { data: { user } } = await client.auth.getUser(); document.getElementById('inviteName').value = user?.user_metadata?.display_name || ''; show(inviteForm) } });
     inviteForm.onsubmit = async event => { event.preventDefault(); const { error: passwordError } = await client.auth.updateUser({ password: document.getElementById('invitePassword').value }); if (passwordError) return showError(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('inviteName').value.trim(), p_phone: document.getElementById('invitePhone').value.trim(), p_address: document.getElementById('inviteAddress').value.trim(), p_emergency_contact: document.getElementById('inviteEmergency').value.trim() }); if (profileError) return showError(profileError.message); await client.auth.signOut(); show(loginForm); showError('Account setup is complete. Sign in with your email, password and school code.', true) };
+    if (new URLSearchParams(location.search).get('setup') === 'complete') showError('Account setup is complete. Sign in with your email, password and school code.', true);
   </script>
 </body>
 

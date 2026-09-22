@@ -54,6 +54,14 @@ Deno.serve(async (request) => {
       const school = schoolsByCode.get(schoolCode);
       const { error: profileError } = await admin.from("profiles").upsert({ id: user.id, school_id: school?.id, role, display_name: displayName });
       if (profileError) return Response.json({ error: `Could not assign ${email}: ${profileError.message}` }, { status: 500 });
+      if (role === "parent" && school?.id) {
+        const { data: workspace } = await admin.from("school_workspaces").select("payload").eq("school_id", school.id).maybeSingle();
+        const learnerRef = workspace?.payload?.learners?.[0]?.id;
+        if (learnerRef) {
+          const { error: linkError } = await admin.from("parent_learner_links").upsert({ school_id: school.id, parent_id: user.id, learner_ref: learnerRef });
+          if (linkError) return Response.json({ error: `Could not link ${email} to a demonstration learner: ${linkError.message}` }, { status: 500 });
+        }
+      }
       created.push(email);
     }
   }
