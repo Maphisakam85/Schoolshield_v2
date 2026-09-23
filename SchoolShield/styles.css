@@ -279,6 +279,16 @@
     font-size: 15px;
 }
 
+/* Sender-based chat presentation. Position is determined by the signed-in
+   sender identity, never by message sequence. */
+.chat-contact-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:9px; max-height:205px; overflow:auto; padding-right:4px; }
+.chat-contact-button { width:100%; border:1px solid #dce6e8; background:#fff; border-radius:10px; text-align:left; cursor:pointer; }
+.chat-contact-action { margin-left:auto; color:#087550; font-weight:700; font-size:12px; }
+.chat-message.grouped { margin-top:-1px; }
+.chat-message.grouped .msg { border-top-left-radius:5px!important; border-top-right-radius:5px!important; }
+.message-sender { display:block; margin-bottom:4px; color:#087550; font-size:9px; font-weight:800; }
+.msg small em { font-style:normal; color:#21845c; }
+
 :root {
     --navy: #082c36;
     --navy2: #0c3a45;

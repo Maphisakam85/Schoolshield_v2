@@ -21,10 +21,10 @@ function activeSchool() {
   try {
     const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
     if (session?.schoolCode && session?.schoolName) {
-      return { name: session.schoolName, code: session.schoolCode };
+      return { name: session.schoolName, code: session.schoolCode, principal: session.principalName || `${session.schoolName} Principal` };
     }
   } catch (err) { /* The sign-in guard redirects before any workspace is rendered. */ }
-  return { name: "", code: "" };
+  return { name: "", code: "", principal: "School Principal" };
 }
 let SCHOOL = activeSchool();
 
@@ -1535,7 +1535,46 @@ function submitDailyWeek(classId, weekStart) {
 }
 
 /* --------------------------------- chat ---------------------------------- */
+function chatTimestamp(message) {
+  if (!message.sentAt) return message.date || "Now";
+  return new Date(message.sentAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function chatSender(message, conversation, legacySide) {
+  if (message.sender) return message.sender;
+  const teacherOwned = conversation.legacyOwner === "teacher" || /^Teacher/.test(conversation.role || "");
+  if (teacherOwned) {
+    const teacher = conversation.legacyTeacher || conversation.id;
+    const principal = conversation.legacyPrincipal || SCHOOL.principal;
+    return message.from === "me" ? teacher : principal;
+  }
+  return message.from === legacySide ? userName() : conversation.id;
+}
+
 function chatLayout(title, eyebrow, desc, conversations, storeKey, ownStoredSide = "me") {
+  if (!conversations.length) return generic(title, eyebrow, desc, '<section class="panel"><p class="muted">No conversations available.</p></section>');
+  const selected = Math.max(0, Math.min(conversations.length - 1, Number(param("chat")) || 0));
+  const active = conversations[selected];
+  const storageIndex = active.storeIndex ?? selected;
+  const people = conversations.map((contact, index) => `<a href="${page()}.html?chat=${index}" data-chat-contact class="chat-person ${index === selected ? "active" : ""}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="dot success"></span></a>`).join("");
+  const contacts = conversations.map((contact, index) => `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${page()}.html?chat=${index}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="chat-contact-action">Chat -></span></button>`).join("");
+  const ordered = (active.messages || []).map((message, index) => ({ message, index })).sort((a, b) => {
+    const first = Date.parse(a.message.sentAt || a.message.date || "");
+    const second = Date.parse(b.message.sentAt || b.message.date || "");
+    return Number.isNaN(first) || Number.isNaN(second) || first === second ? a.index - b.index : first - second;
+  });
+  let previousSender = "";
+  const messages = ordered.map(({ message }) => {
+    const sender = chatSender(message, active, ownStoredSide);
+    const mine = sender === userName();
+    const grouped = sender === previousSender;
+    previousSender = sender;
+    return `<div class="chat-message ${mine ? "outgoing" : "incoming"} ${grouped ? "grouped" : ""}"><div class="msg ${mine ? "mine" : "other"}">${mine || grouped ? "" : `<b class="message-sender">${sender}</b>`}<span>${message.text}</span><small>${chatTimestamp(message)}${mine ? " <em>sent</em>" : ""}</small></div></div>`;
+  }).join("") || '<p class="muted">No messages yet. Start the conversation below.</p>';
+  return generic(title, eyebrow, desc, `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`);
+}
+
+function legacyChatLayout(title, eyebrow, desc, conversations, storeKey, ownStoredSide = "me") {
   if (!conversations.length)
     return generic(
       title,
@@ -1589,14 +1628,43 @@ function teacherChat() {
       "me",
     );
   }
-  const storedIndex = getState().teacherChat.findIndex((conversation) => conversation.id === userName());
-  const stored = getState().teacherChat[storedIndex];
+  const principal = SCHOOL.principal || `${SCHOOL.name} Principal`;
+  let storedIndex = getState().teacherChat.findIndex((conversation) => conversation.id === userName());
+  if (storedIndex < 0) {
+    persist((state) => {
+      state.teacherChat = state.teacherChat || [];
+      state.teacherChat.push({
+        id: userName(),
+        role: `Teacher · ${SCHOOL.name}`,
+        initials: initials(userName()),
+        legacyOwner: "teacher",
+        legacyTeacher: userName(),
+        legacyPrincipal: principal,
+        messages: [{ from: "them", sender: principal, text: "Good morning. Please submit your class marks so the clerk can compile the term reports.", date: "17 Sep 2026" }],
+      });
+    });
+    storedIndex = getState().teacherChat.length - 1;
+  }
+  let stored = getState().teacherChat[storedIndex];
+  if (stored && (!stored.legacyOwner || stored.messages?.some((message) => !message.sender))) {
+    persist((state) => {
+      const conversation = state.teacherChat[storedIndex];
+      conversation.legacyOwner = "teacher";
+      conversation.legacyTeacher = userName();
+      conversation.legacyPrincipal = principal;
+      conversation.messages.forEach((message) => { if (!message.sender) message.sender = message.from === "them" ? principal : userName(); });
+    });
+    stored = getState().teacherChat[storedIndex];
+  }
   const peer = {
-    id: SCHOOL.principal,
+    id: principal,
     role: "Principal · " + SCHOOL.name,
-    initials: initials(SCHOOL.principal),
+    initials: initials(principal),
     storeIndex: storedIndex,
-    messages: stored ? stored.messages : [{ from: "them", text: "Good morning. Please submit your class marks so the clerk can compile the term reports.", date: "17 Sep 2026" }],
+    legacyOwner: stored?.legacyOwner,
+    legacyTeacher: stored?.legacyTeacher,
+    legacyPrincipal: stored?.legacyPrincipal,
+    messages: stored ? stored.messages : [{ from: "them", sender: principal, text: "Good morning. Please submit your class marks so the clerk can compile the term reports.", date: "17 Sep 2026" }],
   };
   return chatLayout(
     "Teacher Chat",
@@ -1604,7 +1672,7 @@ function teacherChat() {
     "Direct, private channel between you and the principal. Parents cannot access this channel.",
     [peer],
     "teacherChat",
-    "them",
+    "me",
   );
 }
 
@@ -1614,7 +1682,17 @@ function parentChat() {
   if (r === "teacher") {
     const mine = teacherClasses(userName()).map((c) => c.id);
     const list = getState().parentChat
-      .map((conversation, storeIndex) => ({ ...conversation, storeIndex }))
+      .map((conversation, storeIndex) => {
+        const learner = learnerById(conversation.learnerId);
+        return {
+          ...conversation,
+          // The linked learner record is the source of truth for the tester
+          // parent name shown to a teacher; older chat rows used a seed name.
+          id: learner?.parent || conversation.id,
+          role: learner ? `${learner.relation || "Parent"} · ${learner.name} (${learner.class})` : conversation.role,
+          storeIndex,
+        };
+      })
       .filter((conversation) => mine.includes(conversation.class));
     return chatLayout(
       "Parent–Teacher Chat",
@@ -1627,13 +1705,29 @@ function parentChat() {
   }
   const child = parentLearner();
   if (!child) return parentLinkRequired("Parent–Teacher Chat");
-  const parentChatIndex = getState().parentChat.findIndex((conversation) => conversation.learnerId === child.id);
+  let parentChatIndex = getState().parentChat.findIndex((conversation) => conversation.learnerId === child.id);
+  if (parentChatIndex < 0) {
+    persist((state) => {
+      state.parentChat = state.parentChat || [];
+      state.parentChat.push({
+        id: userName(),
+        learnerId: child.id,
+        class: child.class,
+        role: `${child.relation || "Parent"} · ${child.name} (${child.class})`,
+        initials: initials(userName()),
+        legacyOwner: "parent",
+        messages: [{ from: "them", sender: teacherForClass(child.class), text: `Good day. ${child.name}'s Term 2 report will be shared here once it is published.`, date: "17 Sep 2026" }],
+      });
+    });
+    parentChatIndex = getState().parentChat.length - 1;
+  }
   const storedParentChat = getState().parentChat[parentChatIndex];
   const peer = {
     id: teacherForClass(child.class),
     role: `Class teacher · ${child.class}`,
     initials: initials(teacherForClass(child.class)),
     storeIndex: parentChatIndex,
+    legacyOwner: storedParentChat?.legacyOwner,
     messages: storedParentChat ? storedParentChat.messages : [
       {
         from: "them",
@@ -3011,20 +3105,37 @@ function sendAnnouncement() {
   render();
 }
 
-function sendMessage(storeKey, chatIndex = 0, sender = "me") {
+async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
   const input = $("#chatInput");
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
+  if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
+    const child = role() === "parent"
+      ? parentLearner()
+      : getState().parentChat?.[Number(chatIndex) || 0] && learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
+    const { data: { session } } = await window.schoolshieldSupabase.auth.getSession();
+    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
+    const response = await fetch(`${config.url}/functions/v1/parent-chat`, {
+      method: "POST",
+      headers: { apikey: config.publishableKey, Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ learner_id: child?.id, text }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) return modal("Message not sent", `<p class="muted">${result.error || "Please try again."}</p>`);
+    await refreshCloudWorkspace(true);
+    if (role() === "teacher") render();
+    return;
+  }
   if (Array.isArray(getState()[storeKey])) {
     persist((state) => {
       const conversation = state[storeKey][Number(chatIndex)] || state[storeKey][0];
-      if (conversation) conversation.messages.push({ from: sender, text, date: todayLabel() });
+      if (conversation) conversation.messages.push({ from: sender, sender: userName(), text, date: todayLabel(), sentAt: new Date().toISOString() });
     });
   } else {
     persist((state) => {
       state.chatExtras = state.chatExtras || {};
       state.chatExtras[storeKey] = state.chatExtras[storeKey] || [];
-      state.chatExtras[storeKey].push({ from: sender, text, date: todayLabel() });
+      state.chatExtras[storeKey].push({ from: sender, sender: userName(), text, date: todayLabel(), sentAt: new Date().toISOString() });
     });
   }
   render();
@@ -3335,6 +3446,8 @@ function bind() {
       sendMessage(sendButton?.dataset.store, sendButton?.dataset.chat, sendButton?.dataset.sender);
     }
   });
+  const messagePane = $("#messages");
+  if (messagePane) requestAnimationFrame(() => { messagePane.scrollTop = messagePane.scrollHeight; });
   setTimeout(showPendingSickNoticePopup, 0);
 }
 
@@ -3353,7 +3466,12 @@ async function startWorkspace() {
       await client.auth.signOut();
       return location.replace("login.html");
     }
-    sessionStorage.setItem("schoolshieldSession", JSON.stringify({ userId: session.user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, role: profile.role, displayName: profile.display_name, email: session.user.email }));
+    let principalName = profile.role === "principal" ? profile.display_name : "";
+    if (!principalName) {
+      const { data: principalProfile } = await client.from("profiles").select("display_name").eq("school_id", school.id).eq("role", "principal").maybeSingle();
+      principalName = principalProfile?.display_name || `${school.name} Principal`;
+    }
+    sessionStorage.setItem("schoolshieldSession", JSON.stringify({ userId: session.user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, principalName, role: profile.role, displayName: profile.display_name, email: session.user.email }));
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
