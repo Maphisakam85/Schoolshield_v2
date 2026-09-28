@@ -4196,97 +4196,16 @@ function processVisitorScan() {
 }
 
 function checkoutVisitor(id) {
-  const visitor = getState().visitors.find((item) => item.id === id);
-
-  if (!visitor) {
-    modal(
-      "Visitor not found",
-      `<p class="muted">The visitor record could not be found.</p>
-       <div class="modal-foot">
-         <button class="btn primary" data-action="close-modal">Done</button>
-       </div>`,
-    );
-    return;
-  }
-
-  if (visitor.status !== "Inside") {
-    modal(
-      "Already checked out",
-      `<p class="muted">
-        ${visitor.name} has already been checked out.
-      </p>
-      <div class="modal-foot">
-        <button class="btn primary" data-action="close-modal">Done</button>
-      </div>`,
-    );
-    return;
-  }
-
-  const checkoutTime = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
   persist((state) => {
-    const item = state.visitors.find((entry) => entry.id === id);
-
-    if (!item) return;
-
-    item.status = "Checked Out";
-    item.out = checkoutTime;
-    item.processedBy = userName();
-
-    // Keep an audit record for the checkout
-    item.checkoutBy = userName();
-    item.checkoutAt = new Date().toISOString();
-
-    state.notifications = state.notifications || [];
-
-    state.notifications.unshift({
-      id: "NTF-VIS-OUT-" + Date.now().toString().slice(-6),
-      createdAt: notificationTimestamp(),
-      category: "Visitor",
-      scope: "system",
-      priority: "Low",
-      title: "Visitor checked out",
-      description: `${item.name} has checked out and left the school premises.`,
-      reporter: userName(),
-      read: false,
-    });
+    const visitor = state.visitors.find((item) => item.id === id);
+    if (visitor && visitor.status === "Inside") {
+      visitor.status = "Checked Out";
+      visitor.out = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
   });
-
-  // Close any open visitor/QR modal
   $$(".modal-backdrop").forEach((element) => element.remove());
-
-  // Immediately refresh the visitor list
   render();
-
-  // Show confirmation
-  modal(
-    "Visitor checked out",
-    `<p>
-      <b>${visitor.name}</b> has been checked out successfully.
-    </p>
-    <div class="detail-grid">
-      <div>
-        <small>Check-out time</small>
-        <b>${checkoutTime}</b>
-      </div>
-      <div>
-        <small>Status</small>
-        ${badge("Checked Out")}
-      </div>
-      <div>
-        <small>Processed by</small>
-        <b>${userName()}</b>
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn primary" data-action="close-modal">Done</button>
-    </div>`,
-  );
 }
-
 function viewIncident(id) {
   const incident = getState().incidents.find((item) => item.id === id);
   if (!incident) return;
@@ -5424,7 +5343,7 @@ function bind() {
     );
     render();
   });
-  $$("[data-visitor]").forEach(
+  $$("[data-visitor]:not([data-action])").forEach(
     (b) => (b.onclick = () => visitorModal(b.dataset.visitor)),
   );
   $("#visitorSearch")?.addEventListener("input", (e) =>
