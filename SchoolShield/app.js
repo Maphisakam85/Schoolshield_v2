@@ -55,6 +55,7 @@ const ACCESS = {
     "appointments",
     "test-scores",
     "teacher-chat",
+    "sgb-chat",
   ],
   deputy: [
     "dashboard",
@@ -75,7 +76,7 @@ const ACCESS = {
     "test-scores",
     "teacher-chat",
   ],
-  sgb: ["dashboard", "incidents", "notifications", "reports"],
+  sgb: ["dashboard", "visitors", "incidents", "announcements", "sgb-chat"],
   security: [
     "dashboard",
     "visitors",
@@ -93,6 +94,7 @@ const ACCESS = {
   ],
   clerk: [
     "dashboard",
+    "notifications",
     "class-records",
     "student-records",
     "student-reports",
@@ -107,6 +109,7 @@ const ACCESS = {
   ],
   teacher: [
     "dashboard",
+    "notifications",
     "learners",
     "class-records",
     "announcements",
@@ -152,6 +155,7 @@ const NAV = [
     "security-officers.html",
     "shield",
   ],
+  ["sgb-chat", "SGB Chat", "sgb-chat.html", "chat"],
   ["settings", "Settings", "settings.html", "settings"],
 ];
 
@@ -160,7 +164,7 @@ const NAV_GROUPS = [
   { label: "People", ids: ["learners", "class-records", "parents", "staff", "account-requests", "student-records", "student-record"] },
   { label: "Learning", ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"] },
   { label: "Safety & wellbeing", ids: ["visitors", "incidents", "security", "security-officers", "sick-notices", "sick-notice"] },
-  { label: "Communication", ids: ["announcements", "appointments", "teacher-chat", "parent-chat"] },
+  { label: "Communication", ids: ["announcements", "appointments", "teacher-chat", "parent-chat", "sgb-chat"] },
   { label: "Administration", ids: ["settings"] },
 ];
 
@@ -180,7 +184,7 @@ const SUBJECTS_BY_PHASE = {
   senior: ["Mathematics", "Physics", "Life Sciences", "Sesotho", "English", "Life Orientation", "Computer Applications Technology", "History"],
 };
 function emptyWorkspace() {
-  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], staffChangeRequests: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
+  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], staffChangeRequests: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], sgbPrincipalChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
 }
 
 /* ------------------------------ state layer ------------------------------ */
@@ -215,13 +219,32 @@ function save(state) {
   localStorage.setItem(`schoolshield:${SCHOOL.code}`, JSON.stringify(state));
   if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
     const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
-    window.schoolshieldSupabase.from("school_workspaces")
-      .upsert({ school_id: session.schoolId, payload: state, version: WORKSPACE_VERSION, updated_by: session.userId || null }, { onConflict: "school_id" })
-      .then(({ error }) => { if (error) console.warn("School workspace sync failed", error.message); });
+    // Serialize changes so a refresh cannot replace a just-added visitor,
+    // incident or message with an older workspace payload.
+    const previous = window.schoolshieldWorkspaceSaveQueue || Promise.resolve();
+    window.schoolshieldWorkspaceSaveQueue = previous.catch(() => undefined).then(async () => {
+      const { error } = await window.schoolshieldSupabase.from("school_workspaces")
+        // A workspace is created only by a principal, deputy or clerk during
+        // onboarding. Regular staff (including SGB members) have UPDATE access,
+        // but not INSERT access. Upsert checks the INSERT policy even when the
+        // row already exists, so it rejected their chat messages.
+        .update({ payload: state, version: WORKSPACE_VERSION, updated_by: session.userId || null })
+        .eq("school_id", session.schoolId);
+      if (error) {
+        window.schoolshieldLastSyncError = error.message;
+        console.warn("School workspace sync failed", error.message);
+        return false;
+      }
+      window.schoolshieldLastSyncError = "";
+      return true;
+    });
+    return window.schoolshieldWorkspaceSaveQueue;
   }
+  return Promise.resolve(true);
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
+  if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
   const client = window.schoolshieldSupabase;
   const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
   if (!client || !session.schoolId) return false;
@@ -257,6 +280,39 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   window.schoolshieldCloudWorkspaceReady = true;
   if (changed && renderAfterRefresh) render();
   return changed;
+}
+
+async function refreshWorkspaceManually() {
+  const changed = await refreshCloudWorkspace(true);
+  const message = window.schoolshieldLastSyncError
+    ? `The latest data could not be loaded: ${window.schoolshieldLastSyncError}`
+    : changed
+      ? "The latest school data has been loaded."
+      : "This workspace is already up to date.";
+  modal(window.schoolshieldLastSyncError ? "Refresh failed" : "Workspace refreshed", `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+}
+
+function startWorkspaceRealtime() {
+  const client = window.schoolshieldSupabase;
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  if (!client || !session.schoolId || session.role === "parent" || window.schoolshieldWorkspaceChannel) return;
+  const channel = client
+    .channel(`school-workspace:${session.schoolId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "school_workspaces", filter: `school_id=eq.${session.schoolId}` },
+      (change) => {
+        const payload = change.new?.payload;
+        if (!payload || typeof payload !== "object") return;
+        const key = `schoolshield:${session.schoolCode}`;
+        const incoming = JSON.stringify(payload);
+        if (localStorage.getItem(key) === incoming) return;
+        localStorage.setItem(key, incoming);
+        render();
+      },
+    )
+    .subscribe();
+  window.schoolshieldWorkspaceChannel = channel;
 }
 
 async function connectCloudWorkspace(user, profile, school) {
@@ -752,6 +808,12 @@ function dashboard() {
   const s = getState();
   const r = role();
   if (r === "parent") return parentDashboard();
+  if (r === "sgb") {
+    return shell(
+      `<div class="hero"><div><span class="pill">SGB oversight</span><h1>Good morning, SGB Member</h1><p>Your workspace is limited to school safety reports, announcements and direct governance communication.</p></div></div><div class="stats-grid">${stat("Visitors today", s.visitors.length, "Visitor report")}${stat("Open incidents", openIncidents(), "Incident report")}${stat("Announcements", s.announcements.length, "Published notices")}${stat("Principal chat", (s.sgbPrincipalChat || []).filter((chat) => chat.sgbMember === userName()).length, "Private channel")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Only SGB-authorised tools are available.</p></div></div><div class="quick-grid">${quickForRole("sgb")}</div></section>`,
+      "Dashboard",
+    );
+  }
   const stats = scopeStats();
   const heroLabel =
     r === "sgb"
@@ -845,9 +907,10 @@ function quickForRole(r) {
       ["Reports", "reports.html"],
     ],
     sgb: [
-      ["Review incidents", "incidents.html"],
-      ["Open reports", "reports.html"],
-      ["Read notifications", "notifications.html"],
+      ["Visitor report", "visitors.html"],
+      ["Incident report", "incidents.html"],
+      ["Announcements", "announcements.html"],
+      ["Chat with principal", "sgb-chat.html"],
     ],
     security: [
       ["Register visitor", "visitors.html"],
@@ -1495,11 +1558,12 @@ function dailyAttendanceRegister() {
   const weeklyPrompt = savedDays.length === 5 && !weeklySubmission
     ? `<div class="notice"><div class="notice-icon">!</div><div class="grow"><b>Weekly attendance ready to submit</b><p>All five school days for the week beginning ${weekStart} have been captured.</p></div><button class="btn primary" data-action="submit-daily-week" data-class="${classId}" data-week="${weekStart}">Submit week</button></div>`
     : `<p class="muted">Week of ${weekStart}: ${savedDays.length} of 5 school days captured${weeklySubmission ? " - weekly attendance submitted" : ""}.</p>`;
-  return generic("Attendance Register", "Teacher workspace", "Capture one day at a time. Each saved day immediately updates learner and weekly attendance.", `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId} daily register</h3><p>${existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day."}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${date}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${classId}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${classId}">${existing ? "Save changes & close" : "Submit attendance & close"}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>Edit or delete a previously saved day.</p></div></div>${past}</section>`);
+  return generic("Attendance Register", "Teacher workspace", "Capture one day at a time. Each saved day immediately updates learner and weekly attendance.", `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId} daily register</h3><p>${existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day."}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${date}" max="${todayIso()}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${classId}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${classId}">${existing ? "Save changes & close" : "Submit attendance & close"}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>Edit or delete a previously saved day.</p></div></div>${past}</section>`);
 }
 function saveDailyAttendance(classId) {
   const date = inputValue("attendanceDate");
   if (!date) return;
+  if (date > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">Attendance can only be recorded for today or an earlier date.</p>");
   const entries = Object.fromEntries(learnersInClass(classId).map((learner) => [learner.id, $(`[data-day-status][data-learner="${learner.id}"]:checked`)?.dataset.dayStatus || "Present"]));
   persist((state) => {
     state.attendanceRegisters = state.attendanceRegisters || [];
@@ -1677,6 +1741,61 @@ function teacherChat() {
 }
 
 /* Teacher ↔ parent channel. Leadership has no access to this page. */
+/* Direct SGB ↔ principal channel. Each SGB member only sees their own thread. */
+function sgbChat() {
+  const principal = SCHOOL.principal || `${SCHOOL.name} Principal`;
+  const isPrincipalUser = role() === "principal";
+  const saved = getState().sgbPrincipalChat || [];
+  if (isPrincipalUser) {
+    const conversations = saved.map((conversation, storeIndex) => ({
+      ...conversation,
+      id: conversation.sgbMember || conversation.id,
+      role: `SGB member · ${SCHOOL.name}`,
+      initials: initials(conversation.sgbMember || conversation.id),
+      storeIndex,
+    }));
+    return chatLayout(
+      "SGB Chat",
+      "Principal · governance channel",
+      "Private conversations with individual SGB members.",
+      conversations,
+      "sgbPrincipalChat",
+      "me",
+    );
+  }
+
+  let storedIndex = saved.findIndex((conversation) => conversation.sgbMember === userName());
+  if (storedIndex < 0) {
+    persist((state) => {
+      state.sgbPrincipalChat = state.sgbPrincipalChat || [];
+      state.sgbPrincipalChat.push({
+        id: principal,
+        sgbMember: userName(),
+        role: `Principal · ${SCHOOL.name}`,
+        initials: initials(principal),
+        messages: [{ from: "them", sender: principal, text: "Welcome to the SGB channel. Please share governance questions or feedback here.", date: todayLabel(), sentAt: new Date().toISOString() }],
+      });
+    });
+    storedIndex = getState().sgbPrincipalChat.length - 1;
+  }
+  const stored = getState().sgbPrincipalChat[storedIndex];
+  const peer = {
+    ...stored,
+    id: principal,
+    role: `Principal · ${SCHOOL.name}`,
+    initials: initials(principal),
+    storeIndex: storedIndex,
+  };
+  return chatLayout(
+    "SGB Chat",
+    "SGB · principal channel",
+    "Private conversation between you and the principal.",
+    [peer],
+    "sgbPrincipalChat",
+    "me",
+  );
+}
+
 function parentChat() {
   const r = role();
   if (r === "teacher") {
@@ -1748,6 +1867,18 @@ function parentChat() {
 /* ------------------------------ announcements ---------------------------- */
 function announcements() {
   const r = role();
+  const recent = getState().announcements;
+  if (r === "sgb") {
+    const rows = recent.map(
+      (a) => `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
+    );
+    return generic(
+      "Announcements",
+      "SGB view-only access",
+      "Read school announcements. SGB members cannot create, edit or delete announcements.",
+      `<section class="panel"><div class="panel-head"><div><h3>School announcements</h3><p>Published communications available to the governing body.</p></div></div>${table(["Announcement", "Audience", "Delivery", "Message"], rows, "No announcements have been published.")}</section>`,
+    );
+  }
   const options = audienceOptions();
   const opts = options
     .map(
@@ -1756,7 +1887,6 @@ function announcements() {
     )
     .join("");
   const first = options[0] || { count: 0, label: "" };
-  const recent = getState().announcements;
   const rows = recent.map(
     (a) =>
       `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.recipients}</td><td>${a.delivery}</td><td>${badge("Active")}</td><td>${a.author === userName() ? `<button class="table-action" data-action="manage-announcement" data-announcement="${a.id}">Manage</button>` : "—"}</td></tr>`,
@@ -1957,9 +2087,7 @@ function appointments() {
 function visitors() {
   const s = getState();
   const canManage = ["security", "clerk"].includes(role());
-  const controls = canManage
-    ? '<div class="action-row"><button class="btn ghost" data-action="scan">Scan QR</button><button class="btn primary" data-action="register">+ Register visitor</button></div>'
-    : "";
+  const controls = `<div class="action-row"><button class="btn ghost" data-action="preview-visitors">Preview report</button><button class="btn ghost" data-action="download-visitors">Download PDF</button>${canManage ? '<button class="btn ghost" data-action="scan">Scan QR</button><button class="btn primary" data-action="register">+ Register visitor</button>' : ""}</div>`;
   return shell(
     `<div class="page-intro"><div><span class="pill">Front office & gate</span><h1>Visitors</h1><p>${canManage ? "Register visitors, track campus presence and complete check-outs." : "View visitor activity and campus presence."}</p></div>${controls}</div><div class="stats-grid compact">${stat("Inside", s.visitors.filter((v) => v.status === "Inside").length, "Currently on campus")}${stat("Visits today", s.visitors.length, "All registrations")}${stat("Checked out", s.visitors.filter((v) => v.status === "Checked Out").length, "Completed visits")}</div>${searchBar("visitorSearch", "Search visitor, ID, host or purpose")}<section class="panel">${table(
       ["Visitor", "Type", "Host", "Purpose", "Check-in", "Check-out", "Status", ""],
@@ -1974,7 +2102,7 @@ function visitors() {
 function incidents() {
   const s = getState();
   return shell(
-    `<div class="page-intro"><div><span class="pill">Safety management</span><h1>Incidents</h1><p>Record, investigate, escalate and close school safety incidents.</p></div><div class="action-row"><button class="btn ghost" data-action="download-incidents">Download incident report</button>${role() !== "sgb" ? '<button class="btn primary" data-action="incident">+ Report incident</button>' : ""}</div></div>${searchBar("incidentSearch", "Search incident ID, location or description")}<section class="panel">${table(
+    `<div class="page-intro"><div><span class="pill">Safety management</span><h1>Incidents</h1><p>Record, investigate, escalate and close school safety incidents.</p></div><div class="action-row"><button class="btn ghost" data-action="preview-incidents">Preview report</button><button class="btn ghost" data-action="download-incidents">Download PDF</button>${role() !== "sgb" ? '<button class="btn primary" data-action="incident">+ Report incident</button>' : ""}</div></div>${searchBar("incidentSearch", "Search incident ID, location or description")}<section class="panel">${table(
       [
         "Incident",
         "Date & time",
@@ -2007,6 +2135,7 @@ function modal(title, body) {
   el.className = "modal-backdrop";
   el.innerHTML = `<div class="modal" style="max-height:90vh;display:flex;flex-direction:column"><div class="modal-head"><h3>${title}</h3><button class="close">×</button></div><div class="modal-body" style="overflow-y:auto;max-height:calc(90vh - 70px)">${body}</div></div>`;
   document.body.appendChild(el);
+  markRequiredFields(el);
   $$('[data-action]', el).forEach(
     (button) => (button.onclick = () => action(button.dataset.action, button)),
   );
@@ -2040,6 +2169,100 @@ function todayLabel() {
   ];
   const d = new Date();
   return d.getDate() + " " + months[d.getMonth()] + " " + d.getFullYear();
+}
+
+const REQUIRED_FIELDS = {
+  "save-visitor": ["visitorName", "visitorIdentity", "visitorType", "visitorPurpose", "visitorHost"],
+  "save-incident": ["incidentDate", "incidentTime", "incidentLocation", "incidentCategory", "incidentPriority", "incidentDescription"],
+  "save-learner": ["learnerName", "learnerClass", "learnerParent", "learnerRelation"],
+  "save-staff": ["staffName", "staffRole", "staffDepartment"],
+  "save-staff-changes": ["editStaffName", "editStaffRole", "editStaffDepartment", "editStaffStatus"],
+  "save-parent": ["editParentName", "editParentRelation", "editParentPhone"],
+  "save-appointment": ["appointmentTitle", "appointmentWith", "appointmentDate", "appointmentTime"],
+  "submit-sick-notice": ["sickLearner", "sickDate", "sickReason"],
+  "save-officer-new": ["newOfficerName", "newOfficerEmployee", "newOfficerShift", "newOfficerSite"],
+  "save-officer": ["editOfficerName", "editOfficerEmployee", "editOfficerShift", "editOfficerSite", "editOfficerStatus"],
+  "send-announcement": ["audienceSelect", "deliverySelect", "annTitle", "annBody"],
+  "save-assessment": ["assessmentClass", "assessmentSubject", "assessmentTitle", "assessmentDate"],
+  "submit-teacher-assignment": ["assignmentClass", "assignmentTeacher"],
+  "save-daily-attendance": ["attendanceDate"],
+};
+
+function markRequiredFields(root = document) {
+  Object.values(REQUIRED_FIELDS).flat().forEach((id) => {
+    const field = document.getElementById(id);
+    if (!field || !root.contains(field)) return;
+    field.required = true;
+    const label = field.closest("label");
+    if (label && !label.querySelector(".required-mark")) label.insertAdjacentHTML("beforeend", '<span class="required-mark" aria-label="Required"> *</span>');
+  });
+  applyFieldFormats(root);
+}
+function validateRequiredFields(actionName) {
+  const fields = (REQUIRED_FIELDS[actionName] || []).map((id) => document.getElementById(id)).filter(Boolean);
+  const missing = fields.filter((field) => !String(field.value || "").trim());
+  fields.forEach((field) => field.removeAttribute("aria-invalid"));
+  if (!missing.length) return true;
+  missing.forEach((field) => field.setAttribute("aria-invalid", "true"));
+  missing[0].focus();
+  modal("Important information missing", `<p class="muted">Complete the required fields marked with <b>*</b> before submitting.</p>`);
+  return false;
+}
+
+const FIELD_FORMATS = {
+  visitorName: { maxLength: 100 }, visitorIdentity: { maxLength: 15 }, visitorPhone: { maxLength: 13, inputMode: "tel" }, visitorEmail: { maxLength: 120 }, visitorCompany: { maxLength: 100 }, visitorPurpose: { maxLength: 160 }, visitorHost: { maxLength: 100 }, visitorVehicle: { maxLength: 16 },
+  incidentLocation: { maxLength: 120 }, incidentPeople: { maxLength: 180 }, incidentCctv: { maxLength: 40 }, incidentDescription: { maxLength: 1500 }, incidentAction: { maxLength: 1000 }, incidentNotes: { maxLength: 1000 },
+  learnerName: { maxLength: 100 }, learnerParent: { maxLength: 100 }, editParentName: { maxLength: 100 }, editParentPhone: { maxLength: 13, inputMode: "tel" },
+  staffName: { maxLength: 100 }, editStaffName: { maxLength: 100 }, staffDepartment: { maxLength: 80 }, editStaffDepartment: { maxLength: 80 },
+  newOfficerName: { maxLength: 100 }, newOfficerEmployee: { maxLength: 24 }, editOfficerName: { maxLength: 100 }, editOfficerEmployee: { maxLength: 24 },
+  appointmentTitle: { maxLength: 120 }, annTitle: { maxLength: 140 }, annBody: { maxLength: 2000 }, sickDetails: { maxLength: 1000 },
+};
+function applyFieldFormats(root = document) {
+  Object.entries(FIELD_FORMATS).forEach(([id, config]) => {
+    const field = document.getElementById(id);
+    if (!field || !root.contains(field)) return;
+    if (config.maxLength) field.maxLength = config.maxLength;
+    if (config.inputMode) field.inputMode = config.inputMode;
+  });
+  const identity = document.getElementById("visitorIdentity");
+  const identityType = document.getElementById("visitorIdType");
+  if (identity && root.contains(identity)) {
+    const applyIdentityFormat = () => {
+      const southAfricanId = identityType?.value === "South African ID";
+      identity.maxLength = southAfricanId ? 13 : 15;
+      identity.inputMode = southAfricanId ? "numeric" : "text";
+      if (southAfricanId) identity.value = identity.value.replace(/\D/g, "").slice(0, 13);
+    };
+    applyIdentityFormat();
+    identityType?.addEventListener("change", applyIdentityFormat);
+    identity.addEventListener("input", applyIdentityFormat);
+  }
+}
+function validateFieldFormats(actionName) {
+  const errors = [];
+  const cleanPhone = (value) => String(value || "").replace(/[\s()-]/g, "");
+  if (actionName === "save-visitor") {
+    const identity = inputValue("visitorIdentity");
+    const idType = inputValue("visitorIdType");
+    if (idType === "South African ID" && !/^\d{13}$/.test(identity)) errors.push("South African ID number must contain exactly 13 digits.");
+    if (idType !== "South African ID" && !/^[A-Za-z0-9-]{6,15}$/.test(identity)) errors.push("Passport or driving-licence number must contain 6–15 letters, numbers or hyphens.");
+    const phone = cleanPhone(inputValue("visitorPhone"));
+    if (phone && !/^(?:0\d{9}|\+27\d{9})$/.test(phone)) errors.push("Cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.");
+    const email = $("#visitorEmail");
+    if (email?.value && !email.checkValidity()) errors.push("Enter a valid email address.");
+  }
+  if (actionName === "save-parent") {
+    const phone = cleanPhone(inputValue("editParentPhone"));
+    if (!/^(?:0\d{9}|\+27\d{9})$/.test(phone)) errors.push("Parent cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.");
+  }
+  if (!errors.length) return true;
+  modal("Check field format", `<p class="muted">${errors.join("<br>")}</p>`);
+  return false;
+}
+function todayIso() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
 }
 function notificationTimestamp() {
   return new Date().toISOString();
@@ -2255,27 +2478,51 @@ function viewHistory(learnerId) {
   if (!selected) return;
   modal(`${selected.learner.name} — selected report`, `<div style="white-space:pre-wrap;line-height:1.7;padding:6px">${selected.lines.join("\n")}</div><div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${learnerId}">Download PDF</button></div>`);
 }
-function downloadIncidentReport() {
+function visitorReportLines() {
+  const visitors = getState().visitors;
+  return [`${SCHOOL.name} — Visitor report`, `Generated ${todayLabel()} · ${visitors.length} visitor record(s)`, "", "Visitor | Type | Host | Purpose | Check-in | Check-out | Status", ...visitors.map((visitor) => [visitor.name, visitor.type, visitor.host, visitor.purpose, visitor.in, visitor.out, visitor.status].join(" | "))];
+}
+function incidentReportLines() {
   const incidents = getState().incidents;
-  const lines = [`${SCHOOL.name} — Incident report`, `Generated ${todayLabel()} · ${incidents.length} incident(s) · Average response 4.8 hrs`, "", "Incident Number | Date | Time | Category | Priority | Location | Reported By | Status | Description | Action Taken"];
-  incidents.forEach((incident) => lines.push([incident.id, incident.date, incident.time, incident.category, incident.priority, incident.location, incident.reporter || incident.officer, incident.status, incident.description, incident.immediateAction || "—"].join(" | ")));
-  downloadTextFile(`schoolshield-incident-report-${todayLabel().replace(/\s/g, "-")}.txt`, lines.join("\n"));
+  return [`${SCHOOL.name} — Incident report`, `Generated ${todayLabel()} · ${incidents.length} incident(s)`, "", "Incident | Date | Time | Category | Priority | Location | Officer | Status | Description", ...incidents.map((incident) => [incident.id, incident.date, incident.time, incident.category, incident.priority, incident.location, incident.reporter || incident.officer, incident.status, incident.description].join(" | "))];
+}
+function previewReport(title, lines) {
+  const safeText = lines.map((line) => String(line).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")).join("\n");
+  modal(title, `<div style="white-space:pre-wrap;line-height:1.7;padding:4px">${safeText}</div>`);
+}
+function previewVisitorReport() { previewReport("Visitor report preview", visitorReportLines()); }
+function previewIncidentReport() { previewReport("Incident report preview", incidentReportLines()); }
+function downloadVisitorReport() {
+  return downloadPdf(`schoolshield-visitor-report-${todayLabel().replace(/\s/g, "-")}.pdf`, "Visitor report", visitorReportLines());
+}
+function downloadIncidentReport() {
+  return downloadPdf(`schoolshield-incident-report-${todayLabel().replace(/\s/g, "-")}.pdf`, "Incident report", incidentReportLines());
 }
 
 /* -------------------------------- actions -------------------------------- */
 function action(type, el) {
   const classId = el && el.dataset.class;
   const learnerId = el && el.dataset.learner;
+  if (!validateRequiredFields(type)) return;
+  if (!validateFieldFormats(type)) return;
   if (type === "register")
     modal(
       "Register visitor",
       `<p class="muted">Captured ${todayLabel()} by ${userName()}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label><label>Visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/*"></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
     );
-  else if (type === "incident")
+  else if (type === "incident") {
     modal(
       "Report incident",
       `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState().security.map((officer) => `<option>${officer.name}</option>`).join("")}</select></label><label>Persons involved<input class="input" id="incidentPeople"></label><label>Linked visitor (optional)<select class="select" id="incidentVisitor"><option value="">None</option>${getState().visitors.map((visitor) => `<option value="${visitor.id}">${visitor.name}</option>`).join("")}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${learners().map((learner) => `<option value="${learner.id}">${learner.name}</option>`).join("")}</select></label><label>Staff member (optional)<select class="select" id="incidentStaff"><option value="">None</option>${getState().staff.map((staff) => `<option>${staff.name}</option>`).join("")}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label><label class="full">Photos & documents<input class="input" id="incidentFiles" type="file" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
     );
+    const incidentDate = $("#incidentDate");
+    if (incidentDate) incidentDate.max = todayIso();
+    const officerSelect = $("#incidentOfficer");
+    if (officerSelect && role() !== "security") {
+      officerSelect.insertAdjacentHTML("afterbegin", '<option value="" selected>Not assigned</option>');
+      officerSelect.closest("label").firstChild.textContent = "Security officer (optional)";
+    }
+  }
   else if (type === "scan")
     modal(
       "Gate QR scanner",
@@ -2290,6 +2537,9 @@ function action(type, el) {
   else if (type === "preview-learner-report") previewLearnerReport(classId, learnerId);
   else if (type === "download-history") downloadHistory(el.dataset.learner);
   else if (type === "view-history") viewHistory(el.dataset.learner);
+  else if (type === "preview-visitors") previewVisitorReport();
+  else if (type === "download-visitors") downloadVisitorReport();
+  else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
   else if (type === "submit-marks") saveTestScores(classId, "teacher");
@@ -2419,9 +2669,10 @@ function notificationsForRole() {
 function inputValue(id) {
   return ($("#" + id)?.value || "").trim();
 }
-function finishForm() {
+function finishForm(title = "Saved successfully", message = "Your update has been saved and shared with the school workspace.") {
   $$(".modal-backdrop").forEach((el) => el.remove());
   render();
+  if (title) modal(title, `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
 }
 function requireValues(values) {
   if (values.every(Boolean)) return true;
@@ -2443,8 +2694,8 @@ function saveVisitor() {
     modal("Duplicate visitor", '<p class="muted">This identity has already been registered today.</p>');
     return;
   }
-  persist((state) =>
-    state.visitors.unshift({
+  persist((state) => {
+    const visitor = {
       id: "VIS-" + Date.now().toString().slice(-4),
       name,
       host,
@@ -2464,14 +2715,27 @@ function saveVisitor() {
       date: todayLabel(),
       registeredBy: userName(),
       processedBy: userName(),
-    }),
-  );
-  finishForm();
+    };
+    state.visitors.unshift(visitor);
+    state.notifications.unshift({
+      id: "NTF-VIS-" + Date.now().toString().slice(-6),
+      createdAt: notificationTimestamp(),
+      category: "Visitor",
+      scope: "system",
+      priority: "Low",
+      title: "Visitor registered",
+      description: `${visitor.name} has checked in to visit ${visitor.host}.`,
+      reporter: userName(),
+      read: false,
+    });
+  });
+  finishForm("Visitor registered", `${name} has been added to the visitor register and shared with connected school users.`);
 }
 function saveIncident() {
   const location = inputValue("incidentLocation");
   const description = inputValue("incidentDescription");
   if (!requireValues([location, description])) return;
+  if (inputValue("incidentDate") > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">An incident can only be reported for today or an earlier date.</p>");
   persist((state) => {
     const id = "INC-" + Date.now().toString().slice(-6);
     state.incidents.unshift({
@@ -2482,7 +2746,7 @@ function saveIncident() {
       location,
       priority: inputValue("incidentPriority"),
       status: "Open",
-      officer: inputValue("incidentOfficer") || userName(),
+      officer: inputValue("incidentOfficer") || (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
       description,
       people: inputValue("incidentPeople"),
@@ -2509,7 +2773,7 @@ function saveIncident() {
       comments: [],
     });
   });
-  finishForm();
+  finishForm("Incident successfully reported", `The ${inputValue("incidentCategory")} incident has been recorded and alerts have been sent to authorised users.`);
 }
 function saveLearner() {
   const name = inputValue("learnerName");
@@ -2633,6 +2897,7 @@ function saveSickNotice() {
   const date = inputValue("sickDate");
   const reason = inputValue("sickReason");
   if (!requireValues([learner, date, reason])) return;
+  if (date > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">A sick notice can only be submitted for today or an earlier date.</p>");
   persist((state) =>
     state.sickNotices.unshift({
       id: "SN-" + Date.now().toString().slice(-5),
@@ -3217,6 +3482,7 @@ function render() {
   else if (p === "attendance-register") html = dailyAttendanceRegister();
   else if (p === "teacher-chat") html = teacherChat();
   else if (p === "parent-chat") html = parentChat();
+  else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
   $("#app").innerHTML = html;
   bind();
@@ -3288,6 +3554,16 @@ function initWorkspaceChrome() {
   const main = $(".main");
   const topActions = $(".top-actions");
   if (!sidebar || !main || !topActions) return;
+  if (!$("#refreshWorkspace")) {
+    const refresh = document.createElement("button");
+    refresh.id = "refreshWorkspace";
+    refresh.className = "icon-btn";
+    refresh.title = "Refresh school data";
+    refresh.setAttribute("aria-label", "Refresh school data");
+    refresh.textContent = "↻";
+    refresh.onclick = refreshWorkspaceManually;
+    topActions.prepend(refresh);
+  }
   const nav = sidebar.querySelector("nav");
   const setMobileNav = () => {
     if (!nav) return;
@@ -3372,6 +3648,7 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  markRequiredFields(document);
   if (!window.__schoolshieldCloudRefreshListener) {
     window.__schoolshieldCloudRefreshListener = true;
     const refreshWhenVisible = () => { if (document.visibilityState === "visible") refreshCloudWorkspace(true); };
@@ -3429,6 +3706,10 @@ function bind() {
   $("#studentSearch")?.addEventListener("input", (e) =>
     filterTable(e.target.value, ".student-row"),
   );
+  ["incidentDate", "sickDate", "attendanceDate"].forEach((id) => {
+    const dateInput = document.getElementById(id);
+    if (dateInput) dateInput.max = todayIso();
+  });
   $("#chatSearch")?.addEventListener("input", (event) => {
     const query = event.target.value.toLowerCase();
     $$("[data-chat-contact]").forEach((contact) => (contact.style.display = contact.innerText.toLowerCase().includes(query) ? "" : "none"));
@@ -3440,10 +3721,10 @@ function bind() {
     if (count) count.textContent = opt.dataset.count || "0";
   });
   $("#chatInput")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       const sendButton = $("[data-action='send-message']");
-      sendMessage(sendButton?.dataset.store, sendButton?.dataset.chat, sendButton?.dataset.sender);
+      if (sendButton) action("send-message", sendButton);
     }
   });
   const messagePane = $("#messages");
@@ -3475,6 +3756,13 @@ async function startWorkspace() {
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
+    startWorkspaceRealtime();
+    // Parents use the restricted parent-workspace endpoint rather than the
+    // full workspace channel. This lightweight fallback also keeps every open
+    // portal current if a browser or network blocks realtime websockets.
+    if (!window.schoolshieldWorkspaceRefreshTimer) {
+      window.schoolshieldWorkspaceRefreshTimer = setInterval(() => refreshCloudWorkspace(true), 15000);
+    }
     if (["principal", "clerk"].includes(profile.role)) {
       const { count } = await client.from("account_request_notifications").select("id", { count: "exact", head: true }).is("read_at", null);
       window.schoolshieldPendingAccountAlerts = count || 0;
