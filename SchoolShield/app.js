@@ -2974,15 +2974,20 @@ function processVisitorScan() {
   finishForm();
 }
 function checkoutVisitor(id) {
+  let visitorName = "";
+  let checkedOut = false;
   persist((state) => {
     const visitor = state.visitors.find((item) => item.id === id);
     if (visitor && visitor.status === "Inside") {
+      visitorName = visitor.name;
       visitor.status = "Checked Out";
       visitor.out = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      visitor.checkedOutBy = userName();
+      checkedOut = true;
     }
   });
-  $$(".modal-backdrop").forEach((element) => element.remove());
-  render();
+  if (!checkedOut) return modal("Visitor already checked out", "<p class=\"muted\">This visitor is no longer marked as being on campus.</p>");
+  finishForm("Visitor checked out", `${visitorName} has been checked out and the shared visitor register has been updated.`);
 }
 function viewIncident(id) {
   const incident = getState().incidents.find((item) => item.id === id);
@@ -3691,7 +3696,7 @@ function bind() {
     persist((state) => state.notifications.forEach((n) => { if (visibleIds.has(n.id)) n.read = true; }));
     render();
   });
-  $$("[data-visitor]").forEach(
+  $$("[data-visitor]:not([data-action])").forEach(
     (b) => (b.onclick = () => visitorModal(b.dataset.visitor)),
   );
   $("#visitorSearch")?.addEventListener("input", (e) =>
