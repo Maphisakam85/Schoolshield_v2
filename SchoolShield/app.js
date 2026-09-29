@@ -285,6 +285,7 @@ function emptyWorkspace() {
     staff: [],
     staffChangeRequests: [],
     security: [],
+    securityAttendance: [],
     sickNotices: [],
     appointments: [],
     teacherChat: [],
@@ -2499,18 +2500,563 @@ function security() {
 }
 function securityOfficers() {
   const s = getState();
+
+  // Make sure older workspaces that don't have this collection
+  // still work correctly.
+  const attendance = s.securityAttendance || [];
+
+  const today = todayIso();
+
+  const todayAttendance = attendance.filter((record) => record.date === today);
+
+  const onDuty = s.security.filter(
+    (officer) => officer.status === "On Duty",
+  ).length;
+
+  const completedToday = todayAttendance.filter(
+    (record) => record.status === "Completed",
+  ).length;
+
+  const rows = s.security
+    .map((officer) => {
+      const record = todayAttendance.find(
+        (item) => item.officerId === officer.id,
+      );
+
+      let clockIn = "—";
+      let clockOut = "—";
+      let attendanceStatus = "Not Clocked In";
+
+      if (record) {
+        clockIn = record.clockIn || "—";
+        clockOut = record.clockOut || "—";
+        attendanceStatus = record.status || "Clocked In";
+      }
+
+      let attendanceAction = "";
+
+      if (!record) {
+        attendanceAction = `
+        <button
+          class="btn small primary"
+          data-action="clock-in-security"
+          data-officer="${officer.id}"
+        >
+          Clock In
+        </button>
+      `;
+      } else if (record.status === "Clocked In") {
+        attendanceAction = `
+        <button
+          class="btn small primary"
+          data-action="clock-out-security"
+          data-officer="${officer.id}"
+        >
+          Clock Out
+        </button>
+      `;
+      } else {
+        attendanceAction = `
+        <span class="muted">Shift completed</span>
+      `;
+      }
+
+      return `
+      <tr>
+        <td>
+          <b>${officer.name}</b>
+          <small>Badge ${officer.id}</small>
+        </td>
+
+        <td>${officer.employee}</td>
+
+        <td>${officer.shift}</td>
+
+        <td>${officer.site}</td>
+
+        <td>
+          ${badge(officer.status)}
+        </td>
+
+        <td>
+          <b>${clockIn}</b>
+          <small>Clock in</small>
+        </td>
+
+        <td>
+          <b>${clockOut}</b>
+          <small>Clock out</small>
+        </td>
+
+        <td>
+          ${badge(attendanceStatus)}
+        </td>
+
+        <td>
+          <div class="action-row">
+            ${attendanceAction}
+
+            <button
+              class="btn small"
+              data-action="security-attendance-history"
+              data-officer="${officer.id}"
+            >
+              History
+            </button>
+
+            <button
+              class="table-action"
+              data-action="manage-officer"
+              data-officer="${officer.id}"
+            >
+              Manage
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+    })
+    .join("");
+
   return generic(
     "Security Officers",
     "Security management",
-    "Manage officer profiles, employee IDs, shifts, sites and duties.",
-    `<div class="stats-grid compact">${stat("Officers", s.security.length, "Displayed here")}${stat("On duty", s.security.filter((x) => x.status === "On Duty").length, "Current shift")}${stat("Sites", "4", "Configured")}${stat("Checkpoints", "12", "QR checkpoints")}</div><section class="panel"><div class="panel-head"><div><h3>Officer directory & deployment</h3><p>Open an officer to update shift, site and duty status.</p></div></div>${table(
-      ["Officer", "Employee ID", "Shift", "Assigned site", "Status", ""],
-      s.security.map(
-        (x) =>
-          `<tr><td><b>${x.name}</b><small>Badge ${x.id}</small></td><td>${x.employee}</td><td>${x.shift}</td><td>${x.site}</td><td>${badge(x.status)}</td><td><button class="table-action" data-action="manage-officer" data-officer="${x.id}">Manage</button></td></tr>`,
-      ),
-    )}</section>`,
-    '<button class="btn primary" data-action="add-officer">+ Add security officer</button>',
+    "Manage officer profiles, attendance, shifts, sites and duties.",
+
+    `
+      <div class="stats-grid compact">
+
+        ${stat("Officers", s.security.length, "Registered security officers")}
+
+        ${stat("On duty", onDuty, "Currently clocked in")}
+
+        ${stat("Completed today", completedToday, "Clocked in and out")}
+
+        ${stat("Attendance records", todayAttendance.length, "Today's records")}
+
+      </div>
+
+      <section class="panel">
+
+        <div class="panel-head">
+
+          <div>
+            <h3>Security officer attendance</h3>
+
+            <p>
+              Each officer has an individual daily clock-in and clock-out record.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
+
+              <tr>
+                <th>Officer</th>
+                <th>Employee ID</th>
+                <th>Shift</th>
+                <th>Assigned site</th>
+                <th>Duty status</th>
+                <th>Clock in</th>
+                <th>Clock out</th>
+                <th>Attendance</th>
+                <th>Actions</th>
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                rows ||
+                `
+                  <tr>
+                    <td colspan="9" class="muted">
+                      No security officers have been registered.
+                    </td>
+                  </tr>
+                `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+    `,
+
+    `
+      <button
+        class="btn primary"
+        data-action="add-officer"
+      >
+        + Add security officer
+      </button>
+    `,
+  );
+}
+
+function clockInSecurityOfficer(id) {
+  const officer = getState().security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const date = todayIso();
+
+  const existingRecord = (getState().securityAttendance || []).find(
+    (record) => record.officerId === id && record.date === date,
+  );
+
+  if (existingRecord) {
+    if (existingRecord.status === "Clocked In") {
+      modal(
+        "Already clocked in",
+        `
+          <p>
+            <b>${officer.name}</b> is already clocked in.
+          </p>
+
+          <p class="muted">
+            Clock-in time: ${existingRecord.clockIn}
+          </p>
+
+          <div class="modal-foot">
+            <button
+              class="btn primary"
+              data-action="close-modal"
+            >
+              Done
+            </button>
+          </div>
+        `,
+      );
+    } else {
+      modal(
+        "Attendance already completed",
+        `
+          <p>
+            <b>${officer.name}</b> already has a completed attendance
+            record for today.
+          </p>
+
+          <div class="detail-grid">
+
+            <div>
+              <small>Clock in</small>
+              <b>${existingRecord.clockIn}</b>
+            </div>
+
+            <div>
+              <small>Clock out</small>
+              <b>${existingRecord.clockOut || "—"}</b>
+            </div>
+
+          </div>
+
+          <div class="modal-foot">
+            <button
+              class="btn primary"
+              data-action="close-modal"
+            >
+              Done
+            </button>
+          </div>
+        `,
+      );
+    }
+
+    return;
+  }
+
+  const clockInTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  persist((state) => {
+    state.securityAttendance = state.securityAttendance || [];
+
+    state.securityAttendance.unshift({
+      id: "SEC-ATT-" + Date.now().toString().slice(-8),
+
+      officerId: officer.id,
+
+      officerName: officer.name,
+
+      employeeId: officer.employee,
+
+      date,
+
+      clockIn: clockInTime,
+
+      clockOut: "",
+
+      status: "Clocked In",
+
+      shift: officer.shift,
+
+      site: officer.site,
+    });
+
+    // Update the officer's current duty status.
+    const currentOfficer = state.security.find((item) => item.id === id);
+
+    if (currentOfficer) {
+      currentOfficer.status = "On Duty";
+    }
+  });
+
+  finishForm(
+    "Security officer clocked in",
+    `${officer.name} has been clocked in successfully at ${clockInTime}.`,
+  );
+}
+
+function clockOutSecurityOfficer(id) {
+  const state = getState();
+
+  const officer = state.security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const date = todayIso();
+
+  const attendanceRecord = (state.securityAttendance || []).find(
+    (record) => record.officerId === id && record.date === date,
+  );
+
+  if (!attendanceRecord) {
+    modal(
+      "Cannot clock out",
+      `
+        <p>
+          <b>${officer.name}</b> has not been clocked in today.
+        </p>
+
+        <p class="muted">
+          Clock the officer in before recording a clock-out time.
+        </p>
+
+        <div class="modal-foot">
+
+          <button
+            class="btn primary"
+            data-action="close-modal"
+          >
+            Done
+          </button>
+
+        </div>
+      `,
+    );
+
+    return;
+  }
+
+  if (attendanceRecord.status === "Completed") {
+    modal(
+      "Already clocked out",
+      `
+        <p>
+          <b>${officer.name}</b> has already been clocked out today.
+        </p>
+
+        <p class="muted">
+          Clock-out time: ${attendanceRecord.clockOut}
+        </p>
+
+        <div class="modal-foot">
+
+          <button
+            class="btn primary"
+            data-action="close-modal"
+          >
+            Done
+          </button>
+
+        </div>
+      `,
+    );
+
+    return;
+  }
+
+  const clockOutTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  persist((state) => {
+    const record = (state.securityAttendance || []).find(
+      (item) => item.officerId === id && item.date === date,
+    );
+
+    if (!record) return;
+
+    record.clockOut = clockOutTime;
+    record.status = "Completed";
+
+    const currentOfficer = state.security.find((item) => item.id === id);
+
+    if (currentOfficer) {
+      currentOfficer.status = "Off Duty";
+    }
+  });
+
+  finishForm(
+    "Security officer clocked out",
+    `${officer.name} has been clocked out successfully at ${clockOutTime}.`,
+  );
+}
+
+function securityAttendanceHistory(id) {
+  const state = getState();
+
+  const officer = state.security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const records = (state.securityAttendance || [])
+    .filter((record) => record.officerId === id)
+    .sort((a, b) => {
+      return new Date(b.date) - new Date(a.date);
+    });
+
+  const rows = records
+    .map((record) => {
+      return `
+      <tr>
+
+        <td>
+          <b>${record.date}</b>
+        </td>
+
+        <td>
+          ${record.shift || officer.shift || "—"}
+        </td>
+
+        <td>
+          ${record.site || officer.site || "—"}
+        </td>
+
+        <td>
+          <b>${record.clockIn || "—"}</b>
+        </td>
+
+        <td>
+          <b>${record.clockOut || "—"}</b>
+        </td>
+
+        <td>
+          ${badge(record.status)}
+        </td>
+
+      </tr>
+    `;
+    })
+    .join("");
+
+  modal(
+    `${officer.name} — Attendance History`,
+
+    `
+      <div class="detail-grid">
+
+        <div>
+          <small>Officer</small>
+          <b>${officer.name}</b>
+        </div>
+
+        <div>
+          <small>Employee ID</small>
+          <b>${officer.employee}</b>
+        </div>
+
+        <div>
+          <small>Badge</small>
+          <b>${officer.id}</b>
+        </div>
+
+        <div>
+          <small>Assigned site</small>
+          <b>${officer.site}</b>
+        </div>
+
+      </div>
+
+      <section class="panel">
+
+        <div class="panel-head">
+
+          <div>
+            <h3>Attendance records</h3>
+
+            <p>
+              Daily clock-in and clock-out history.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
+
+              <tr>
+                <th>Date</th>
+                <th>Shift</th>
+                <th>Site</th>
+                <th>Clock in</th>
+                <th>Clock out</th>
+                <th>Status</th>
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                rows ||
+                `
+                  <tr>
+                    <td
+                      colspan="6"
+                      class="muted"
+                    >
+                      No attendance records found.
+                    </td>
+                  </tr>
+                `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+
+      <div class="modal-foot">
+
+        <button
+          class="btn primary"
+          data-action="close-modal"
+        >
+          Done
+        </button>
+
+      </div>
+    `,
   );
 }
 
@@ -3653,10 +4199,26 @@ function action(type, el) {
   else if (type === "resolve-incident") resolveIncident(el.dataset.incident);
   else if (type === "comment-notification")
     commentNotification(el.dataset.notification);
-  else if (type === "manage-officer") manageOfficer(el.dataset.officer);
-  else if (type === "add-officer") addOfficer();
-  else if (type === "save-officer-new") saveNewOfficer();
-  else if (type === "save-officer") saveOfficer(el.dataset.officer);
+  else if (type === "manage-officer")
+  manageOfficer(el.dataset.officer);
+
+else if (type === "add-officer")
+  addOfficer();
+
+else if (type === "save-officer-new")
+  saveNewOfficer();
+
+else if (type === "save-officer")
+  saveOfficer(el.dataset.officer);
+
+else if (type === "clock-in-security")
+  clockInSecurityOfficer(el.dataset.officer);
+
+else if (type === "clock-out-security")
+  clockOutSecurityOfficer(el.dataset.officer);
+
+else if (type === "security-attendance-history")
+  securityAttendanceHistory(el.dataset.officer);
   else if (type === "view-sick-notice") viewSickNotice(el.dataset.sick);
   else if (type === "view-parent-sick-notice")
     viewParentSickNotice(el.dataset.sick);
@@ -4200,7 +4762,10 @@ function checkoutVisitor(id) {
     const visitor = state.visitors.find((item) => item.id === id);
     if (visitor && visitor.status === "Inside") {
       visitor.status = "Checked Out";
-      visitor.out = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      visitor.out = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
   });
   $$(".modal-backdrop").forEach((element) => element.remove());
@@ -4315,18 +4880,37 @@ function addOfficer() {
 function saveNewOfficer() {
   const name = inputValue("newOfficerName");
   const employee = inputValue("newOfficerEmployee");
+
   if (!requireValues([name, employee])) return;
-  persist((state) =>
+
+  persist((state) => {
+    state.security = state.security || [];
+
+    state.securityAttendance =
+      state.securityAttendance || [];
+
+    const officerNumber =
+      state.security.length + 1;
+
     state.security.push({
-      id: `SEC-${String(state.security.length + 1).padStart(3, "0")}`,
+      id: `SEC-${String(officerNumber).padStart(3, "0")}`,
+
       name,
+
       employee,
+
       shift: inputValue("newOfficerShift"),
+
       site: inputValue("newOfficerSite"),
-      status: "Scheduled",
-    }),
+
+      status: "Scheduled"
+    });
+  });
+
+  finishForm(
+    "Security officer added",
+    `${name} has been added to the security officer register.`
   );
-  finishForm();
 }
 function manageOfficer(id) {
   const officer = getState().security.find((item) => item.id === id);
