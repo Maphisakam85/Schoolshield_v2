@@ -380,22 +380,22 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   );
   if (!client || !session.schoolId) return false;
   if (session.role === "parent") {
+    const previousError = window.schoolshieldParentWorkspaceError;
+    const previousLinked = window.schoolshieldParentLearnerLinked;
+    const fail = (message) => {
+      window.schoolshieldParentWorkspaceError = message;
+      if (renderAfterRefresh && previousError !== message) render();
+      return false;
+    };
     let response;
     try {
       response = await window.schoolshieldFunctionRequest("parent-workspace");
     } catch (error) {
-      window.schoolshieldParentWorkspaceError = error.message;
-      return false;
+      return fail(error.message || "Check your connection and try again.");
     }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.payload) {
-      window.schoolshieldParentWorkspaceError =
-        data?.error || `Request failed (${response.status})`;
-      console.warn(
-        "Parent workspace could not be refreshed",
-        window.schoolshieldParentWorkspaceError,
-      );
-      return false;
+      return fail(data?.error || `Request failed (${response.status})`);
     }
     window.schoolshieldParentWorkspaceError = "";
     const key = workspaceCacheKey();
@@ -403,7 +403,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     const changed = sessionStorage.getItem(key) !== incoming;
     sessionStorage.setItem(key, incoming);
     window.schoolshieldParentLearnerLinked = Boolean(data.linked);
-    if (changed && renderAfterRefresh) render();
+    if (renderAfterRefresh && (changed || previousError || previousLinked !== Boolean(data.linked))) render();
     return changed;
   }
   const { data, error } = await client
@@ -781,6 +781,22 @@ function parentLearner() {
   );
 }
 function parentLinkRequired(title = "Your learner") {
+  const error = window.schoolshieldParentWorkspaceError;
+  const linked = window.schoolshieldParentLearnerLinked;
+  // Only the authenticated endpoint can confirm that there is no learner link.
+  // An empty cache after a deployment or failed request is not evidence of that.
+  if (error || linked !== false) {
+    const detail = String(error || (linked
+      ? "Your account is linked, but the learner record could not be loaded. Please retry."
+      : "Your learner information has not loaded yet. Please retry."))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return generic(
+      title,
+      "Parent / guardian",
+      "We could not load your learner information.",
+      `<section class="panel"><h3>Learner information unavailable</h3><p class="muted" role="status">${detail}</p><div class="panel-foot"><button class="btn primary" data-action="refresh-parent-workspace">Retry loading</button> <a class="btn" href="login.html">Sign in again</a></div></section>`,
+    );
+  }
   return generic(
     title,
     "Parent / guardian",

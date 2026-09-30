@@ -185,3 +185,31 @@ test('hidden tabs pause polling and overlapping focus events share a request', a
   h.context.startWorkspaceAutoRefresh();
   assert.equal(h.timers.length, 1, 'starting twice does not duplicate the timer');
 });
+
+test('parent link screen distinguishes failed loading from a confirmed missing link', () => {
+  const context = vm.createContext({ window: {}, generic: (...args) => args.join(' ') });
+  vm.runInContext(app.slice(app.indexOf('function parentLinkRequired('), app.indexOf('/* ----------------------------- domain: audience')), context);
+  assert.match(context.parentLinkRequired(), /Retry loading/);
+  assert.doesNotMatch(context.parentLinkRequired(), /ask the school clerk/);
+  context.window.schoolshieldParentWorkspaceError = 'Session expired';
+  assert.match(context.parentLinkRequired(), /Session expired/);
+  context.window.schoolshieldParentWorkspaceError = '';
+  context.window.schoolshieldParentLearnerLinked = true;
+  assert.match(context.parentLinkRequired(), /Your account is linked/);
+  context.window.schoolshieldParentLearnerLinked = false;
+  assert.match(context.parentLinkRequired(), /ask the school clerk/);
+});
+
+test('parent loading failure redraws its error and recovery redraws unchanged data', async () => {
+  const h = pollingHarness();
+  await h.timers.shift().callback();
+  const original = h.context.window.schoolshieldFunctionRequest;
+  h.context.window.schoolshieldFunctionRequest = async () => { throw Error('Session expired'); };
+  await h.timers.shift().callback();
+  assert.equal(h.context.window.schoolshieldParentWorkspaceError, 'Session expired');
+  assert.equal(h.renders(), 2);
+  h.context.window.schoolshieldFunctionRequest = original;
+  await h.timers.shift().callback();
+  assert.equal(h.context.window.schoolshieldParentWorkspaceError, '');
+  assert.equal(h.renders(), 3);
+});
