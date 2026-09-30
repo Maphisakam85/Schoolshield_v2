@@ -179,6 +179,7 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: "Overview", ids: ["leadership", "notifications"] },
+  
   {
     label: "People",
     ids: [
@@ -191,16 +192,7 @@ const NAV_GROUPS = [
       "student-record",
     ],
   },
-  {
-    label: "Learning",
-    ids: [
-      "attendance-register",
-      "test-scores",
-      "student-reports",
-      "report-compilation",
-      "reports",
-    ],
-  },
+
   {
     label: "Safety & wellbeing",
     ids: [
@@ -1083,7 +1075,6 @@ function dashboard() {
           "Currently inside",
         ),
         stat("Open incidents", openIncidents(), "Needs attention"),
-        stat("Learners", schoolStats().learners, "Enrolled this year"),
       ]
     : [
         stat(
@@ -1113,7 +1104,7 @@ function dashboard() {
     .join("");
 
   return shell(
-    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid">${kpis.join("")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid">${kpis.join("")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
       s.incidents
         .slice(0, 4)
@@ -4189,8 +4180,9 @@ function action(type, el) {
   else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
-  else if (type === "submit-marks") saveTestScores(classId, "teacher");
+  else if (type === "submit-marks") saveTestScores(classId, "teacher", el.dataset.assessment);
   else if (type === "update-scores") saveTestScores(classId, "clerk", el.dataset.assessment);
+  else if (type === "notify-parent-critical-subject") notifyParentCriticalSubject(el.dataset.assessment, learnerId);
   else if (type === "save-attendance") saveAttendance(classId);
   else if (type === "open-attendance-day")
     go(
@@ -4290,26 +4282,16 @@ function action(type, el) {
   else if (type === "resolve-incident") resolveIncident(el.dataset.incident);
   else if (type === "comment-notification")
     commentNotification(el.dataset.notification);
-  else if (type === "manage-officer")
-  manageOfficer(el.dataset.officer);
-
-else if (type === "add-officer")
-  addOfficer();
-
-else if (type === "save-officer-new")
-  saveNewOfficer();
-
-else if (type === "save-officer")
-  saveOfficer(el.dataset.officer);
-
-else if (type === "clock-in-security")
-  clockInSecurityOfficer(el.dataset.officer);
-
-else if (type === "clock-out-security")
-  clockOutSecurityOfficer(el.dataset.officer);
-
-else if (type === "security-attendance-history")
-  securityAttendanceHistory(el.dataset.officer);
+  else if (type === "manage-officer") manageOfficer(el.dataset.officer);
+  else if (type === "add-officer") addOfficer();
+  else if (type === "save-officer-new") saveNewOfficer();
+  else if (type === "save-officer") saveOfficer(el.dataset.officer);
+  else if (type === "clock-in-security")
+    clockInSecurityOfficer(el.dataset.officer);
+  else if (type === "clock-out-security")
+    clockOutSecurityOfficer(el.dataset.officer);
+  else if (type === "security-attendance-history")
+    securityAttendanceHistory(el.dataset.officer);
   else if (type === "view-sick-notice") viewSickNotice(el.dataset.sick);
   else if (type === "view-parent-sick-notice")
     viewParentSickNotice(el.dataset.sick);
@@ -4349,8 +4331,10 @@ function alertToast() {
 function notificationsForRole() {
   const notices = getState().notifications;
   if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
+  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
+  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
+  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
+>>>>>>>>> Temporary merge branch 2
   const child = parentLearner();
   return notices.filter(
     (notice) =>
@@ -4968,11 +4952,9 @@ function saveNewOfficer() {
   persist((state) => {
     state.security = state.security || [];
 
-    state.securityAttendance =
-      state.securityAttendance || [];
+    state.securityAttendance = state.securityAttendance || [];
 
-    const officerNumber =
-      state.security.length + 1;
+    const officerNumber = state.security.length + 1;
 
     state.security.push({
       id: `SEC-${String(officerNumber).padStart(3, "0")}`,
@@ -4985,13 +4967,13 @@ function saveNewOfficer() {
 
       site: inputValue("newOfficerSite"),
 
-      status: "Scheduled"
+      status: "Scheduled",
     });
   });
 
   finishForm(
     "Security officer added",
-    `${name} has been added to the security officer register.`
+    `${name} has been added to the security officer register.`,
   );
 }
 function manageOfficer(id) {
