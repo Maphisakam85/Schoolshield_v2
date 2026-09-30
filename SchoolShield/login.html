@@ -6,132 +6,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SchoolShield — Sign in</title>
   <link rel="stylesheet" href="styles.css">
-  <style>
-    body {
-      min-height: 100vh;
-      background: linear-gradient(135deg, #062a34, #0a735a);
-      display: grid;
-      place-items: center
-    }
-
-    .auth {
-      width: min(430px, calc(100% - 30px));
-      background: #fff;
-      border-radius: 18px;
-      padding: 30px;
-      box-shadow: 0 25px 80px #0004
-    }
-
-    .auth-brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 25px
-    }
-
-    .auth-brand img {
-      width: 46px
-    }
-
-    .auth-brand strong {
-      font-size: 20px
-    }
-
-    .auth h1 {
-      font-size: 24px;
-      margin: 0 0 6px
-    }
-
-    .auth p {
-      font-size: 11px;
-      color: #71838a;
-      line-height: 1.6
-    }
-
-    .auth label {
-      display: block;
-      font-size: 9px;
-      font-weight: 700;
-      margin: 17px 0 6px
-    }
-
-    .auth .input {
-      padding: 12px;
-      width: 100%
-    }
-
-    .auth .btn {
-      width: 100%;
-      margin-top: 14px;
-      padding: 12px
-    }
-
-    .demo {
-      margin-top: 14px;
-      background: #f3f8f6;
-      border-radius: 9px;
-      padding: 10px;
-      font-size: 10px;
-      color: #567
-    }
-
-    .auth-tabs {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin: 20px 0 4px
-    }
-
-    .auth-tabs .btn {
-      margin: 0
-    }
-
-    .auth-tabs .ghost {
-      border: 1px solid #d5e3df;
-      background: #fff
-    }
-
-    .auth-modal {
-      position: fixed;
-      inset: 0;
-      background: #061f28aa;
-      display: grid;
-      place-items: center;
-      padding: 20px;
-      z-index: 20
-    }
-
-    .auth-modal[hidden] {
-      display: none
-    }
-
-    .auth-modal-card {
-      width: min(390px, 100%);
-      background: #fff;
-      border-radius: 16px;
-      padding: 26px;
-      box-shadow: 0 20px 70px #0005
-    }
-
-    .auth-modal-card h2 {
-      margin: 0 0 8px;
-      font-size: 20px
-    }
-
-    .auth-modal-card .btn {
-      margin-top: 18px
-    }
-  </style>
+  <link rel="stylesheet" href="auth.css">
 </head>
 
-<body>
-  <main class="auth">
+<body class="auth-page">
+  <div class="auth-layout"><aside class="auth-visual" aria-label="School community"><img src="assets/login-campus.png" alt="School staff walking together on campus"><div class="auth-story"><span>ONE SCHOOL. ONE CONNECTED COMMUNITY.</span><h2>A safer school starts with connection.</h2><p>Stay close to your school, your learners and the people who care for them.</p></div></aside><main class="auth">
     <div class="auth-brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield logo">
       <div><strong>SchoolShield</strong><small style="display:block;color:#71838a;font-size:9px">School safety &amp;
           management</small></div>
     </div>
-    <h1>Welcome back</h1>
-    <p>Sign in to your school workspace. New accounts are reviewed by that school’s principal or clerk before access is
+    <h1 id="authTitle">Welcome back</h1>
+    <p id="authIntro">Sign in to your school workspace. New accounts are reviewed by that school’s principal or clerk before access is
       granted.</p>
     <div class="auth-tabs"><button class="btn small primary" id="showLogin" type="button">Sign in</button><button
         class="btn small ghost" id="showRequest" type="button">Create account</button></div>
@@ -174,11 +59,8 @@
           id="resetPasswordConfirm" type="password" required autocomplete="new-password" minlength="8"
           placeholder="Repeat your new password"></label><button class="btn primary" type="submit">Reset password</button>
     </form>
-    <div class="demo"><b>Initial school administrators</b><br><code>principal@&lt;school-domain&gt;</code> and
-      <code>clerk@&lt;school-domain&gt;</code><br>Prototype password: <b>Test@123</b>. Change it after first sign-in.
-    </div>
     <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px"></div>
-  </main>
+  </main></div>
   <div class="auth-modal" id="requestSuccessModal" hidden role="dialog" aria-modal="true"
     aria-labelledby="requestSuccessTitle">
     <div class="auth-modal-card">
@@ -193,7 +75,7 @@
   <script src="supabase-client.js"></script>
   <script>
     const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), inviteForm = document.getElementById('inviteForm'), forgotPasswordForm = document.getElementById('forgotPasswordForm'), resetPasswordForm = document.getElementById('resetPasswordForm');
-    const show = form => { [loginForm, requestForm, inviteForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
+    const show = form => { document.getElementById("authIntro").textContent = form === requestForm ? "Choose your school and request access. Your principal or clerk will review your account before you can sign in." : "Sign in to your school workspace. New accounts are reviewed by your school before access is granted."; document.getElementById("authTitle").textContent = form === requestForm ? "Join your school" : form === forgotPasswordForm ? "Reset your password" : form === inviteForm ? "Finish your account" : form === resetPasswordForm ? "Choose a password" : "Welcome back"; document.querySelectorAll(".auth-tabs button").forEach(button => button.classList.remove("ghost")); [loginForm, requestForm, inviteForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
     document.getElementById('showLogin').onclick = () => show(loginForm); document.getElementById('showRequest').onclick = () => show(requestForm);
     const showError = (message, ok = false) => { errorBox.style.color = ok ? '#087443' : '#b42318'; errorBox.textContent = message; errorBox.style.display = 'block' };
     async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,school:schools(id,code,name)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
@@ -208,6 +90,7 @@
     client?.auth.onAuthStateChange((event, session) => { if (event === 'PASSWORD_RECOVERY' && session) show(resetPasswordForm) });
     client?.auth.getSession().then(async ({ data: { session } }) => { if (!session) return; if (recoveryUrl()) return show(resetPasswordForm); if (/type=invite/.test(location.hash + location.search)) { const { data: { user } } = await client.auth.getUser(); document.getElementById('inviteName').value = user?.user_metadata?.display_name || ''; show(inviteForm) } });
     inviteForm.onsubmit = async event => { event.preventDefault(); const { error: passwordError } = await client.auth.updateUser({ password: document.getElementById('invitePassword').value }); if (passwordError) return showError(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('inviteName').value.trim(), p_phone: document.getElementById('invitePhone').value.trim(), p_address: document.getElementById('inviteAddress').value.trim(), p_emergency_contact: document.getElementById('inviteEmergency').value.trim() }); if (profileError) return showError(profileError.message); await client.auth.signOut(); show(loginForm); showError('Account setup is complete. Sign in with your email, password and school code.', true) };
+    if (new URLSearchParams(location.search).get('view') === 'create') show(requestForm);
     if (new URLSearchParams(location.search).get('setup') === 'complete') showError('Account setup is complete. Sign in with your email, password and school code.', true);
   </script>
 </body>

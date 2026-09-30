@@ -39,14 +39,30 @@ test('incidents-only dashboard layout is limited to security', () => {
   assert.match(html, /security-dashboard-panels/);
   assert.equal((html.match(/<article>/g) || []).length, 3);
 });
-test('security notification filtering does not change other staff visibility', () => {
+test('notifications are limited to their role and whole-school audience', () => {
   const notices = [{ scope: 'clerk' }, { scope: 'whole-school' }, { scope: 'leadership' }];
-  for (const role of ['clerk', 'teacher', 'sgb']) {
+  for (const role of ['principal', 'deputy', 'clerk', 'teacher', 'sgb', 'security', 'parent']) {
     const context = portal(role);
-    context.getState = () => ({ notifications: notices });
-    assert.equal(context.notificationsForRole().length, 2);
+    context.getState = () => ({ notifications: notices, incidents: [] });
+    assert.equal(context.notificationsForRole().length, ['clerk', 'principal', 'deputy'].includes(role) ? 2 : 1);
   }
-  const context = portal('security');
-  context.getState = () => ({ notifications: notices });
-  assert.equal(context.notificationsForRole().length, 1);
+});
+
+test('teacher incidents, alerts and reports exclude other classes', () => {
+  const context = portal('teacher');
+  const incidents = [
+    { id: 'mine', learnerId: 'L1' }, { id: 'other', learnerId: 'L2' },
+    { id: 'school', scope: 'whole-school' }, { id: 'teachers', scope: 'teachers' },
+    { id: 'reported', reporter: 'Teacher A' },
+  ];
+  const notifications = incidents.map(i => ({ id: i.id, incidentId: i.id }));
+  notifications.push({ id: 'private', scope: 'teacher', recipient: 'Teacher B', learnerId: 'L1' });
+  notifications.push({ id: 'class', scope: 'teacher', class: '8A' });
+  notifications.push({ id: 'other-class', scope: 'teacher', class: '8B' });
+  context.userName = () => 'Teacher A';
+  context.teacherClasses = () => [{ id: '8A' }];
+  context.learnerById = id => ({ class: id === 'L1' ? '8A' : '8B' });
+  context.getState = () => ({ incidents, notifications });
+  assert.deepEqual(Array.from(context.incidentsForRole(), i => i.id), ['mine', 'school', 'teachers', 'reported']);
+  assert.deepEqual(Array.from(context.notificationsForRole(), i => i.id), ['mine', 'school', 'teachers', 'reported', 'class']);
 });

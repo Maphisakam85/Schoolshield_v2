@@ -119,6 +119,33 @@ test('failed messages retain the draft and restore the send button', async () =>
   assert.equal(h.button.disabled, false);
 });
 
+test('teacher to principal chat clears the composer before the draft-preserving render', async () => {
+  const h = sendHarness();
+  const state = { teacherChat: [{ messages: [] }] };
+  h.context.getState = () => state;
+  h.context.persist = mutate => mutate(state);
+  h.context.userName = () => 'Teacher';
+  h.context.todayLabel = () => 'Today';
+  h.context.render = () => { assert.equal(h.input.value, ''); };
+  await h.context.sendMessage('teacherChat');
+  assert.equal(state.teacherChat[0].messages.length, 1);
+  assert.equal(state.teacherChat[0].messages[0].text, 'hello parent');
+});
+
+test('new replies stay after received messages even when device clocks disagree', () => {
+  const context = vm.createContext({
+    param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
+    chatSender: message => message.sender, chatTimestamp: () => '',
+    generic: (title, eyebrow, description, body) => body,
+  });
+  vm.runInContext(app.slice(app.indexOf('function chatLayout('), app.indexOf('function legacyChatLayout(')), context);
+  const html = context.chatLayout('Chat', '', '', [{ id: 'Principal', messages: [
+    { sender: 'Principal', text: 'Received first', sentAt: '2026-09-30T12:30:00Z' },
+    { sender: 'Teacher', text: 'My new reply', sentAt: '2026-09-30T12:20:00Z' },
+  ] }], 'teacherChat');
+  assert.ok(html.indexOf('Received first') < html.indexOf('My new reply'));
+});
+
 function pollingHarness() {
   const timers = [];
   const events = {};

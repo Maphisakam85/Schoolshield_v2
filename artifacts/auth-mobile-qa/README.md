@@ -23,5 +23,3 @@ Desktop login: 1280 x 900. Phone: 390 x 844. Small phone: 320 x 740.
 Limit: viewport emulation in Edge; physical iOS keyboard behavior was not tested.
 
 final result: passed
-
-Full-size revision: removed outer margins, card width cap, radius and shadow. Desktop uses a 60/40 image/form split with minimum viewport height. Inspected login-fullscreen.png at 1440 x 900 and captured create-fullscreen.png. Mobile retains stacked layout.

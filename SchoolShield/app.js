@@ -1019,7 +1019,7 @@ function initials(name) {
     .join("");
 }
 function openIncidents() {
-  return getState().incidents.filter((i) => i.status !== "Resolved").length;
+  return incidentsForRole().filter((i) => i.status !== "Resolved").length;
 }
 function classesForScope() {
   const r = role();
@@ -1111,7 +1111,7 @@ function dashboard() {
   return shell(
     `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div><div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
-      s.incidents
+      incidentsForRole()
         .slice(0, 4)
         .map(
           (i) =>
@@ -1128,7 +1128,7 @@ function parentDashboard() {
   const alerts = notificationsForRole();
   const published = publishedReportsForClass(child.class, child.id);
   return shell(
-    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>Good morning, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", "${child.class} only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.title}</b><small>${notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
+    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>Good morning, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.title}</b><small>${notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
     "Dashboard",
   );
 }
@@ -2182,15 +2182,9 @@ function chatLayout(
         `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${page()}.html?chat=${index}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="chat-contact-action">Chat -></span></button>`,
     )
     .join("");
-  const ordered = (active.messages || [])
-    .map((message, index) => ({ message, index }))
-    .sort((a, b) => {
-      const first = Date.parse(a.message.sentAt || a.message.date || "");
-      const second = Date.parse(b.message.sentAt || b.message.date || "");
-      return Number.isNaN(first) || Number.isNaN(second) || first === second
-        ? a.index - b.index
-        : first - second;
-    });
+  // The persisted conversation is append-only. Device clocks and legacy date
+  // strings can disagree; sorting those timestamps moved replies above receipts.
+  const ordered = (active.messages || []).map((message) => ({ message }));
   let previousSender = "";
   const messages =
     ordered
@@ -3418,7 +3412,7 @@ function incidents() {
         "Officer",
         "",
       ],
-      s.incidents.map(
+      incidentsForRole().map(
         (i) =>
           `<tr class="incident-row"><td><b>${i.id}</b></td><td>${i.date}<small>${i.time}</small></td><td>${i.category}</td><td>${i.location}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td><td>${i.officer}</td><td><button class="table-action" data-action="view-incident" data-incident="${i.id}">Open</button></td></tr>`,
       ),
@@ -4052,7 +4046,7 @@ function visitorReportLines() {
   ];
 }
 function incidentReportLines() {
-  const incidents = getState().incidents;
+  const incidents = incidentsForRole();
   return [
     `${SCHOOL.name} — Incident report`,
     `Generated ${todayLabel()} · ${incidents.length} incident(s)`,
@@ -4122,7 +4116,7 @@ function action(type, el) {
   else if (type === "incident") {
     modal(
       "Report incident",
-      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
+      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Share with<select class="select" id="incidentScope"><option value="related">Related staff and safety team</option><option value="teachers">All teachers</option><option value="whole-school">Whole school</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
         .security.map((officer) => `<option>${officer.name}</option>`)
         .join(
           "",
@@ -4132,7 +4126,7 @@ function action(type, el) {
         )
         .join(
           "",
-        )}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${learners()
+        )}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${(role() === "teacher" ? learnersForScope() : learners())
         .map(
           (learner) => `<option value="${learner.id}">${learner.name}</option>`,
         )
@@ -4332,20 +4326,52 @@ function alertToast() {
   if (!latest) return "";
   return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${latest.id}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${latest.title}</b><small style="display:block;margin-top:2px">${latest.description}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
 }
+function relatedLearnerRecord(record) {
+  if (role() === "teacher") {
+    const mine = teacherClasses(userName()).map((item) => item.id);
+    const learner = record.learnerId && learnerById(record.learnerId);
+    return learner ? mine.includes(learner.class) : Boolean(record.class && mine.includes(record.class));
+  }
+  if (role() === "parent") {
+    const child = parentLearner();
+    return Boolean(child && (record.learnerId ? record.learnerId === child.id : record.class === child.class));
+  }
+  return false;
+}
+
+function roleAudienceMatches(record) {
+  const audience = record.scope || record.audience;
+  const aliases = { teachers: "teacher", parents: "parent", "all-teachers": "teacher", "all-parents": "parent" };
+  if (audience === "whole-school") return true;
+  if (audience === "staff") return role() !== "parent";
+  if (audience === "leadership") return isLeadership();
+  return (aliases[audience] || audience) === role();
+}
+
+function incidentsForRole() {
+  return getState().incidents.filter((incident) => {
+    if (["principal", "deputy", "security", "sgb"].includes(role())) return true;
+    return roleAudienceMatches(incident) || incident.reporter === userName() ||
+      incident.staff === userName() || relatedLearnerRecord(incident);
+  });
+}
+
 function notificationsForRole() {
-  const notices = getState().notifications;
-  if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() === "security") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
-  const child = parentLearner();
-  return notices.filter(
-    (notice) =>
-      (notice.scope === "parents" &&
-        (!notice.class || (child && notice.class === child.class))) ||
-      notice.scope === "whole-school" ||
-      (child && notice.learnerId === child.id),
-  );
+  const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
+  return getState().notifications.filter((notice) => {
+    if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
+    if (notice.recipient) return notice.recipient === userName();
+    const targeted = Boolean(notice.learnerId || notice.class);
+    if (notice.scope === "whole-school") return true;
+    if (roleAudienceMatches(notice)) return !targeted || relatedLearnerRecord(notice) || !["parent", "teacher"].includes(role());
+    // A learner's own teacher may see learner alerts, but not private alerts
+    // addressed to a different staff role or a named recipient.
+    if (targeted && ["teacher", "parent"].includes(role()) && relatedLearnerRecord(notice)) {
+      return !notice.scope || ["system", "parents", "parent", "learner"].includes(notice.scope);
+    }
+    if (!notice.scope || notice.scope === "system") return ["principal", "deputy", "security", "clerk"].includes(role());
+    return false;
+  });
 }
 
 function inputValue(id) {
@@ -4447,6 +4473,7 @@ function saveIncident() {
   const location = inputValue("incidentLocation");
   const description = inputValue("incidentDescription");
   if (!requireValues([location, description])) return;
+  if (role() === "teacher" && inputValue("incidentLearner") && !learnersForScope().some((item) => item.id === inputValue("incidentLearner"))) return;
   if (inputValue("incidentDate") > todayIso())
     return modal(
       "Future date not allowed",
@@ -4472,6 +4499,7 @@ function saveIncident() {
         (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
       description,
+      scope: ["teachers", "whole-school"].includes(inputValue("incidentScope")) ? inputValue("incidentScope") : "related",
       people: inputValue("incidentPeople"),
       visitorId: inputValue("incidentVisitor"),
       learnerId: inputValue("incidentLearner"),
@@ -4841,7 +4869,7 @@ function checkoutVisitor(id) {
   render();
 }
 function viewIncident(id) {
-  const incident = getState().incidents.find((item) => item.id === id);
+  const incident = incidentsForRole().find((item) => item.id === id);
   if (!incident) return;
   const comments =
     (incident.comments || [])
@@ -4867,6 +4895,7 @@ function viewIncident(id) {
   );
 }
 function addIncidentResponse(id) {
+  if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
   const text = inputValue("incidentResponse");
   if (!text) return;
   persist((state) => {
@@ -4885,6 +4914,7 @@ function addIncidentResponse(id) {
   finishForm();
 }
 function resolveIncident(id) {
+  if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
   persist((state) => {
     const incident = state.incidents.find((item) => item.id === id);
     if (!incident) return;
@@ -4904,7 +4934,7 @@ function resolveIncident(id) {
   finishForm();
 }
 function viewNotification(id) {
-  const notice = getState().notifications.find((item) => item.id === id);
+  const notice = notificationsForRole().find((item) => item.id === id);
   if (!notice) return;
   persist((state) => {
     const item = state.notifications.find((entry) => entry.id === id);
@@ -4930,6 +4960,7 @@ function viewNotification(id) {
   );
 }
 function commentNotification(id) {
+  if (role() !== "principal" || !notificationsForRole().some((item) => item.id === id)) return;
   const text = inputValue("notificationComment");
   if (!text) return;
   persist((state) => {
@@ -5670,6 +5701,7 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
       });
     });
   }
+  input.value = "";
   render();
 }
 
@@ -5962,12 +5994,21 @@ function initWorkspaceChrome() {
       sidebar.style.transform = compact ? "translateX(-105%)" : "translateX(0)";
       sidebar.style.position = "fixed";
       sidebar.style.zIndex = "40";
-      sidebar.style.width = "280px";
+      sidebar.style.width = "min(280px, 85vw)";
+      sidebar.inert = compact;
+      sidebar.setAttribute("aria-hidden", String(compact));
+      const backdrop = $("#mobileNavBackdrop");
+      if (backdrop) backdrop.hidden = compact;
+      $("#sidebarToggle")?.setAttribute("aria-expanded", String(!compact));
       main.style.marginLeft = "0";
       main.style.width = "100%";
       return;
     }
     const rail = compact || innerWidth <= 980;
+    sidebar.inert = false;
+    sidebar.removeAttribute("aria-hidden");
+    const backdrop = $("#mobileNavBackdrop");
+    if (backdrop) backdrop.hidden = true;
     sidebar.style.transform = "";
     sidebar.style.width = rail ? "70px" : "252px";
     sidebar
@@ -5978,6 +6019,16 @@ function initWorkspaceChrome() {
     main.style.marginLeft = rail ? "70px" : "252px";
     main.style.width = rail ? "calc(100% - 70px)" : "calc(100% - 252px)";
   };
+  if (!$("#mobileNavBackdrop")) {
+    const backdrop = document.createElement("button");
+    backdrop.id = "mobileNavBackdrop";
+    backdrop.className = "mobile-nav-backdrop";
+    backdrop.setAttribute("aria-label", "Close navigation");
+    backdrop.hidden = true;
+    backdrop.onclick = () => setSidebarState(true);
+    main.before(backdrop);
+  }
+  sidebar.onkeydown = (event) => { if (event.key === "Escape") { setSidebarState(true); $("#sidebarToggle")?.focus(); } };
   if (!$("#sidebarToggle")) {
     const toggle = document.createElement("button");
     toggle.id = "sidebarToggle";
