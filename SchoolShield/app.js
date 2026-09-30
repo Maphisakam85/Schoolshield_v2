@@ -179,7 +179,6 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: "Overview", ids: ["leadership", "notifications"] },
-  
   {
     label: "People",
     ids: [
@@ -193,6 +192,10 @@ const NAV_GROUPS = [
     ],
   },
 
+  {
+    label: "Learning",
+    ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"],
+  },
   {
     label: "Safety & wellbeing",
     ids: [
@@ -958,7 +961,7 @@ function nav() {
       : "";
   return (
     dashboard +
-    NAV_GROUPS.map((group) => {
+    NAV_GROUPS.filter((group) => role() !== "security" || group.label !== "Learning").map((group) => {
       const links = group.ids
         .map((id) => NAV.find((item) => item[0] === id))
         .filter((item) => item && allowed(item[0]));
@@ -1103,8 +1106,10 @@ function dashboard() {
     })
     .join("");
 
+  const classPerformancePanel = r === "security" ? "" : `<section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section>`;
+
   return shell(
-    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid">${kpis.join("")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div><div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
       s.incidents
         .slice(0, 4)
@@ -4180,9 +4185,8 @@ function action(type, el) {
   else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
-  else if (type === "submit-marks") saveTestScores(classId, "teacher", el.dataset.assessment);
+  else if (type === "submit-marks") saveTestScores(classId, "teacher");
   else if (type === "update-scores") saveTestScores(classId, "clerk", el.dataset.assessment);
-  else if (type === "notify-parent-critical-subject") notifyParentCriticalSubject(el.dataset.assessment, learnerId);
   else if (type === "save-attendance") saveAttendance(classId);
   else if (type === "open-attendance-day")
     go(
@@ -4331,10 +4335,9 @@ function alertToast() {
 function notificationsForRole() {
   const notices = getState().notifications;
   if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
->>>>>>>>> Temporary merge branch 2
+  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && (notice.scope !== "teacher" || notice.recipient === userName()));
+  if (role() === "security") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
+  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
   const child = parentLearner();
   return notices.filter(
     (notice) =>

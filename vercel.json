@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "",
+  "buildCommand": "node --check SchoolShield/app.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js && node --test tests/chat.test.cjs tests/portal-scope.test.cjs",
   "installCommand": "",
   "outputDirectory": "SchoolShield",
   "headers": [

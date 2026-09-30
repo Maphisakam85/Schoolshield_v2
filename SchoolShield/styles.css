@@ -628,7 +628,7 @@ a {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 13px;
     margin-bottom: 22px
 }
@@ -680,9 +680,23 @@ a {
 
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1.35fr;
     gap: 14px;
     margin-bottom: 14px
+}
+
+.stats-grid.security-dashboard-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-grid.security-dashboard-panels {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 700px) {
+    .stats-grid.security-dashboard-stats {
+        grid-template-columns: 1fr;
+    }
 }
 
 .panel {
