@@ -6,6 +6,18 @@ Roles: Principal, Deputy Principal, SGB Member, Security Officer, Parent/Guardia
 
 Session behaviour: closing the browser tab ends the prototype session. Use one of the Botshabelo school codes and role-based demo emails listed in [demo-credentials.md](demo-credentials.md) to preview each permission set.
 
+## Deploy to Vercel
+
+Import this repository with the Vercel **Root Directory** left at the repository
+root (blank), and use the **Other** framework preset. The root `vercel.json`
+serves `SchoolShield/` as the static output directory and skips build and install
+commands. No build step is needed for this HTML/CSS/JavaScript application.
+
+After pushing the configuration, deploy the latest commit. The deployment root
+(`/`) serves `index.html`; `/login.html` and `/dashboard.html` serve their
+respective pages. If an existing project returns `404 NOT_FOUND`, check that its
+Root Directory is blank and redeploy the latest commit.
+
 ## Supabase operational prototype baseline
 
 The repository includes a Supabase migration with Auth profiles, school-tenant
