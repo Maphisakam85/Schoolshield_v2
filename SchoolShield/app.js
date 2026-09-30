@@ -19,11 +19,19 @@ const ROLE_NAMES = {
 /* A signed-in person works within exactly one Supabase school tenant. */
 function activeSchool() {
   try {
-    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
+    const session = JSON.parse(
+      sessionStorage.getItem("schoolshieldSession") || "null",
+    );
     if (session?.schoolCode && session?.schoolName) {
-      return { name: session.schoolName, code: session.schoolCode, principal: session.principalName || `${session.schoolName} Principal` };
+      return {
+        name: session.schoolName,
+        code: session.schoolCode,
+        principal: session.principalName || `${session.schoolName} Principal`,
+      };
     }
-  } catch (err) { /* The sign-in guard redirects before any workspace is rendered. */ }
+  } catch (err) {
+    /* The sign-in guard redirects before any workspace is rendered. */
+  }
   return { name: "", code: "", principal: "School Principal" };
 }
 let SCHOOL = activeSchool();
@@ -143,9 +151,19 @@ const NAV = [
   ["student-records", "Student Records", "student-records.html", "folder"],
   ["student-record", "Student Record", "student-record.html", "record"],
   ["student-reports", "Student Reports", "student-reports.html", "report"],
-  ["report-compilation", "Report Compilation", "report-compilation.html", "report"],
+  [
+    "report-compilation",
+    "Report Compilation",
+    "report-compilation.html",
+    "report",
+  ],
   ["test-scores", "Test Scores", "test-scores.html", "scores"],
-  ["attendance-register", "Attendance Register", "attendance-register.html", "calendar"],
+  [
+    "attendance-register",
+    "Attendance Register",
+    "attendance-register.html",
+    "calendar",
+  ],
   ["sick-notice", "Sick Notice", "sick-notice.html", "medical"],
   ["teacher-chat", "Teacher Chat", "teacher-chat.html", "chat"],
   ["parent-chat", "Parent–Teacher Chat", "parent-chat.html", "chat"],
@@ -161,37 +179,133 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: "Overview", ids: ["leadership", "notifications"] },
-  { label: "People", ids: ["learners", "class-records", "parents", "staff", "account-requests", "student-records", "student-record"] },
-  { label: "Learning", ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"] },
-  { label: "Safety & wellbeing", ids: ["visitors", "incidents", "security", "security-officers", "sick-notices", "sick-notice"] },
-  { label: "Communication", ids: ["announcements", "appointments", "teacher-chat", "parent-chat", "sgb-chat"] },
+  {
+    label: "People",
+    ids: [
+      "learners",
+      "class-records",
+      "parents",
+      "staff",
+      "account-requests",
+      "student-records",
+      "student-record",
+    ],
+  },
+  {
+    label: "Learning",
+    ids: [
+      "attendance-register",
+      "test-scores",
+      "student-reports",
+      "report-compilation",
+      "reports",
+    ],
+  },
+  {
+    label: "Safety & wellbeing",
+    ids: [
+      "visitors",
+      "incidents",
+      "security",
+      "security-officers",
+      "sick-notices",
+      "sick-notice",
+    ],
+  },
+  {
+    label: "Communication",
+    ids: [
+      "announcements",
+      "appointments",
+      "teacher-chat",
+      "parent-chat",
+      "sgb-chat",
+    ],
+  },
   { label: "Administration", ids: ["settings"] },
 ];
 
 /* -------------------------------- icons ---------------------------------- */
 const ICON = {
-  grid: "▦", lead: "♛", users: "◉", alert: "⚠", bell: "🔔",
-  student: "🎓", parent: "👪", staff: "👤", shield: "🛡", report: "📊",
-  settings: "⚙", megaphone: "📣", medical: "✚", calendar: "▣",
-  folder: "🗂", record: "📄", scores: "▥", chat: "💬",
+  grid: "▦",
+  lead: "♛",
+  users: "◉",
+  alert: "⚠",
+  bell: "🔔",
+  student: "🎓",
+  parent: "👪",
+  staff: "👤",
+  shield: "🛡",
+  report: "📊",
+  settings: "⚙",
+  megaphone: "📣",
+  medical: "✚",
+  calendar: "▣",
+  folder: "🗂",
+  record: "📄",
+  scores: "▥",
+  chat: "💬",
 };
 /* -------------------------- workspace data source ------------------------- */
 // Operational data is loaded from and saved to Supabase. The empty shape only
 // protects a newly created, as-yet-unpopulated school workspace.
 const WORKSPACE_VERSION = 13;
 const SUBJECTS_BY_PHASE = {
-  junior: ["Mathematics", "Natural Sciences", "English", "Sesotho", "Social Sciences", "Technology", "Life Orientation"],
-  senior: ["Mathematics", "Physics", "Life Sciences", "Sesotho", "English", "Life Orientation", "Computer Applications Technology", "History"],
+  junior: [
+    "Mathematics",
+    "Natural Sciences",
+    "English",
+    "Sesotho",
+    "Social Sciences",
+    "Technology",
+    "Life Orientation",
+  ],
+  senior: [
+    "Mathematics",
+    "Physics",
+    "Life Sciences",
+    "Sesotho",
+    "English",
+    "Life Orientation",
+    "Computer Applications Technology",
+    "History",
+  ],
 };
 function emptyWorkspace() {
-  return { __v: WORKSPACE_VERSION, classes: [], learners: [], assessments: [], reports: [], announcements: [], visitors: [], incidents: [], notifications: [], staff: [], staffChangeRequests: [], security: [], sickNotices: [], appointments: [], teacherChat: [], parentChat: [], sgbPrincipalChat: [], attendanceRegisters: [], attendanceWeeks: [], chatExtras: [], reportRequests: [], teacherAssignments: [] };
+  return {
+    __v: WORKSPACE_VERSION,
+    classes: [],
+    learners: [],
+    assessments: [],
+    reports: [],
+    announcements: [],
+    visitors: [],
+    incidents: [],
+    notifications: [],
+    staff: [],
+    staffChangeRequests: [],
+    security: [],
+    securityAttendance: [],
+    sickNotices: [],
+    appointments: [],
+    teacherChat: [],
+    parentChat: [],
+    sgbPrincipalChat: [],
+    attendanceRegisters: [],
+    attendanceWeeks: [],
+    chatExtras: [],
+    reportRequests: [],
+    teacherAssignments: [],
+  };
 }
 
 /* ------------------------------ state layer ------------------------------ */
 function getState() {
   let stored = null;
   try {
-    stored = JSON.parse(localStorage.getItem(`schoolshield:${SCHOOL.code}`) || "null");
+    stored = JSON.parse(
+      localStorage.getItem(`schoolshield:${SCHOOL.code}`) || "null",
+    );
   } catch (err) {
     stored = null;
   }
@@ -218,48 +332,72 @@ function getState() {
 function save(state) {
   localStorage.setItem(`schoolshield:${SCHOOL.code}`, JSON.stringify(state));
   if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
-    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+    const session = JSON.parse(
+      sessionStorage.getItem("schoolshieldSession") || "{}",
+    );
     // Serialize changes so a refresh cannot replace a just-added visitor,
     // incident or message with an older workspace payload.
     const previous = window.schoolshieldWorkspaceSaveQueue || Promise.resolve();
-    window.schoolshieldWorkspaceSaveQueue = previous.catch(() => undefined).then(async () => {
-      const { error } = await window.schoolshieldSupabase.from("school_workspaces")
-        // A workspace is created only by a principal, deputy or clerk during
-        // onboarding. Regular staff (including SGB members) have UPDATE access,
-        // but not INSERT access. Upsert checks the INSERT policy even when the
-        // row already exists, so it rejected their chat messages.
-        .update({ payload: state, version: WORKSPACE_VERSION, updated_by: session.userId || null })
-        .eq("school_id", session.schoolId);
-      if (error) {
-        window.schoolshieldLastSyncError = error.message;
-        console.warn("School workspace sync failed", error.message);
-        return false;
-      }
-      window.schoolshieldLastSyncError = "";
-      return true;
-    });
+    window.schoolshieldWorkspaceSaveQueue = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const { error } = await window.schoolshieldSupabase
+          .from("school_workspaces")
+          // A workspace is created only by a principal, deputy or clerk during
+          // onboarding. Regular staff (including SGB members) have UPDATE access,
+          // but not INSERT access. Upsert checks the INSERT policy even when the
+          // row already exists, so it rejected their chat messages.
+          .update({
+            payload: state,
+            version: WORKSPACE_VERSION,
+            updated_by: session.userId || null,
+          })
+          .eq("school_id", session.schoolId);
+        if (error) {
+          window.schoolshieldLastSyncError = error.message;
+          console.warn("School workspace sync failed", error.message);
+          return false;
+        }
+        window.schoolshieldLastSyncError = "";
+        return true;
+      });
     return window.schoolshieldWorkspaceSaveQueue;
   }
   return Promise.resolve(true);
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
-  if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
+  if (window.schoolshieldWorkspaceSaveQueue)
+    await window.schoolshieldWorkspaceSaveQueue;
   const client = window.schoolshieldSupabase;
-  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  const session = JSON.parse(
+    sessionStorage.getItem("schoolshieldSession") || "{}",
+  );
   if (!client || !session.schoolId) return false;
   if (session.role === "parent") {
-    const { data: { session: authSession } } = await client.auth.getSession();
+    const {
+      data: { session: authSession },
+    } = await client.auth.getSession();
     if (!authSession?.access_token) return false;
     const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await fetch(`${config.url}/functions/v1/parent-workspace`, {
-      method: "POST",
-      headers: { apikey: config.publishableKey, Authorization: `Bearer ${authSession.access_token}` },
-    });
+    const response = await fetch(
+      `${config.url}/functions/v1/parent-workspace`,
+      {
+        method: "POST",
+        headers: {
+          apikey: config.publishableKey,
+          Authorization: `Bearer ${authSession.access_token}`,
+        },
+      },
+    );
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.payload) {
-      window.schoolshieldParentWorkspaceError = data?.error || `Request failed (${response.status})`;
-      console.warn("Parent workspace could not be refreshed", window.schoolshieldParentWorkspaceError);
+      window.schoolshieldParentWorkspaceError =
+        data?.error || `Request failed (${response.status})`;
+      console.warn(
+        "Parent workspace could not be refreshed",
+        window.schoolshieldParentWorkspaceError,
+      );
       return false;
     }
     window.schoolshieldParentWorkspaceError = "";
@@ -271,8 +409,13 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     if (changed && renderAfterRefresh) render();
     return changed;
   }
-  const { data, error } = await client.from("school_workspaces").select("payload, version, updated_at").eq("school_id", session.schoolId).maybeSingle();
-  if (error || !data?.payload || !Object.keys(data.payload).length) return false;
+  const { data, error } = await client
+    .from("school_workspaces")
+    .select("payload, version, updated_at")
+    .eq("school_id", session.schoolId)
+    .maybeSingle();
+  if (error || !data?.payload || !Object.keys(data.payload).length)
+    return false;
   const key = `schoolshield:${session.schoolCode}`;
   const incoming = JSON.stringify(data.payload);
   const changed = localStorage.getItem(key) !== incoming;
@@ -289,18 +432,34 @@ async function refreshWorkspaceManually() {
     : changed
       ? "The latest school data has been loaded."
       : "This workspace is already up to date.";
-  modal(window.schoolshieldLastSyncError ? "Refresh failed" : "Workspace refreshed", `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  modal(
+    window.schoolshieldLastSyncError ? "Refresh failed" : "Workspace refreshed",
+    `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+  );
 }
 
 function startWorkspaceRealtime() {
   const client = window.schoolshieldSupabase;
-  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
-  if (!client || !session.schoolId || session.role === "parent" || window.schoolshieldWorkspaceChannel) return;
+  const session = JSON.parse(
+    sessionStorage.getItem("schoolshieldSession") || "{}",
+  );
+  if (
+    !client ||
+    !session.schoolId ||
+    session.role === "parent" ||
+    window.schoolshieldWorkspaceChannel
+  )
+    return;
   const channel = client
     .channel(`school-workspace:${session.schoolId}`)
     .on(
       "postgres_changes",
-      { event: "UPDATE", schema: "public", table: "school_workspaces", filter: `school_id=eq.${session.schoolId}` },
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "school_workspaces",
+        filter: `school_id=eq.${session.schoolId}`,
+      },
       (change) => {
         const payload = change.new?.payload;
         if (!payload || typeof payload !== "object") return;
@@ -325,7 +484,17 @@ async function connectCloudWorkspace(user, profile, school) {
   if (await refreshCloudWorkspace()) return;
   if (["principal", "deputy", "clerk"].includes(profile.role)) {
     const initialState = getState();
-    const { error: insertError } = await client.from("school_workspaces").upsert({ school_id: school.id, payload: initialState, version: WORKSPACE_VERSION, updated_by: user.id }, { onConflict: "school_id", ignoreDuplicates: true });
+    const { error: insertError } = await client
+      .from("school_workspaces")
+      .upsert(
+        {
+          school_id: school.id,
+          payload: initialState,
+          version: WORKSPACE_VERSION,
+          updated_by: user.id,
+        },
+        { onConflict: "school_id", ignoreDuplicates: true },
+      );
     if (!insertError) {
       window.schoolshieldCloudWorkspaceReady = true;
       await refreshCloudWorkspace();
@@ -342,16 +511,24 @@ function persist(mutator) {
 
 function role() {
   try {
-    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
+    const session = JSON.parse(
+      sessionStorage.getItem("schoolshieldSession") || "null",
+    );
     if (session?.role && ROLE_NAMES[session.role]) return session.role;
-  } catch (err) { /* Legacy demo sessions continue below. */ }
+  } catch (err) {
+    /* Legacy demo sessions continue below. */
+  }
   return sessionStorage.getItem("schoolshieldRole") || "principal";
 }
 function userName() {
   try {
-    const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
+    const session = JSON.parse(
+      sessionStorage.getItem("schoolshieldSession") || "null",
+    );
     if (session?.displayName) return session.displayName;
-  } catch (err) { /* The sign-in guard redirects before any workspace is rendered. */ }
+  } catch (err) {
+    /* The sign-in guard redirects before any workspace is rendered. */
+  }
   return ROLE_NAMES[role()] || "Member";
 }
 function page() {
@@ -361,7 +538,8 @@ function param(name) {
   return new URLSearchParams(location.search).get(name);
 }
 function allowed(target = page()) {
-  if (target === "account-requests") return ["principal", "clerk"].includes(role());
+  if (target === "account-requests")
+    return ["principal", "clerk"].includes(role());
   return (ACCESS[role()] || []).includes(target);
 }
 function go(url) {
@@ -528,7 +706,10 @@ function reportBadgeClass(status) {
 function publishedReportsForClass(classId, learnerId = "") {
   const report = reportForClass(classId);
   if (!report) return [];
-  if (learnerId) return (report.releasedLearners?.[learnerId] || report.status === "published") ? [report] : [];
+  if (learnerId)
+    return report.releasedLearners?.[learnerId] || report.status === "published"
+      ? [report]
+      : [];
   return report.status === "published" ? [report] : [];
 }
 
@@ -568,7 +749,11 @@ function parentsForClass(classId) {
   return parentDirectory().filter((p) => p.classes.includes(classId));
 }
 function parentLearner() {
-  return learners().find((learner) => learner.parent === userName()) || learners()[0] || null;
+  return (
+    learners().find((learner) => learner.parent === userName()) ||
+    learners()[0] ||
+    null
+  );
 }
 function parentLinkRequired(title = "Your learner") {
   return generic(
@@ -666,10 +851,14 @@ function audienceOptions() {
 
 /* ------------------------------ ui primitives ---------------------------- */
 function daysAbsent(learner) {
-  return Number.isFinite(learner.absentDays) ? learner.absentDays : Math.round(((100 - learner.attendance) / 100) * 60);
+  return Number.isFinite(learner.absentDays)
+    ? learner.absentDays
+    : Math.round(((100 - learner.attendance) / 100) * 60);
 }
 function attendanceRegisterFor(classId, date) {
-  return (getState().attendanceRegisters || []).find((register) => register.class === classId && register.date === date);
+  return (getState().attendanceRegisters || []).find(
+    (register) => register.class === classId && register.date === date,
+  );
 }
 function icon(key) {
   return `<span class="icon">${ICON[key] || "•"}</span>`;
@@ -707,34 +896,50 @@ function statusBadge(status) {
   return `<span class="badge ${reportBadgeClass(status)}">${flowStep(status).label}</span>`;
 }
 function navHasNewUpdates(id) {
-  if (id === "notifications") return notificationsForRole().some((notice) => !notice.read);
-  if (id === "account-requests") return (window.schoolshieldPendingAccountAlerts || 0) > 0;
+  if (id === "notifications")
+    return notificationsForRole().some((notice) => !notice.read);
+  if (id === "account-requests")
+    return (window.schoolshieldPendingAccountAlerts || 0) > 0;
   if (id === "sick-notices" && role() === "teacher") {
     return getState().sickNotices.some((notice) => {
-      const learnerRecord = learners().find((learner) => learner.name === notice.person);
-      return notice.status !== "Reviewed" && learnerRecord && teacherForClass(learnerRecord.class) === userName();
+      const learnerRecord = learners().find(
+        (learner) => learner.name === notice.person,
+      );
+      return (
+        notice.status !== "Reviewed" &&
+        learnerRecord &&
+        teacherForClass(learnerRecord.class) === userName()
+      );
     });
   }
   return false;
 }
 function nav() {
   const dashboardLink = NAV.find((item) => item[0] === "dashboard");
-  const dashboard = dashboardLink && allowed("dashboard") ? (() => {
-    const [id, label, url, ic] = dashboardLink;
-    return `<a href="${url}" class="nav-item dashboard-nav ${page() === id ? "active" : ""}">${icon(ic)}<span>${label}</span></a>`;
-  })() : "";
-  return dashboard + NAV_GROUPS.map((group) => {
-    const links = group.ids.map((id) => NAV.find((item) => item[0] === id)).filter((item) => item && allowed(item[0]));
-    if (!links.length) return "";
-    const isCurrentGroup = links.some(([id]) => page() === id);
-    const open = isCurrentGroup || links.some(([id]) => navHasNewUpdates(id));
-    return `<details class="nav-group" ${open ? "open" : ""}><summary>${group.label}<span>⌄</span></summary>${links.map(
-      ([id, label, url, ic]) => {
-        const hasUpdates = navHasNewUpdates(id);
-        return `<a href="${url}" class="nav-item ${page() === id ? "active" : ""} ${hasUpdates ? "has-updates" : ""}" title="${hasUpdates ? label + ": new updates" : label}" aria-label="${hasUpdates ? label + ", new updates" : label}">${icon(ic)}<span>${label}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
-      },
-    ).join("")}</details>`;
-  }).join("");
+  const dashboard =
+    dashboardLink && allowed("dashboard")
+      ? (() => {
+          const [id, label, url, ic] = dashboardLink;
+          return `<a href="${url}" class="nav-item dashboard-nav ${page() === id ? "active" : ""}">${icon(ic)}<span>${label}</span></a>`;
+        })()
+      : "";
+  return (
+    dashboard +
+    NAV_GROUPS.map((group) => {
+      const links = group.ids
+        .map((id) => NAV.find((item) => item[0] === id))
+        .filter((item) => item && allowed(item[0]));
+      if (!links.length) return "";
+      const isCurrentGroup = links.some(([id]) => page() === id);
+      const open = isCurrentGroup || links.some(([id]) => navHasNewUpdates(id));
+      return `<details class="nav-group" ${open ? "open" : ""}><summary>${group.label}<span>⌄</span></summary>${links
+        .map(([id, label, url, ic]) => {
+          const hasUpdates = navHasNewUpdates(id);
+          return `<a href="${url}" class="nav-item ${page() === id ? "active" : ""} ${hasUpdates ? "has-updates" : ""}" title="${hasUpdates ? label + ": new updates" : label}" aria-label="${hasUpdates ? label + ", new updates" : label}">${icon(ic)}<span>${label}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
+        })
+        .join("")}</details>`;
+    }).join("")
+  );
 }
 function shell(body, title) {
   const r = role();
@@ -939,12 +1144,10 @@ function quickForRole(r) {
     ],
   };
   return (map[r] || [])
-    .map(
-      (x) => {
-        const navItem = NAV.find((item) => item[2] === x[1]);
-        return `<a class="quick" style="min-height:68px;padding:13px 15px;gap:11px" href="${x[1]}">${navItem ? icon(navItem[3]) : "✦"}<span>${x[0]}</span><b>→</b></a>`;
-      },
-    )
+    .map((x) => {
+      const navItem = NAV.find((item) => item[2] === x[1]);
+      return `<a class="quick" style="min-height:68px;padding:13px 15px;gap:11px" href="${x[1]}">${navItem ? icon(navItem[3]) : "✦"}<span>${x[0]}</span><b>→</b></a>`;
+    })
     .join("");
 }
 
@@ -1039,11 +1242,25 @@ function classRecordsIndex() {
       return `<details class="panel grade-panel" style="padding:0;overflow:hidden" ${innerWidth > 820 ? "open" : ""}><summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 20px;cursor:pointer;list-style:none"><div><h3 style="margin:0">${g.grade}</h3><p style="margin:5px 0 0">${gs.learners} learners · attendance ${gs.attendance}% · class average ${gs.courseAverage}% · pass rate ${gs.passRate}%</p></div><span class="badge neutral">${g.classes.length} ${g.classes.length === 1 ? "class" : "classes"} · View</span></summary><div style="padding:0 20px 20px">${classGrid(g.classes, { request: isLeadership(), showStatus: isLeadership() || r === "clerk" })}</div></details>`;
     })
     .join("");
-  const assignmentTool = role() === "clerk"
-    ? '<section class="panel"><div class="panel-head"><div><h3>Class teacher assignment</h3><p>Submit a registered teacher assignment for principal approval.</p></div><button class="btn primary" data-action="assign-teacher">Assign teacher</button></div></section>'
+  const assignmentTool =
+    role() === "clerk"
+      ? '<section class="panel"><div class="panel-head"><div><h3>Class teacher assignment</h3><p>Submit a registered teacher assignment for principal approval.</p></div><button class="btn primary" data-action="assign-teacher">Assign teacher</button></div></section>'
+      : "";
+  const approvalQueue =
+    role() === "principal"
+      ? (getState().teacherAssignments || []).filter(
+          (assignment) => assignment.status === "Pending",
+        )
+      : [];
+  const approvalPanel = approvalQueue.length
+    ? `<section class="panel"><div class="panel-head"><div><h3>Teacher assignments awaiting approval</h3><p>Approval updates the teacher portal and notifies linked parents.</p></div></div>${table(
+        ["Class", "Proposed teacher", "Requested by", ""],
+        approvalQueue.map(
+          (assignment) =>
+            `<tr><td>${assignment.class}</td><td>${assignment.teacher}</td><td>${assignment.requestedBy}</td><td><button class="btn small primary" data-action="approve-teacher-assignment" data-assignment="${assignment.id}">Approve</button></td></tr>`,
+        ),
+      )}</section>`
     : "";
-  const approvalQueue = role() === "principal" ? (getState().teacherAssignments || []).filter((assignment) => assignment.status === "Pending") : [];
-  const approvalPanel = approvalQueue.length ? `<section class="panel"><div class="panel-head"><div><h3>Teacher assignments awaiting approval</h3><p>Approval updates the teacher portal and notifies linked parents.</p></div></div>${table(["Class", "Proposed teacher", "Requested by", ""], approvalQueue.map((assignment) => `<tr><td>${assignment.class}</td><td>${assignment.teacher}</td><td>${assignment.requestedBy}</td><td><button class="btn small primary" data-action="approve-teacher-assignment" data-assignment="${assignment.id}">Approve</button></td></tr>`))}</section>` : "";
   const note = isLeadership()
     ? "Class-level summary first — open a class to see its learners, or request a compiled report for a specific class."
     : "Class-level summary. Open a class to see the learners registered in it.";
@@ -1209,24 +1426,23 @@ function studentReports() {
 /* Teacher view: submit marks, review the compiled report, finalise and send. */
 function studentReportsTeacher() {
   const mine = teacherClasses(userName());
-  const rows = mine
-    .map((c) => {
-      const report = reportForClass(c.id);
-      const status = report ? report.status : "awaiting-marks";
-      const st = classStats(c.id);
-      let action = '<span class="muted">No action</span>';
-      if (status === "awaiting-marks")
-        action = `<button class="btn small" data-action="go-test-scores" data-class="${c.id}">Capture & submit marks</button>`;
-      else if (status === "ready")
-        action = '<span class="muted">Waiting for the clerk to compile</span>';
-      else if (status === "compiled")
-        action = `<a class="btn small primary" href="student-reports.html?class=${c.id}">Review learner reports</a>`;
-      else if (status === "finalised")
-        action = `<a class="btn small primary" href="student-reports.html?class=${c.id}">Release individual reports</a>`;
-      else if (status === "published")
-        action = `<button class="btn small" data-action="download-report" data-class="${c.id}">Download</button>`;
-      return `<tr><td><b>${c.grade} · ${c.id}</b><small>${st.learners} learners</small></td><td>${TERM}</td><td>${statusBadge(status)}</td><td>${report && report.compiledOn ? report.compiledOn : "—"}</td><td>${action}</td></tr>`;
-    });
+  const rows = mine.map((c) => {
+    const report = reportForClass(c.id);
+    const status = report ? report.status : "awaiting-marks";
+    const st = classStats(c.id);
+    let action = '<span class="muted">No action</span>';
+    if (status === "awaiting-marks")
+      action = `<button class="btn small" data-action="go-test-scores" data-class="${c.id}">Capture & submit marks</button>`;
+    else if (status === "ready")
+      action = '<span class="muted">Waiting for the clerk to compile</span>';
+    else if (status === "compiled")
+      action = `<a class="btn small primary" href="student-reports.html?class=${c.id}">Review learner reports</a>`;
+    else if (status === "finalised")
+      action = `<a class="btn small primary" href="student-reports.html?class=${c.id}">Release individual reports</a>`;
+    else if (status === "published")
+      action = `<button class="btn small" data-action="download-report" data-class="${c.id}">Download</button>`;
+    return `<tr><td><b>${c.grade} · ${c.id}</b><small>${st.learners} learners</small></td><td>${TERM}</td><td>${statusBadge(status)}</td><td>${report && report.compiledOn ? report.compiledOn : "—"}</td><td>${action}</td></tr>`;
+  });
   const steps = REPORT_FLOW.map(
     (s, i) =>
       `<div class="flow-step"><span class="flow-index">${i + 1}</span><div><b>${s.label}</b><small>${s.hint}</small></div></div>`,
@@ -1242,48 +1458,66 @@ function studentReportsTeacher() {
 function teacherReportReview(classId) {
   const c = classById(classId);
   const report = reportForClass(classId);
-  if (!c || !teacherClasses(userName()).some((item) => item.id === classId)) return studentReportsTeacher();
+  if (!c || !teacherClasses(userName()).some((item) => item.id === classId))
+    return studentReportsTeacher();
   const learnersInReview = learnersInClass(classId);
   const rows = learnersInReview.map((learner) => {
     const reviewed = report?.learnerReviews?.[learner.id];
     const released = report?.releasedLearners?.[learner.id];
-    const action = report?.status === "compiled" ? (reviewed ? badge("Approved") : `<button class="btn small primary" data-action="review-learner-report" data-class="${classId}" data-learner="${learner.id}">Review & approve</button>`) : report?.status === "finalised" || report?.status === "published" ? (released ? badge("Released") : `<button class="btn small primary" data-action="release-learner-report" data-class="${classId}" data-learner="${learner.id}">Release to ${learner.parent}</button>`) : '<span class="muted">Awaiting compilation</span>';
+    const action =
+      report?.status === "compiled"
+        ? reviewed
+          ? badge("Approved")
+          : `<button class="btn small primary" data-action="review-learner-report" data-class="${classId}" data-learner="${learner.id}">Review & approve</button>`
+        : report?.status === "finalised" || report?.status === "published"
+          ? released
+            ? badge("Released")
+            : `<button class="btn small primary" data-action="release-learner-report" data-class="${classId}" data-learner="${learner.id}">Release to ${learner.parent}</button>`
+          : '<span class="muted">Awaiting compilation</span>';
     return `<tr><td><b>${learner.name}</b><small>${learner.id} · ${learner.parent}</small></td><td>${learner.attendance}%</td><td>${learner.average}%</td><td>${learnerSickNotices(learner).length}</td><td><button class="table-action" data-action="preview-learner-report" data-class="${classId}" data-learner="${learner.id}">Preview</button> ${action}</td></tr>`;
   });
   const canFinalise = report && report.status === "compiled";
-  const approved = learnersInReview.filter((learner) => report?.learnerReviews?.[learner.id]).length;
-  const released = learnersInReview.filter((learner) => report?.releasedLearners?.[learner.id]).length;
-  return generic(`${c.grade} · ${c.id} report review`, "Teacher review", "Review each learner’s generated report, including marks and recorded sick notices, before releasing it only to that learner’s registered parent.", `${backLink("All student reports", "student-reports.html")}<section class="panel"><div class="panel-head"><div><h3>Compiled learner reports</h3><p>Prepared by the clerk · ${report ? report.compiledOn || "Pending" : "Pending"} · ${approved}/${learnersInReview.length} reviewed · ${released}/${learnersInReview.length} released</p></div>${report ? statusBadge(report.status) : ""}</div>${table(["Learner / registered parent", "Attendance", "Average", "Sick notices", ""], rows)}<div class="panel-foot">${canFinalise && approved === learnersInReview.length ? `<button class="btn primary" data-action="finalise-report" data-class="${classId}">Approve class for individual release</button>` : canFinalise ? `<span class="muted">Review ${learnersInReview.length - approved} more learner report(s) before enabling release.</span>` : report && report.status === "finalised" ? `<span class="muted">Release each learner report above to its registered parent.</span>` : '<span class="muted">This class is not ready for teacher approval.</span>'}</div></section>`);
+  const approved = learnersInReview.filter(
+    (learner) => report?.learnerReviews?.[learner.id],
+  ).length;
+  const released = learnersInReview.filter(
+    (learner) => report?.releasedLearners?.[learner.id],
+  ).length;
+  return generic(
+    `${c.grade} · ${c.id} report review`,
+    "Teacher review",
+    "Review each learner’s generated report, including marks and recorded sick notices, before releasing it only to that learner’s registered parent.",
+    `${backLink("All student reports", "student-reports.html")}<section class="panel"><div class="panel-head"><div><h3>Compiled learner reports</h3><p>Prepared by the clerk · ${report ? report.compiledOn || "Pending" : "Pending"} · ${approved}/${learnersInReview.length} reviewed · ${released}/${learnersInReview.length} released</p></div>${report ? statusBadge(report.status) : ""}</div>${table(["Learner / registered parent", "Attendance", "Average", "Sick notices", ""], rows)}<div class="panel-foot">${canFinalise && approved === learnersInReview.length ? `<button class="btn primary" data-action="finalise-report" data-class="${classId}">Approve class for individual release</button>` : canFinalise ? `<span class="muted">Review ${learnersInReview.length - approved} more learner report(s) before enabling release.</span>` : report && report.status === "finalised" ? `<span class="muted">Release each learner report above to its registered parent.</span>` : '<span class="muted">This class is not ready for teacher approval.</span>'}</div></section>`,
+  );
 }
 
 /* Clerk view: compile learner reports from submitted marks, send back. */
 function studentReportsClerk() {
   const all = classes();
   const requests = getState().reportRequests || [];
-  const requestRows = requests
-    .map((request) => {
-      const c = classById(request.class);
-      return `<tr><td><b>${c ? c.grade + " · " + c.id : request.class}</b></td><td>${request.requestedBy}</td><td>${request.requestedOn}</td><td><a class="table-action" href="class-records.html?class=${request.class}">Open class →</a></td></tr>`;
-    });
-  const rows = all
-    .map((c) => {
-      const report = reportForClass(c.id);
-      const status = report ? report.status : "awaiting-marks";
-      const st = classStats(c.id);
-      const teacher = c.teacher;
-      let action = '<span class="muted">No action</span>';
-      if (status === "awaiting-marks")
-        action = '<span class="muted">Waiting for teacher marks</span>';
-      else if (status === "ready")
-        action = `<a class="btn small primary" href="report-compilation.html?class=${c.id}">Open compilation</a>`;
-      else if (status === "compiled")
-        action = '<span class="muted">With the teacher for review</span>';
-      else if (status === "finalised")
-        action = '<span class="muted">Teacher releases to registered parents</span>';
-      else if (status === "published")
-        action = `<button class="btn small" data-action="download-report" data-class="${c.id}">Download</button>`;
-      return `<tr><td><b>${c.grade} · ${c.id}</b><small>${st.learners} learners · ${teacher}</small></td><td>${report && report.marksSubmittedOn ? report.marksSubmittedOn : "—"}</td><td>${statusBadge(status)}</td><td>${action}</td></tr>`;
-    });
+  const requestRows = requests.map((request) => {
+    const c = classById(request.class);
+    return `<tr><td><b>${c ? c.grade + " · " + c.id : request.class}</b></td><td>${request.requestedBy}</td><td>${request.requestedOn}</td><td><a class="table-action" href="class-records.html?class=${request.class}">Open class →</a></td></tr>`;
+  });
+  const rows = all.map((c) => {
+    const report = reportForClass(c.id);
+    const status = report ? report.status : "awaiting-marks";
+    const st = classStats(c.id);
+    const teacher = c.teacher;
+    let action = '<span class="muted">No action</span>';
+    if (status === "awaiting-marks")
+      action = '<span class="muted">Waiting for teacher marks</span>';
+    else if (status === "ready")
+      action = `<a class="btn small primary" href="report-compilation.html?class=${c.id}">Open compilation</a>`;
+    else if (status === "compiled")
+      action = '<span class="muted">With the teacher for review</span>';
+    else if (status === "finalised")
+      action =
+        '<span class="muted">Teacher releases to registered parents</span>';
+    else if (status === "published")
+      action = `<button class="btn small" data-action="download-report" data-class="${c.id}">Download</button>`;
+    return `<tr><td><b>${c.grade} · ${c.id}</b><small>${st.learners} learners · ${teacher}</small></td><td>${report && report.marksSubmittedOn ? report.marksSubmittedOn : "—"}</td><td>${statusBadge(status)}</td><td>${action}</td></tr>`;
+  });
   const ready = all.filter(
     (c) => (reportForClass(c.id) || {}).status === "ready",
   ).length;
@@ -1302,12 +1536,28 @@ function reportCompilationWorkspace(classId) {
   const assessments = assessmentsForClass(classId);
   const rows = learnersInClass(classId).map((learner) => {
     const sick = learnerSickNotices(learner);
-    const marks = assessments.map((assessment) => assessment.scores?.[learner.id] ?? "—");
-    return `<tr><td><b>${learner.name}</b><small>${learner.id} · Parent: ${learner.parent}</small></td><td>${marks.map((mark) => mark === "—" ? "—" : mark + "%").join(" · ")}</td><td>${learner.attendance}%</td><td>${sick.length ? sick.map((notice) => `${notice.date} · ${notice.reason}`).join("<br>") : '<span class="muted">None recorded</span>'}</td><td><button class="table-action" data-action="preview-learner-report" data-class="${classId}" data-learner="${learner.id}">Preview</button></td></tr>`;
+    const marks = assessments.map(
+      (assessment) => assessment.scores?.[learner.id] ?? "—",
+    );
+    return `<tr><td><b>${learner.name}</b><small>${learner.id} · Parent: ${learner.parent}</small></td><td>${marks.map((mark) => (mark === "—" ? "—" : mark + "%")).join(" · ")}</td><td>${learner.attendance}%</td><td>${sick.length ? sick.map((notice) => `${notice.date} · ${notice.reason}`).join("<br>") : '<span class="muted">None recorded</span>'}</td><td><button class="table-action" data-action="preview-learner-report" data-class="${classId}" data-learner="${learner.id}">Preview</button></td></tr>`;
   });
-  const markHeaders = assessments.length ? assessments.map((assessment) => assessment.subject).join(" · ") : "No marks";
+  const markHeaders = assessments.length
+    ? assessments.map((assessment) => assessment.subject).join(" · ")
+    : "No marks";
   const ready = report.status === "ready";
-  return generic(`${c.grade} · ${c.id} compilation`, "Clerk report compilation", "Check submitted teacher marks and learner sick notices, generate the term reports, then send the complete class back to the assigned teacher.", `${backLink("Compilation queue", "student-reports.html")}<div class="stats-grid">${stat("Learners", learnersInClass(classId).length, "Individual reports to generate")}${stat("Assessments", assessments.length, "Teacher-submitted marks")}${stat("Sick notices", learnersInClass(classId).reduce((total, learner) => total + learnerSickNotices(learner).length, 0), "Included in reports")}${stat("Report status", flowStep(report.status).label, c.teacher)}</div><section class="panel"><div class="panel-head"><div><h3>Report data review</h3><p>Marks: ${markHeaders}</p></div>${statusBadge(report.status)}</div>${table(["Learner / registered parent", "Submitted marks", "Attendance", "Sick notices to include", ""], rows)}<div class="panel-foot">${ready ? `<button class="btn primary" data-action="compile-report" data-class="${classId}">Generate reports & send to ${c.teacher}</button>` : '<span class="muted">This class has already moved beyond clerk compilation.</span>'}</div></section><section class="panel"><div class="panel-head"><div><h3>Term report layout</h3><p>Each learner report contains the current term and all earlier terms in the school year, subject levels, attendance, sick-notice summary, remarks and signatures.</p></div></div><p class="muted">Use Preview to inspect an individual report before sending the class to the teacher.</p></section>`);
+  return generic(
+    `${c.grade} · ${c.id} compilation`,
+    "Clerk report compilation",
+    "Check submitted teacher marks and learner sick notices, generate the term reports, then send the complete class back to the assigned teacher.",
+    `${backLink("Compilation queue", "student-reports.html")}<div class="stats-grid">${stat("Learners", learnersInClass(classId).length, "Individual reports to generate")}${stat("Assessments", assessments.length, "Teacher-submitted marks")}${stat(
+      "Sick notices",
+      learnersInClass(classId).reduce(
+        (total, learner) => total + learnerSickNotices(learner).length,
+        0,
+      ),
+      "Included in reports",
+    )}${stat("Report status", flowStep(report.status).label, c.teacher)}</div><section class="panel"><div class="panel-head"><div><h3>Report data review</h3><p>Marks: ${markHeaders}</p></div>${statusBadge(report.status)}</div>${table(["Learner / registered parent", "Submitted marks", "Attendance", "Sick notices to include", ""], rows)}<div class="panel-foot">${ready ? `<button class="btn primary" data-action="compile-report" data-class="${classId}">Generate reports & send to ${c.teacher}</button>` : '<span class="muted">This class has already moved beyond clerk compilation.</span>'}</div></section><section class="panel"><div class="panel-head"><div><h3>Term report layout</h3><p>Each learner report contains the current term and all earlier terms in the school year, subject levels, attendance, sick-notice summary, remarks and signatures.</p></div></div><p class="muted">Use Preview to inspect an individual report before sending the class to the teacher.</p></section>`,
+  );
 }
 
 function reportCompilationPage() {
@@ -1503,9 +1753,16 @@ function testScoresClerk() {
   }
   const c = classById(classId);
   const assessmentId = param("assessment");
-  const assessment = assessmentsForClass(classId).find((item) => item.id === assessmentId) || assessmentsForClass(classId)[0];
-  const assessmentPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">${assessmentsForClass(classId)
-    .map((item) => `<a href="test-scores.html?class=${classId}&assessment=${item.id}" style="display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid ${item.id === assessment?.id ? "#087550" : "#d4e0e3"};background:${item.id === assessment?.id ? "#e7f7ef" : "#fff"};color:#14343b;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${item.subject} <span style="font-weight:500;margin-left:4px">· ${item.title}</span></a>`)
+  const assessment =
+    assessmentsForClass(classId).find((item) => item.id === assessmentId) ||
+    assessmentsForClass(classId)[0];
+  const assessmentPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">${assessmentsForClass(
+    classId,
+  )
+    .map(
+      (item) =>
+        `<a href="test-scores.html?class=${classId}&assessment=${item.id}" style="display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid ${item.id === assessment?.id ? "#087550" : "#d4e0e3"};background:${item.id === assessment?.id ? "#e7f7ef" : "#fff"};color:#14343b;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${item.subject} <span style="font-weight:500;margin-left:4px">· ${item.title}</span></a>`,
+    )
     .join("")}</div>`;
   const valueRows = learnersInClass(classId)
     .map((l) => {
@@ -1527,22 +1784,84 @@ function testScoresClerk() {
 function attendanceRegister() {
   const mine = teacherClasses(userName());
   const classId = param("class") || mine[0]?.id;
-  if (!mine.length) return generic("Attendance Register", "Teacher workspace", "A class must be assigned before you can capture daily attendance.", '<section class="panel"><p class="muted">No class assigned.</p></section>');
+  if (!mine.length)
+    return generic(
+      "Attendance Register",
+      "Teacher workspace",
+      "A class must be assigned before you can capture daily attendance.",
+      '<section class="panel"><p class="muted">No class assigned.</p></section>',
+    );
   const weekStart = param("week") || "2026-09-14";
-  const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((name, index) => ({ name, date: new Date(new Date(weekStart + "T00:00:00").getTime() + index * 86400000).toISOString().slice(0, 10) }));
-  const records = Object.fromEntries(weekDays.map((day) => [day.date, attendanceRegisterFor(classId, day.date)?.entries || {}]));
+  const weekDays = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ].map((name, index) => ({
+    name,
+    date: new Date(
+      new Date(weekStart + "T00:00:00").getTime() + index * 86400000,
+    )
+      .toISOString()
+      .slice(0, 10),
+  }));
+  const records = Object.fromEntries(
+    weekDays.map((day) => [
+      day.date,
+      attendanceRegisterFor(classId, day.date)?.entries || {},
+    ]),
+  );
   const classPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">${mine.map((schoolClass) => `<a href="attendance-register.html?class=${schoolClass.id}&week=${weekStart}" style="padding:9px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;border:1px solid ${schoolClass.id === classId ? "#087550" : "#d4e0e3"};background:${schoolClass.id === classId ? "#087550" : "#fff"};color:${schoolClass.id === classId ? "#fff" : "#14343b"}">${schoolClass.grade} · ${schoolClass.id}</a>`).join("")}</div>`;
-  const headers = weekDays.map((day, index) => `<th colspan="3" style="background:${index % 2 ? "#eaf0ff" : "#eef8ee"};min-width:104px">${day.name}<small style="display:block">${day.date.slice(5)}</small></th>`).join("");
-  const statusHeaders = weekDays.map(() => "<th>P</th><th>A</th><th>E</th>").join("");
-  const rows = learnersInClass(classId).map((learner) => `<tr><td style="position:sticky;left:0;background:#fff;min-width:190px"><b>${learner.name}</b><small>${learner.id}</small></td>${weekDays.map((day, index) => { const value = records[day.date][learner.id] || "Present"; const colours = index % 2 ? "#eaf0ff" : "#eef8ee"; return ["Present", "Absent", "Excused"].map((status) => `<td style="background:${colours};text-align:center"><input type="checkbox" aria-label="${learner.name} ${day.name} ${status}" data-week-status="${status}" data-week-learner="${learner.id}" data-week-day="${day.date}" ${value === status ? "checked" : ""}></td>`).join(""); }).join("")}</tr>`).join("");
+  const headers = weekDays
+    .map(
+      (day, index) =>
+        `<th colspan="3" style="background:${index % 2 ? "#eaf0ff" : "#eef8ee"};min-width:104px">${day.name}<small style="display:block">${day.date.slice(5)}</small></th>`,
+    )
+    .join("");
+  const statusHeaders = weekDays
+    .map(() => "<th>P</th><th>A</th><th>E</th>")
+    .join("");
+  const rows = learnersInClass(classId)
+    .map(
+      (learner) =>
+        `<tr><td style="position:sticky;left:0;background:#fff;min-width:190px"><b>${learner.name}</b><small>${learner.id}</small></td>${weekDays
+          .map((day, index) => {
+            const value = records[day.date][learner.id] || "Present";
+            const colours = index % 2 ? "#eaf0ff" : "#eef8ee";
+            return ["Present", "Absent", "Excused"]
+              .map(
+                (status) =>
+                  `<td style="background:${colours};text-align:center"><input type="checkbox" aria-label="${learner.name} ${day.name} ${status}" data-week-status="${status}" data-week-learner="${learner.id}" data-week-day="${day.date}" ${value === status ? "checked" : ""}></td>`,
+              )
+              .join("");
+          })
+          .join("")}</tr>`,
+    )
+    .join("");
   const todayDate = new Date().toISOString().slice(0, 10);
   const today = new Date(todayDate + "T00:00:00");
   const mondayOffset = (today.getDay() + 6) % 7;
-  const todayWeekStart = new Date(today.getTime() - mondayOffset * 86400000).toISOString().slice(0, 10);
-  const previous = (getState().attendanceWeeks || []).filter((week) => week.class === classId).map((week) => `<div class="report-row"><span><b>Week of ${week.weekStart}</b><small>Last updated ${week.updatedOn} · ${week.teacher}</small></span><a class="btn small" href="attendance-register.html?class=${classId}&week=${week.weekStart}">View / Edit</a><button class="btn small" data-action="download-attendance-week" data-class="${classId}" data-week="${week.weekStart}">Download</button></div>`).join("") || '<span class="muted">No previous weekly registers.</span>';
+  const todayWeekStart = new Date(today.getTime() - mondayOffset * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const previous =
+    (getState().attendanceWeeks || [])
+      .filter((week) => week.class === classId)
+      .map(
+        (week) =>
+          `<div class="report-row"><span><b>Week of ${week.weekStart}</b><small>Last updated ${week.updatedOn} · ${week.teacher}</small></span><a class="btn small" href="attendance-register.html?class=${classId}&week=${week.weekStart}">View / Edit</a><button class="btn small" data-action="download-attendance-week" data-class="${classId}" data-week="${week.weekStart}">Download</button></div>`,
+      )
+      .join("") || '<span class="muted">No previous weekly registers.</span>';
   const todayRegister = `<a class="btn primary" href="attendance-register.html?class=${classId}&week=${todayWeekStart}">Today’s register · ${todayDate}</a>`;
   const c = classById(classId);
-  return generic("Attendance Register", "Teacher workspace", "Weekly checklist register. Mark P (present), A (absent) or E (excused) for each learner and day; saved absences update learner records, reports and the parent view.", `${classPicker}<section class="panel"><div class="panel-head"><div><h3>${c.grade} · ${c.id} weekly register</h3><p>${c.teacher} · Week beginning ${weekStart}</p></div>${todayRegister}</div><div class="table-wrap" style="max-height:65vh;overflow:auto"><table><thead><tr><th rowspan="2" style="position:sticky;left:0;z-index:3">Student name</th>${headers}</tr><tr>${statusHeaders}</tr></thead><tbody>${rows}</tbody></table></div><div class="panel-foot"><span class="muted">Checklist key: P = Present · A = Absent · E = Excused</span><button class="btn primary" data-action="save-weekly-attendance" data-class="${classId}" data-week="${weekStart}">Submit register & update this week</button></div></section><section class="panel"><div class="panel-head"><div><h3>Previous registers</h3><p>View, download or edit a saved week.</p></div></div>${previous}</section>`);
+  return generic(
+    "Attendance Register",
+    "Teacher workspace",
+    "Weekly checklist register. Mark P (present), A (absent) or E (excused) for each learner and day; saved absences update learner records, reports and the parent view.",
+    `${classPicker}<section class="panel"><div class="panel-head"><div><h3>${c.grade} · ${c.id} weekly register</h3><p>${c.teacher} · Week beginning ${weekStart}</p></div>${todayRegister}</div><div class="table-wrap" style="max-height:65vh;overflow:auto"><table><thead><tr><th rowspan="2" style="position:sticky;left:0;z-index:3">Student name</th>${headers}</tr><tr>${statusHeaders}</tr></thead><tbody>${rows}</tbody></table></div><div class="panel-foot"><span class="muted">Checklist key: P = Present · A = Absent · E = Excused</span><button class="btn primary" data-action="save-weekly-attendance" data-class="${classId}" data-week="${weekStart}">Submit register & update this week</button></div></section><section class="panel"><div class="panel-head"><div><h3>Previous registers</h3><p>View, download or edit a saved week.</p></div></div>${previous}</section>`,
+  );
 }
 
 /* Daily attendance is the source of truth. Weekly completion is derived from
@@ -1555,45 +1874,104 @@ function weekStartFor(date) {
 }
 function schoolDaysForWeek(weekStart) {
   const start = new Date(weekStart + "T00:00:00");
-  return Array.from({ length: 5 }, (_, index) => new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10));
+  return Array.from({ length: 5 }, (_, index) =>
+    new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10),
+  );
 }
 function refreshClassAttendance(state, classId) {
-  const registers = (state.attendanceRegisters || []).filter((item) => item.class === classId);
-  state.learners.filter((learner) => learner.class === classId).forEach((learner) => {
-    const absences = registers.reduce((total, register) => total + (["Absent", "Sick", "Excused"].includes(register.entries?.[learner.id]) ? 1 : 0), 0);
-    learner.absentDays = (learner.initialAbsentDays || 0) + absences;
-    const totalDays = (learner.attendanceDays || 60) + registers.length;
-    learner.attendance = Math.max(0, Math.round(((totalDays - learner.absentDays) / totalDays) * 100));
-  });
+  const registers = (state.attendanceRegisters || []).filter(
+    (item) => item.class === classId,
+  );
+  state.learners
+    .filter((learner) => learner.class === classId)
+    .forEach((learner) => {
+      const absences = registers.reduce(
+        (total, register) =>
+          total +
+          (["Absent", "Sick", "Excused"].includes(
+            register.entries?.[learner.id],
+          )
+            ? 1
+            : 0),
+        0,
+      );
+      learner.absentDays = (learner.initialAbsentDays || 0) + absences;
+      const totalDays = (learner.attendanceDays || 60) + registers.length;
+      learner.attendance = Math.max(
+        0,
+        Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
+      );
+    });
 }
 function attendanceOverview() {
   const mine = teacherClasses(userName());
-  if (!mine.length) return generic("Attendance Register", "Teacher workspace", "A class must be assigned before you can capture daily attendance.", '<section class="panel"><p class="muted">No class assigned.</p></section>');
+  if (!mine.length)
+    return generic(
+      "Attendance Register",
+      "Teacher workspace",
+      "A class must be assigned before you can capture daily attendance.",
+      '<section class="panel"><p class="muted">No class assigned.</p></section>',
+    );
   const classId = param("class") || mine[0].id;
   const schoolClass = classById(classId);
   const today = new Date().toISOString().slice(0, 10);
   const weekStart = weekStartFor(today);
   const weekDays = schoolDaysForWeek(weekStart);
-  const classPicker = mine.map((item) => `<a class="btn small" href="attendance-register.html?class=${item.id}">${item.grade} - ${item.id}</a>`).join("");
-  const progress = weekDays.map((date, index) => {
-    const done = Boolean(attendanceRegisterFor(classId, date));
-    return `<div class="attendance-day ${done ? "complete" : "pending"}"><b>${["Mon", "Tue", "Wed", "Thu", "Fri"][index]}</b><span>${done ? "✓" : "○"}</span><small>${date.slice(8)}</small></div>`;
-  }).join("");
-  const grouped = (getState().attendanceRegisters || []).filter((register) => register.class === classId).sort((a, b) => b.date.localeCompare(a.date)).reduce((groups, register) => {
-    const key = weekStartFor(register.date);
-    (groups[key] ||= []).push(register);
-    return groups;
-  }, {});
-  const pastWeeks = Object.entries(grouped).map(([start, registers]) => `<section class="attendance-history-week"><div class="panel-head"><div><h3>Week of ${start}</h3><p>${registers.length} of 5 weekday registers captured</p></div></div>${registers.map((register) => `<div class="report-row"><span><b>${register.date}</b><small>${register.teacher} - saved ${register.capturedOn}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${classId}&date=${register.date}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${classId}" data-date="${register.date}">Delete</button></span></div>`).join("")}</section>`).join("") || '<p class="muted">No attendance has been captured for this class yet.</p>';
-  const savedThisWeek = weekDays.filter((date) => attendanceRegisterFor(classId, date)).length;
-  const weeklySubmission = (getState().attendanceWeeks || []).find((week) => week.class === classId && week.weekStart === weekStart);
-  const weeklyAction = savedThisWeek === 5 && !weeklySubmission ? `<button class="btn primary" data-action="submit-daily-week" data-class="${classId}" data-week="${weekStart}">Submit weekly attendance</button>` : "";
-  return generic("Attendance Register", "Teacher workspace", "Record attendance one day at a time and review completed registers by week.", `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId}</h3><p>Week beginning ${weekStart}</p></div><a class="btn primary" href="attendance-register.html?class=${classId}&date=${today}">+ New attendance</a></div><div class="attendance-week-bar">${progress}</div><div class="panel-foot"><span class="muted">${savedThisWeek} of 5 school days completed this week.</span>${weeklyAction}</div></section><section class="panel"><div class="panel-head"><div><h3>Past attendance registers</h3><p>Registers are organised by week. You can edit or delete any saved day.</p></div></div>${pastWeeks}</section>`);
+  const classPicker = mine
+    .map(
+      (item) =>
+        `<a class="btn small" href="attendance-register.html?class=${item.id}">${item.grade} - ${item.id}</a>`,
+    )
+    .join("");
+  const progress = weekDays
+    .map((date, index) => {
+      const done = Boolean(attendanceRegisterFor(classId, date));
+      return `<div class="attendance-day ${done ? "complete" : "pending"}"><b>${["Mon", "Tue", "Wed", "Thu", "Fri"][index]}</b><span>${done ? "✓" : "○"}</span><small>${date.slice(8)}</small></div>`;
+    })
+    .join("");
+  const grouped = (getState().attendanceRegisters || [])
+    .filter((register) => register.class === classId)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .reduce((groups, register) => {
+      const key = weekStartFor(register.date);
+      (groups[key] ||= []).push(register);
+      return groups;
+    }, {});
+  const pastWeeks =
+    Object.entries(grouped)
+      .map(
+        ([start, registers]) =>
+          `<section class="attendance-history-week"><div class="panel-head"><div><h3>Week of ${start}</h3><p>${registers.length} of 5 weekday registers captured</p></div></div>${registers.map((register) => `<div class="report-row"><span><b>${register.date}</b><small>${register.teacher} - saved ${register.capturedOn}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${classId}&date=${register.date}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${classId}" data-date="${register.date}">Delete</button></span></div>`).join("")}</section>`,
+      )
+      .join("") ||
+    '<p class="muted">No attendance has been captured for this class yet.</p>';
+  const savedThisWeek = weekDays.filter((date) =>
+    attendanceRegisterFor(classId, date),
+  ).length;
+  const weeklySubmission = (getState().attendanceWeeks || []).find(
+    (week) => week.class === classId && week.weekStart === weekStart,
+  );
+  const weeklyAction =
+    savedThisWeek === 5 && !weeklySubmission
+      ? `<button class="btn primary" data-action="submit-daily-week" data-class="${classId}" data-week="${weekStart}">Submit weekly attendance</button>`
+      : "";
+  return generic(
+    "Attendance Register",
+    "Teacher workspace",
+    "Record attendance one day at a time and review completed registers by week.",
+    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId}</h3><p>Week beginning ${weekStart}</p></div><a class="btn primary" href="attendance-register.html?class=${classId}&date=${today}">+ New attendance</a></div><div class="attendance-week-bar">${progress}</div><div class="panel-foot"><span class="muted">${savedThisWeek} of 5 school days completed this week.</span>${weeklyAction}</div></section><section class="panel"><div class="panel-head"><div><h3>Past attendance registers</h3><p>Registers are organised by week. You can edit or delete any saved day.</p></div></div>${pastWeeks}</section>`,
+  );
 }
 function dailyAttendanceRegister() {
   if (!param("date")) return attendanceOverview();
   const mine = teacherClasses(userName());
-  if (!mine.length) return generic("Attendance Register", "Teacher workspace", "A class must be assigned before you can capture daily attendance.", '<section class="panel"><p class="muted">No class assigned.</p></section>');
+  if (!mine.length)
+    return generic(
+      "Attendance Register",
+      "Teacher workspace",
+      "A class must be assigned before you can capture daily attendance.",
+      '<section class="panel"><p class="muted">No class assigned.</p></section>',
+    );
   const today = new Date().toISOString().slice(0, 10);
   const classId = param("class") || mine[0].id;
   const date = param("date") || today;
@@ -1601,29 +1979,76 @@ function dailyAttendanceRegister() {
   const existing = attendanceRegisterFor(classId, date);
   const weekStart = weekStartFor(date);
   const weekDays = schoolDaysForWeek(weekStart);
-  const savedDays = weekDays.filter((day) => attendanceRegisterFor(classId, day));
-  const weeklySubmission = (getState().attendanceWeeks || []).find((week) => week.class === classId && week.weekStart === weekStart);
-  const classPicker = mine.map((item) => `<a class="btn small" href="attendance-register.html?class=${item.id}&date=${date}">${item.grade} - ${item.id}</a>`).join("");
+  const savedDays = weekDays.filter((day) =>
+    attendanceRegisterFor(classId, day),
+  );
+  const weeklySubmission = (getState().attendanceWeeks || []).find(
+    (week) => week.class === classId && week.weekStart === weekStart,
+  );
+  const classPicker = mine
+    .map(
+      (item) =>
+        `<a class="btn small" href="attendance-register.html?class=${item.id}&date=${date}">${item.grade} - ${item.id}</a>`,
+    )
+    .join("");
   const learnerRows = learnersInClass(classId).map((learner) => {
     const status = existing?.entries?.[learner.id] || "Present";
-    const checklist = ["Present", "Absent", "Sick", "Excused"].map((option) => `<label class="attendance-choice"><input type="radio" name="attendance-${learner.id}" data-day-status="${option}" data-learner="${learner.id}" ${status === option ? "checked" : ""}><span>${option}</span></label>`).join("");
+    const checklist = ["Present", "Absent", "Sick", "Excused"]
+      .map(
+        (option) =>
+          `<label class="attendance-choice"><input type="radio" name="attendance-${learner.id}" data-day-status="${option}" data-learner="${learner.id}" ${status === option ? "checked" : ""}><span>${option}</span></label>`,
+      )
+      .join("");
     return `<tr><td><b>${learner.name}</b><small>${learner.id}</small></td><td><div class="attendance-checklist" role="radiogroup" aria-label="${learner.name} attendance">${checklist}</div></td></tr>`;
   });
-  const past = (getState().attendanceRegisters || []).filter((register) => register.class === classId).sort((a, b) => b.date.localeCompare(a.date)).map((register) => `<div class="report-row"><span><b>${register.date}</b><small>${register.teacher} - saved ${register.capturedOn}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${classId}&date=${register.date}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${classId}" data-date="${register.date}">Delete</button></span></div>`).join("") || '<p class="muted">No daily attendance has been submitted for this class.</p>';
-  const weeklyPrompt = savedDays.length === 5 && !weeklySubmission
-    ? `<div class="notice"><div class="notice-icon">!</div><div class="grow"><b>Weekly attendance ready to submit</b><p>All five school days for the week beginning ${weekStart} have been captured.</p></div><button class="btn primary" data-action="submit-daily-week" data-class="${classId}" data-week="${weekStart}">Submit week</button></div>`
-    : `<p class="muted">Week of ${weekStart}: ${savedDays.length} of 5 school days captured${weeklySubmission ? " - weekly attendance submitted" : ""}.</p>`;
-  return generic("Attendance Register", "Teacher workspace", "Capture one day at a time. Each saved day immediately updates learner and weekly attendance.", `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId} daily register</h3><p>${existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day."}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${date}" max="${todayIso()}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${classId}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${classId}">${existing ? "Save changes & close" : "Submit attendance & close"}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>Edit or delete a previously saved day.</p></div></div>${past}</section>`);
+  const past =
+    (getState().attendanceRegisters || [])
+      .filter((register) => register.class === classId)
+      .sort((a, b) => b.date.localeCompare(a.date))
+      .map(
+        (register) =>
+          `<div class="report-row"><span><b>${register.date}</b><small>${register.teacher} - saved ${register.capturedOn}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${classId}&date=${register.date}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${classId}" data-date="${register.date}">Delete</button></span></div>`,
+      )
+      .join("") ||
+    '<p class="muted">No daily attendance has been submitted for this class.</p>';
+  const weeklyPrompt =
+    savedDays.length === 5 && !weeklySubmission
+      ? `<div class="notice"><div class="notice-icon">!</div><div class="grow"><b>Weekly attendance ready to submit</b><p>All five school days for the week beginning ${weekStart} have been captured.</p></div><button class="btn primary" data-action="submit-daily-week" data-class="${classId}" data-week="${weekStart}">Submit week</button></div>`
+      : `<p class="muted">Week of ${weekStart}: ${savedDays.length} of 5 school days captured${weeklySubmission ? " - weekly attendance submitted" : ""}.</p>`;
+  return generic(
+    "Attendance Register",
+    "Teacher workspace",
+    "Capture one day at a time. Each saved day immediately updates learner and weekly attendance.",
+    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${schoolClass?.grade || "Class"} - ${classId} daily register</h3><p>${existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day."}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${date}" max="${todayIso()}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${classId}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${classId}">${existing ? "Save changes & close" : "Submit attendance & close"}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>Edit or delete a previously saved day.</p></div></div>${past}</section>`,
+  );
 }
 function saveDailyAttendance(classId) {
   const date = inputValue("attendanceDate");
   if (!date) return;
-  if (date > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">Attendance can only be recorded for today or an earlier date.</p>");
-  const entries = Object.fromEntries(learnersInClass(classId).map((learner) => [learner.id, $(`[data-day-status][data-learner="${learner.id}"]:checked`)?.dataset.dayStatus || "Present"]));
+  if (date > todayIso())
+    return modal(
+      "Future date not allowed",
+      '<p class="muted">Attendance can only be recorded for today or an earlier date.</p>',
+    );
+  const entries = Object.fromEntries(
+    learnersInClass(classId).map((learner) => [
+      learner.id,
+      $(`[data-day-status][data-learner="${learner.id}"]:checked`)?.dataset
+        .dayStatus || "Present",
+    ]),
+  );
   persist((state) => {
     state.attendanceRegisters = state.attendanceRegisters || [];
-    const index = state.attendanceRegisters.findIndex((register) => register.class === classId && register.date === date);
-    const register = { class: classId, date, teacher: userName(), entries, capturedOn: todayLabel() };
+    const index = state.attendanceRegisters.findIndex(
+      (register) => register.class === classId && register.date === date,
+    );
+    const register = {
+      class: classId,
+      date,
+      teacher: userName(),
+      entries,
+      capturedOn: todayLabel(),
+    };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
     refreshClassAttendance(state, classId);
@@ -1633,9 +2058,13 @@ function saveDailyAttendance(classId) {
 function deleteDailyAttendance(classId, date) {
   if (!confirm(`Delete the attendance register for ${date}?`)) return;
   persist((state) => {
-    state.attendanceRegisters = (state.attendanceRegisters || []).filter((register) => !(register.class === classId && register.date === date));
+    state.attendanceRegisters = (state.attendanceRegisters || []).filter(
+      (register) => !(register.class === classId && register.date === date),
+    );
     const weekStart = weekStartFor(date);
-    state.attendanceWeeks = (state.attendanceWeeks || []).filter((week) => !(week.class === classId && week.weekStart === weekStart));
+    state.attendanceWeeks = (state.attendanceWeeks || []).filter(
+      (week) => !(week.class === classId && week.weekStart === weekStart),
+    );
     refreshClassAttendance(state, classId);
   });
   render();
@@ -1645,8 +2074,16 @@ function submitDailyWeek(classId, weekStart) {
   if (schoolDays.some((date) => !attendanceRegisterFor(classId, date))) return;
   persist((state) => {
     state.attendanceWeeks = state.attendanceWeeks || [];
-    const summary = { class: classId, weekStart, teacher: userName(), updatedOn: todayLabel(), status: "Submitted" };
-    const index = state.attendanceWeeks.findIndex((week) => week.class === classId && week.weekStart === weekStart);
+    const summary = {
+      class: classId,
+      weekStart,
+      teacher: userName(),
+      updatedOn: todayLabel(),
+      status: "Submitted",
+    };
+    const index = state.attendanceWeeks.findIndex(
+      (week) => week.class === classId && week.weekStart === weekStart,
+    );
     if (index >= 0) state.attendanceWeeks[index] = summary;
     else state.attendanceWeeks.unshift(summary);
   });
@@ -1656,12 +2093,17 @@ function submitDailyWeek(classId, weekStart) {
 /* --------------------------------- chat ---------------------------------- */
 function chatTimestamp(message) {
   if (!message.sentAt) return message.date || "Now";
-  return new Date(message.sentAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  return new Date(message.sentAt).toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 function chatSender(message, conversation, legacySide) {
   if (message.sender) return message.sender;
-  const teacherOwned = conversation.legacyOwner === "teacher" || /^Teacher/.test(conversation.role || "");
+  const teacherOwned =
+    conversation.legacyOwner === "teacher" ||
+    /^Teacher/.test(conversation.role || "");
   if (teacherOwned) {
     const teacher = conversation.legacyTeacher || conversation.id;
     const principal = conversation.legacyPrincipal || SCHOOL.principal;
@@ -1670,30 +2112,14 @@ function chatSender(message, conversation, legacySide) {
   return message.from === legacySide ? userName() : conversation.id;
 }
 
-function chatLayout(title, eyebrow, desc, conversations, storeKey, ownStoredSide = "me") {
-  if (!conversations.length) return generic(title, eyebrow, desc, '<section class="panel"><p class="muted">No conversations available.</p></section>');
-  const selected = Math.max(0, Math.min(conversations.length - 1, Number(param("chat")) || 0));
-  const active = conversations[selected];
-  const storageIndex = active.storeIndex ?? selected;
-  const people = conversations.map((contact, index) => `<a href="${page()}.html?chat=${index}" data-chat-contact class="chat-person ${index === selected ? "active" : ""}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="dot success"></span></a>`).join("");
-  const contacts = conversations.map((contact, index) => `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${page()}.html?chat=${index}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="chat-contact-action">Chat -></span></button>`).join("");
-  const ordered = (active.messages || []).map((message, index) => ({ message, index })).sort((a, b) => {
-    const first = Date.parse(a.message.sentAt || a.message.date || "");
-    const second = Date.parse(b.message.sentAt || b.message.date || "");
-    return Number.isNaN(first) || Number.isNaN(second) || first === second ? a.index - b.index : first - second;
-  });
-  let previousSender = "";
-  const messages = ordered.map(({ message }) => {
-    const sender = chatSender(message, active, ownStoredSide);
-    const mine = sender === userName();
-    const grouped = sender === previousSender;
-    previousSender = sender;
-    return `<div class="chat-message ${mine ? "outgoing" : "incoming"} ${grouped ? "grouped" : ""}"><div class="msg ${mine ? "mine" : "other"}">${mine || grouped ? "" : `<b class="message-sender">${sender}</b>`}<span>${message.text}</span><small>${chatTimestamp(message)}${mine ? " <em>sent</em>" : ""}</small></div></div>`;
-  }).join("") || '<p class="muted">No messages yet. Start the conversation below.</p>';
-  return generic(title, eyebrow, desc, `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`);
-}
-
-function legacyChatLayout(title, eyebrow, desc, conversations, storeKey, ownStoredSide = "me") {
+function chatLayout(
+  title,
+  eyebrow,
+  desc,
+  conversations,
+  storeKey,
+  ownStoredSide = "me",
+) {
   if (!conversations.length)
     return generic(
       title,
@@ -1701,7 +2127,72 @@ function legacyChatLayout(title, eyebrow, desc, conversations, storeKey, ownStor
       desc,
       '<section class="panel"><p class="muted">No conversations available.</p></section>',
     );
-  const selected = Math.max(0, Math.min(conversations.length - 1, Number(param("chat")) || 0));
+  const selected = Math.max(
+    0,
+    Math.min(conversations.length - 1, Number(param("chat")) || 0),
+  );
+  const active = conversations[selected];
+  const storageIndex = active.storeIndex ?? selected;
+  const people = conversations
+    .map(
+      (contact, index) =>
+        `<a href="${page()}.html?chat=${index}" data-chat-contact class="chat-person ${index === selected ? "active" : ""}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="dot success"></span></a>`,
+    )
+    .join("");
+  const contacts = conversations
+    .map(
+      (contact, index) =>
+        `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${page()}.html?chat=${index}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="chat-contact-action">Chat -></span></button>`,
+    )
+    .join("");
+  const ordered = (active.messages || [])
+    .map((message, index) => ({ message, index }))
+    .sort((a, b) => {
+      const first = Date.parse(a.message.sentAt || a.message.date || "");
+      const second = Date.parse(b.message.sentAt || b.message.date || "");
+      return Number.isNaN(first) || Number.isNaN(second) || first === second
+        ? a.index - b.index
+        : first - second;
+    });
+  let previousSender = "";
+  const messages =
+    ordered
+      .map(({ message }) => {
+        const sender = chatSender(message, active, ownStoredSide);
+        const mine = sender === userName();
+        const grouped = sender === previousSender;
+        previousSender = sender;
+        return `<div class="chat-message ${mine ? "outgoing" : "incoming"} ${grouped ? "grouped" : ""}"><div class="msg ${mine ? "mine" : "other"}">${mine || grouped ? "" : `<b class="message-sender">${sender}</b>`}<span>${message.text}</span><small>${chatTimestamp(message)}${mine ? " <em>sent</em>" : ""}</small></div></div>`;
+      })
+      .join("") ||
+    '<p class="muted">No messages yet. Start the conversation below.</p>';
+  return generic(
+    title,
+    eyebrow,
+    desc,
+    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`,
+  );
+}
+
+function legacyChatLayout(
+  title,
+  eyebrow,
+  desc,
+  conversations,
+  storeKey,
+  ownStoredSide = "me",
+) {
+  if (!conversations.length)
+    return generic(
+      title,
+      eyebrow,
+      desc,
+      '<section class="panel"><p class="muted">No conversations available.</p></section>',
+    );
+  const selected = Math.max(
+    0,
+    Math.min(conversations.length - 1, Number(param("chat")) || 0),
+  );
   const active = conversations[selected];
   const storageIndex = active.storeIndex ?? selected;
   const people = conversations
@@ -1718,12 +2209,10 @@ function legacyChatLayout(title, eyebrow, desc, conversations, storeKey, ownStor
     .join("");
   const messages =
     (active.messages || [])
-      .map(
-        (m) => {
-          const mine = m.from === ownStoredSide;
-          return `<div class="chat-message ${mine ? "outgoing" : "incoming"}"><div class="msg ${mine ? "mine" : "other"}"><span>${m.text}</span><small>${m.date || "Now"}${mine ? " ✓✓" : ""}</small></div></div>`;
-        },
-      )
+      .map((m) => {
+        const mine = m.from === ownStoredSide;
+        return `<div class="chat-message ${mine ? "outgoing" : "incoming"}"><div class="msg ${mine ? "mine" : "other"}"><span>${m.text}</span><small>${m.date || "Now"}${mine ? " ✓✓" : ""}</small></div></div>`;
+      })
       .join("") ||
     '<p class="muted">No messages yet — start the conversation below.</p>';
   return generic(
@@ -1748,7 +2237,9 @@ function teacherChat() {
     );
   }
   const principal = SCHOOL.principal || `${SCHOOL.name} Principal`;
-  let storedIndex = getState().teacherChat.findIndex((conversation) => conversation.id === userName());
+  let storedIndex = getState().teacherChat.findIndex(
+    (conversation) => conversation.id === userName(),
+  );
   if (storedIndex < 0) {
     persist((state) => {
       state.teacherChat = state.teacherChat || [];
@@ -1759,19 +2250,32 @@ function teacherChat() {
         legacyOwner: "teacher",
         legacyTeacher: userName(),
         legacyPrincipal: principal,
-        messages: [{ from: "them", sender: principal, text: "Good morning. Please submit your class marks so the clerk can compile the term reports.", date: "17 Sep 2026" }],
+        messages: [
+          {
+            from: "them",
+            sender: principal,
+            text: "Good morning. Please submit your class marks so the clerk can compile the term reports.",
+            date: "17 Sep 2026",
+          },
+        ],
       });
     });
     storedIndex = getState().teacherChat.length - 1;
   }
   let stored = getState().teacherChat[storedIndex];
-  if (stored && (!stored.legacyOwner || stored.messages?.some((message) => !message.sender))) {
+  if (
+    stored &&
+    (!stored.legacyOwner || stored.messages?.some((message) => !message.sender))
+  ) {
     persist((state) => {
       const conversation = state.teacherChat[storedIndex];
       conversation.legacyOwner = "teacher";
       conversation.legacyTeacher = userName();
       conversation.legacyPrincipal = principal;
-      conversation.messages.forEach((message) => { if (!message.sender) message.sender = message.from === "them" ? principal : userName(); });
+      conversation.messages.forEach((message) => {
+        if (!message.sender)
+          message.sender = message.from === "them" ? principal : userName();
+      });
     });
     stored = getState().teacherChat[storedIndex];
   }
@@ -1783,7 +2287,16 @@ function teacherChat() {
     legacyOwner: stored?.legacyOwner,
     legacyTeacher: stored?.legacyTeacher,
     legacyPrincipal: stored?.legacyPrincipal,
-    messages: stored ? stored.messages : [{ from: "them", sender: principal, text: "Good morning. Please submit your class marks so the clerk can compile the term reports.", date: "17 Sep 2026" }],
+    messages: stored
+      ? stored.messages
+      : [
+          {
+            from: "them",
+            sender: principal,
+            text: "Good morning. Please submit your class marks so the clerk can compile the term reports.",
+            date: "17 Sep 2026",
+          },
+        ],
   };
   return chatLayout(
     "Teacher Chat",
@@ -1819,7 +2332,9 @@ function sgbChat() {
     );
   }
 
-  let storedIndex = saved.findIndex((conversation) => conversation.sgbMember === userName());
+  let storedIndex = saved.findIndex(
+    (conversation) => conversation.sgbMember === userName(),
+  );
   if (storedIndex < 0) {
     persist((state) => {
       state.sgbPrincipalChat = state.sgbPrincipalChat || [];
@@ -1828,7 +2343,15 @@ function sgbChat() {
         sgbMember: userName(),
         role: `Principal · ${SCHOOL.name}`,
         initials: initials(principal),
-        messages: [{ from: "them", sender: principal, text: "Welcome to the SGB channel. Please share governance questions or feedback here.", date: todayLabel(), sentAt: new Date().toISOString() }],
+        messages: [
+          {
+            from: "them",
+            sender: principal,
+            text: "Welcome to the SGB channel. Please share governance questions or feedback here.",
+            date: todayLabel(),
+            sentAt: new Date().toISOString(),
+          },
+        ],
       });
     });
     storedIndex = getState().sgbPrincipalChat.length - 1;
@@ -1855,15 +2378,17 @@ function parentChat() {
   const r = role();
   if (r === "teacher") {
     const mine = teacherClasses(userName()).map((c) => c.id);
-    const list = getState().parentChat
-      .map((conversation, storeIndex) => {
+    const list = getState()
+      .parentChat.map((conversation, storeIndex) => {
         const learner = learnerById(conversation.learnerId);
         return {
           ...conversation,
           // The linked learner record is the source of truth for the tester
           // parent name shown to a teacher; older chat rows used a seed name.
           id: learner?.parent || conversation.id,
-          role: learner ? `${learner.relation || "Parent"} · ${learner.name} (${learner.class})` : conversation.role,
+          role: learner
+            ? `${learner.relation || "Parent"} · ${learner.name} (${learner.class})`
+            : conversation.role,
           storeIndex,
         };
       })
@@ -1879,7 +2404,9 @@ function parentChat() {
   }
   const child = parentLearner();
   if (!child) return parentLinkRequired("Parent–Teacher Chat");
-  let parentChatIndex = getState().parentChat.findIndex((conversation) => conversation.learnerId === child.id);
+  let parentChatIndex = getState().parentChat.findIndex(
+    (conversation) => conversation.learnerId === child.id,
+  );
   if (parentChatIndex < 0) {
     persist((state) => {
       state.parentChat = state.parentChat || [];
@@ -1890,7 +2417,14 @@ function parentChat() {
         role: `${child.relation || "Parent"} · ${child.name} (${child.class})`,
         initials: initials(userName()),
         legacyOwner: "parent",
-        messages: [{ from: "them", sender: teacherForClass(child.class), text: `Good day. ${child.name}'s Term 2 report will be shared here once it is published.`, date: "17 Sep 2026" }],
+        messages: [
+          {
+            from: "them",
+            sender: teacherForClass(child.class),
+            text: `Good day. ${child.name}'s Term 2 report will be shared here once it is published.`,
+            date: "17 Sep 2026",
+          },
+        ],
       });
     });
     parentChatIndex = getState().parentChat.length - 1;
@@ -1902,12 +2436,14 @@ function parentChat() {
     initials: initials(teacherForClass(child.class)),
     storeIndex: parentChatIndex,
     legacyOwner: storedParentChat?.legacyOwner,
-    messages: storedParentChat ? storedParentChat.messages : [
-      {
-        from: "them",
-        text: `Good day. ${child.name}'s Term 2 report will be shared here once it is published.`,
-      },
-    ],
+    messages: storedParentChat
+      ? storedParentChat.messages
+      : [
+          {
+            from: "them",
+            text: `Good day. ${child.name}'s Term 2 report will be shared here once it is published.`,
+          },
+        ],
   };
   return chatLayout(
     "Parent–Teacher Chat",
@@ -1925,7 +2461,8 @@ function announcements() {
   const recent = getState().announcements;
   if (r === "sgb") {
     const rows = recent.map(
-      (a) => `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
+      (a) =>
+        `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
     );
     return generic(
       "Announcements",
@@ -1964,10 +2501,32 @@ function staff() {
   const s = getState();
   const canManage = ["principal", "deputy", "clerk"].includes(role());
   const requests = s.staffChangeRequests || [];
-  const mine = requests.filter((request) => request.requestedBy === userName() && request.status === "Pending");
-  const reviewQueue = ["principal", "deputy"].includes(role()) ? requests.filter((request) => request.status === "Pending") : [];
-  const approvals = reviewQueue.length ? `<section class="panel"><div class="panel-head"><div><h3>Staff changes awaiting dual approval</h3><p>Clerk changes only update the register after both the principal and deputy approve.</p></div></div>${table(["Change", "Requested by", "Principal", "Deputy", ""], reviewQueue.map((request) => `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} staff member</b><small>${request.proposed.name} · ${request.proposed.role}</small></td><td>${request.requestedBy}<small>${request.requestedOn}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.approvals[role()] ? '<span class="muted">Your approval recorded</span>' : `<button class="btn small primary" data-action="approve-staff-change" data-staff-change="${request.id}">Approve</button>`}</td></tr>`))}</section>` : "";
-  const submitted = role() === "clerk" && mine.length ? `<section class="panel"><div class="panel-head"><div><h3>My pending staff changes</h3><p>These changes are not live until the principal and deputy both approve.</p></div></div>${table(["Change", "Principal", "Deputy", "Requested"], mine.map((request) => `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} · ${request.proposed.name}</b><small>${request.proposed.role} · ${request.proposed.department}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.requestedOn}</td></tr>`))}</section>` : "";
+  const mine = requests.filter(
+    (request) =>
+      request.requestedBy === userName() && request.status === "Pending",
+  );
+  const reviewQueue = ["principal", "deputy"].includes(role())
+    ? requests.filter((request) => request.status === "Pending")
+    : [];
+  const approvals = reviewQueue.length
+    ? `<section class="panel"><div class="panel-head"><div><h3>Staff changes awaiting dual approval</h3><p>Clerk changes only update the register after both the principal and deputy approve.</p></div></div>${table(
+        ["Change", "Requested by", "Principal", "Deputy", ""],
+        reviewQueue.map(
+          (request) =>
+            `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} staff member</b><small>${request.proposed.name} · ${request.proposed.role}</small></td><td>${request.requestedBy}<small>${request.requestedOn}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.approvals[role()] ? '<span class="muted">Your approval recorded</span>' : `<button class="btn small primary" data-action="approve-staff-change" data-staff-change="${request.id}">Approve</button>`}</td></tr>`,
+        ),
+      )}</section>`
+    : "";
+  const submitted =
+    role() === "clerk" && mine.length
+      ? `<section class="panel"><div class="panel-head"><div><h3>My pending staff changes</h3><p>These changes are not live until the principal and deputy both approve.</p></div></div>${table(
+          ["Change", "Principal", "Deputy", "Requested"],
+          mine.map(
+            (request) =>
+              `<tr><td><b>${request.type === "add" ? "Add" : "Edit"} · ${request.proposed.name}</b><small>${request.proposed.role} · ${request.proposed.department}</small></td><td>${request.approvals.principal ? badge("Approved") : badge("Pending")}</td><td>${request.approvals.deputy ? badge("Approved") : badge("Pending")}</td><td>${request.requestedOn}</td></tr>`,
+          ),
+        )}</section>`
+      : "";
   return generic(
     "Staff",
     "People management",
@@ -1979,7 +2538,9 @@ function staff() {
           `<tr><td><b>${x.name}</b><small>${x.id}</small></td><td>${x.role}</td><td>${x.department}</td><td>${badge(x.status)}</td><td>${canManage ? `<button class="table-action" data-action="manage-staff" data-staff="${x.id}">Manage</button>` : "—"}</td></tr>`,
       ),
     )}</section>`,
-    canManage ? '<button class="btn primary" data-action="add-staff">+ Add staff member</button>' : "",
+    canManage
+      ? '<button class="btn primary" data-action="add-staff">+ Add staff member</button>'
+      : "",
   );
 }
 
@@ -1994,18 +2555,563 @@ function security() {
 }
 function securityOfficers() {
   const s = getState();
+
+  // Make sure older workspaces that don't have this collection
+  // still work correctly.
+  const attendance = s.securityAttendance || [];
+
+  const today = todayIso();
+
+  const todayAttendance = attendance.filter((record) => record.date === today);
+
+  const onDuty = s.security.filter(
+    (officer) => officer.status === "On Duty",
+  ).length;
+
+  const completedToday = todayAttendance.filter(
+    (record) => record.status === "Completed",
+  ).length;
+
+  const rows = s.security
+    .map((officer) => {
+      const record = todayAttendance.find(
+        (item) => item.officerId === officer.id,
+      );
+
+      let clockIn = "—";
+      let clockOut = "—";
+      let attendanceStatus = "Not Clocked In";
+
+      if (record) {
+        clockIn = record.clockIn || "—";
+        clockOut = record.clockOut || "—";
+        attendanceStatus = record.status || "Clocked In";
+      }
+
+      let attendanceAction = "";
+
+      if (!record) {
+        attendanceAction = `
+        <button
+          class="btn small primary"
+          data-action="clock-in-security"
+          data-officer="${officer.id}"
+        >
+          Clock In
+        </button>
+      `;
+      } else if (record.status === "Clocked In") {
+        attendanceAction = `
+        <button
+          class="btn small primary"
+          data-action="clock-out-security"
+          data-officer="${officer.id}"
+        >
+          Clock Out
+        </button>
+      `;
+      } else {
+        attendanceAction = `
+        <span class="muted">Shift completed</span>
+      `;
+      }
+
+      return `
+      <tr>
+        <td>
+          <b>${officer.name}</b>
+          <small>Badge ${officer.id}</small>
+        </td>
+
+        <td>${officer.employee}</td>
+
+        <td>${officer.shift}</td>
+
+        <td>${officer.site}</td>
+
+        <td>
+          ${badge(officer.status)}
+        </td>
+
+        <td>
+          <b>${clockIn}</b>
+          <small>Clock in</small>
+        </td>
+
+        <td>
+          <b>${clockOut}</b>
+          <small>Clock out</small>
+        </td>
+
+        <td>
+          ${badge(attendanceStatus)}
+        </td>
+
+        <td>
+          <div class="action-row">
+            ${attendanceAction}
+
+            <button
+              class="btn small"
+              data-action="security-attendance-history"
+              data-officer="${officer.id}"
+            >
+              History
+            </button>
+
+            <button
+              class="table-action"
+              data-action="manage-officer"
+              data-officer="${officer.id}"
+            >
+              Manage
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+    })
+    .join("");
+
   return generic(
     "Security Officers",
     "Security management",
-    "Manage officer profiles, employee IDs, shifts, sites and duties.",
-    `<div class="stats-grid compact">${stat("Officers", s.security.length, "Displayed here")}${stat("On duty", s.security.filter((x) => x.status === "On Duty").length, "Current shift")}${stat("Sites", "4", "Configured")}${stat("Checkpoints", "12", "QR checkpoints")}</div><section class="panel"><div class="panel-head"><div><h3>Officer directory & deployment</h3><p>Open an officer to update shift, site and duty status.</p></div></div>${table(
-      ["Officer", "Employee ID", "Shift", "Assigned site", "Status", ""],
-      s.security.map(
-        (x) =>
-          `<tr><td><b>${x.name}</b><small>Badge ${x.id}</small></td><td>${x.employee}</td><td>${x.shift}</td><td>${x.site}</td><td>${badge(x.status)}</td><td><button class="table-action" data-action="manage-officer" data-officer="${x.id}">Manage</button></td></tr>`,
-      ),
-    )}</section>`,
-    '<button class="btn primary" data-action="add-officer">+ Add security officer</button>',
+    "Manage officer profiles, attendance, shifts, sites and duties.",
+
+    `
+      <div class="stats-grid compact">
+
+        ${stat("Officers", s.security.length, "Registered security officers")}
+
+        ${stat("On duty", onDuty, "Currently clocked in")}
+
+        ${stat("Completed today", completedToday, "Clocked in and out")}
+
+        ${stat("Attendance records", todayAttendance.length, "Today's records")}
+
+      </div>
+
+      <section class="panel">
+
+        <div class="panel-head">
+
+          <div>
+            <h3>Security officer attendance</h3>
+
+            <p>
+              Each officer has an individual daily clock-in and clock-out record.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
+
+              <tr>
+                <th>Officer</th>
+                <th>Employee ID</th>
+                <th>Shift</th>
+                <th>Assigned site</th>
+                <th>Duty status</th>
+                <th>Clock in</th>
+                <th>Clock out</th>
+                <th>Attendance</th>
+                <th>Actions</th>
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                rows ||
+                `
+                  <tr>
+                    <td colspan="9" class="muted">
+                      No security officers have been registered.
+                    </td>
+                  </tr>
+                `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+    `,
+
+    `
+      <button
+        class="btn primary"
+        data-action="add-officer"
+      >
+        + Add security officer
+      </button>
+    `,
+  );
+}
+
+function clockInSecurityOfficer(id) {
+  const officer = getState().security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const date = todayIso();
+
+  const existingRecord = (getState().securityAttendance || []).find(
+    (record) => record.officerId === id && record.date === date,
+  );
+
+  if (existingRecord) {
+    if (existingRecord.status === "Clocked In") {
+      modal(
+        "Already clocked in",
+        `
+          <p>
+            <b>${officer.name}</b> is already clocked in.
+          </p>
+
+          <p class="muted">
+            Clock-in time: ${existingRecord.clockIn}
+          </p>
+
+          <div class="modal-foot">
+            <button
+              class="btn primary"
+              data-action="close-modal"
+            >
+              Done
+            </button>
+          </div>
+        `,
+      );
+    } else {
+      modal(
+        "Attendance already completed",
+        `
+          <p>
+            <b>${officer.name}</b> already has a completed attendance
+            record for today.
+          </p>
+
+          <div class="detail-grid">
+
+            <div>
+              <small>Clock in</small>
+              <b>${existingRecord.clockIn}</b>
+            </div>
+
+            <div>
+              <small>Clock out</small>
+              <b>${existingRecord.clockOut || "—"}</b>
+            </div>
+
+          </div>
+
+          <div class="modal-foot">
+            <button
+              class="btn primary"
+              data-action="close-modal"
+            >
+              Done
+            </button>
+          </div>
+        `,
+      );
+    }
+
+    return;
+  }
+
+  const clockInTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  persist((state) => {
+    state.securityAttendance = state.securityAttendance || [];
+
+    state.securityAttendance.unshift({
+      id: "SEC-ATT-" + Date.now().toString().slice(-8),
+
+      officerId: officer.id,
+
+      officerName: officer.name,
+
+      employeeId: officer.employee,
+
+      date,
+
+      clockIn: clockInTime,
+
+      clockOut: "",
+
+      status: "Clocked In",
+
+      shift: officer.shift,
+
+      site: officer.site,
+    });
+
+    // Update the officer's current duty status.
+    const currentOfficer = state.security.find((item) => item.id === id);
+
+    if (currentOfficer) {
+      currentOfficer.status = "On Duty";
+    }
+  });
+
+  finishForm(
+    "Security officer clocked in",
+    `${officer.name} has been clocked in successfully at ${clockInTime}.`,
+  );
+}
+
+function clockOutSecurityOfficer(id) {
+  const state = getState();
+
+  const officer = state.security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const date = todayIso();
+
+  const attendanceRecord = (state.securityAttendance || []).find(
+    (record) => record.officerId === id && record.date === date,
+  );
+
+  if (!attendanceRecord) {
+    modal(
+      "Cannot clock out",
+      `
+        <p>
+          <b>${officer.name}</b> has not been clocked in today.
+        </p>
+
+        <p class="muted">
+          Clock the officer in before recording a clock-out time.
+        </p>
+
+        <div class="modal-foot">
+
+          <button
+            class="btn primary"
+            data-action="close-modal"
+          >
+            Done
+          </button>
+
+        </div>
+      `,
+    );
+
+    return;
+  }
+
+  if (attendanceRecord.status === "Completed") {
+    modal(
+      "Already clocked out",
+      `
+        <p>
+          <b>${officer.name}</b> has already been clocked out today.
+        </p>
+
+        <p class="muted">
+          Clock-out time: ${attendanceRecord.clockOut}
+        </p>
+
+        <div class="modal-foot">
+
+          <button
+            class="btn primary"
+            data-action="close-modal"
+          >
+            Done
+          </button>
+
+        </div>
+      `,
+    );
+
+    return;
+  }
+
+  const clockOutTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  persist((state) => {
+    const record = (state.securityAttendance || []).find(
+      (item) => item.officerId === id && item.date === date,
+    );
+
+    if (!record) return;
+
+    record.clockOut = clockOutTime;
+    record.status = "Completed";
+
+    const currentOfficer = state.security.find((item) => item.id === id);
+
+    if (currentOfficer) {
+      currentOfficer.status = "Off Duty";
+    }
+  });
+
+  finishForm(
+    "Security officer clocked out",
+    `${officer.name} has been clocked out successfully at ${clockOutTime}.`,
+  );
+}
+
+function securityAttendanceHistory(id) {
+  const state = getState();
+
+  const officer = state.security.find((item) => item.id === id);
+
+  if (!officer) return;
+
+  const records = (state.securityAttendance || [])
+    .filter((record) => record.officerId === id)
+    .sort((a, b) => {
+      return new Date(b.date) - new Date(a.date);
+    });
+
+  const rows = records
+    .map((record) => {
+      return `
+      <tr>
+
+        <td>
+          <b>${record.date}</b>
+        </td>
+
+        <td>
+          ${record.shift || officer.shift || "—"}
+        </td>
+
+        <td>
+          ${record.site || officer.site || "—"}
+        </td>
+
+        <td>
+          <b>${record.clockIn || "—"}</b>
+        </td>
+
+        <td>
+          <b>${record.clockOut || "—"}</b>
+        </td>
+
+        <td>
+          ${badge(record.status)}
+        </td>
+
+      </tr>
+    `;
+    })
+    .join("");
+
+  modal(
+    `${officer.name} — Attendance History`,
+
+    `
+      <div class="detail-grid">
+
+        <div>
+          <small>Officer</small>
+          <b>${officer.name}</b>
+        </div>
+
+        <div>
+          <small>Employee ID</small>
+          <b>${officer.employee}</b>
+        </div>
+
+        <div>
+          <small>Badge</small>
+          <b>${officer.id}</b>
+        </div>
+
+        <div>
+          <small>Assigned site</small>
+          <b>${officer.site}</b>
+        </div>
+
+      </div>
+
+      <section class="panel">
+
+        <div class="panel-head">
+
+          <div>
+            <h3>Attendance records</h3>
+
+            <p>
+              Daily clock-in and clock-out history.
+            </p>
+          </div>
+
+        </div>
+
+        <div class="table-wrap">
+
+          <table>
+
+            <thead>
+
+              <tr>
+                <th>Date</th>
+                <th>Shift</th>
+                <th>Site</th>
+                <th>Clock in</th>
+                <th>Clock out</th>
+                <th>Status</th>
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              ${
+                rows ||
+                `
+                  <tr>
+                    <td
+                      colspan="6"
+                      class="muted"
+                    >
+                      No attendance records found.
+                    </td>
+                  </tr>
+                `
+              }
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </section>
+
+      <div class="modal-foot">
+
+        <button
+          class="btn primary"
+          data-action="close-modal"
+        >
+          Done
+        </button>
+
+      </div>
+    `,
   );
 }
 
@@ -2066,15 +3172,81 @@ function leadership() {
 /* --------------------------------- settings ------------------------------ */
 function settings() {
   const roleSettings = {
-    principal: [["School profile", "School name, code, contact details and term calendar."], ["Leadership alerts", "Choose urgent incident escalation and daily oversight summaries."], ["Announcement governance", "Set publishing approval and delivery defaults."]],
-    deputy: [["Deputy preferences", "Set delegated classes, alert escalation and handover notifications."], ["Leadership alerts", "Choose urgent incident escalation and daily oversight summaries."], ["Communication defaults", "Control notification delivery preferences."]],
-    clerk: [["Office workflow", "Manage report, appointment and front-office notification preferences."], ["Data administration", "Set learner-record and score-update review reminders."], ["Communication defaults", "Control notification delivery preferences."]],
-    teacher: [["Class workspace", "Set class reminders, mark-submission and parent-message preferences."], ["Communication defaults", "Control notification delivery preferences."], ["Privacy", "Manage your session and secure-device preferences."]],
-    parent: [["My child alerts", "Choose notifications for your linked learner and school-wide alerts."], ["Contact details", "Keep your preferred contact method current."], ["Privacy", "Manage your session and secure-device preferences."]],
-    security: [["Security operations", "Set incident escalation, shift and checkpoint notification preferences."], ["Privacy", "Manage your session and secure-device preferences."], ["Device access", "Review secure-session and sign-in preferences."]],
-    sgb: [["Governance updates", "Choose reports and school-wide notification preferences."], ["Privacy", "Manage your session and secure-device preferences."], ["Device access", "Review secure-session and sign-in preferences."]],
+    principal: [
+      [
+        "School profile",
+        "School name, code, contact details and term calendar.",
+      ],
+      [
+        "Leadership alerts",
+        "Choose urgent incident escalation and daily oversight summaries.",
+      ],
+      [
+        "Announcement governance",
+        "Set publishing approval and delivery defaults.",
+      ],
+    ],
+    deputy: [
+      [
+        "Deputy preferences",
+        "Set delegated classes, alert escalation and handover notifications.",
+      ],
+      [
+        "Leadership alerts",
+        "Choose urgent incident escalation and daily oversight summaries.",
+      ],
+      ["Communication defaults", "Control notification delivery preferences."],
+    ],
+    clerk: [
+      [
+        "Office workflow",
+        "Manage report, appointment and front-office notification preferences.",
+      ],
+      [
+        "Data administration",
+        "Set learner-record and score-update review reminders.",
+      ],
+      ["Communication defaults", "Control notification delivery preferences."],
+    ],
+    teacher: [
+      [
+        "Class workspace",
+        "Set class reminders, mark-submission and parent-message preferences.",
+      ],
+      ["Communication defaults", "Control notification delivery preferences."],
+      ["Privacy", "Manage your session and secure-device preferences."],
+    ],
+    parent: [
+      [
+        "My child alerts",
+        "Choose notifications for your linked learner and school-wide alerts.",
+      ],
+      ["Contact details", "Keep your preferred contact method current."],
+      ["Privacy", "Manage your session and secure-device preferences."],
+    ],
+    security: [
+      [
+        "Security operations",
+        "Set incident escalation, shift and checkpoint notification preferences.",
+      ],
+      ["Privacy", "Manage your session and secure-device preferences."],
+      ["Device access", "Review secure-session and sign-in preferences."],
+    ],
+    sgb: [
+      [
+        "Governance updates",
+        "Choose reports and school-wide notification preferences.",
+      ],
+      ["Privacy", "Manage your session and secure-device preferences."],
+      ["Device access", "Review secure-session and sign-in preferences."],
+    ],
   };
-  const panels = (roleSettings[role()] || roleSettings.parent).map(([heading, description]) => `<section class="panel"><div class="setting-row"><div><b>${heading}</b><small>${description}</small></div><input type="checkbox" checked></div></section>`).join("");
+  const panels = (roleSettings[role()] || roleSettings.parent)
+    .map(
+      ([heading, description]) =>
+        `<section class="panel"><div class="setting-row"><div><b>${heading}</b><small>${description}</small></div><input type="checkbox" checked></div></section>`,
+    )
+    .join("");
   return generic(
     "Settings",
     "Role preferences",
@@ -2093,7 +3265,7 @@ function sickNotices() {
       ["Submitted by", "Learner / staff", "Date", "Reason", "Status", "Action"],
       s.sickNotices.map(
         (n) =>
-      `<tr><td>${n.submittedBy}</td><td>${n.person}</td><td>${n.date}</td><td>${n.reason}</td><td>${badge(n.status)}</td><td><button class="table-action" data-action="view-sick-notice" data-sick="${n.id}">${n.status === "Reviewed" ? "View" : "Review"}</button></td></tr>`,
+          `<tr><td>${n.submittedBy}</td><td>${n.person}</td><td>${n.date}</td><td>${n.reason}</td><td>${badge(n.status)}</td><td><button class="table-action" data-action="view-sick-notice" data-sick="${n.id}">${n.status === "Reviewed" ? "View" : "Review"}</button></td></tr>`,
       ),
     )}</section>`,
   );
@@ -2103,30 +3275,60 @@ function sickNotice() {
     "Sick Notice",
     "Parent / guardian",
     "Notify the school when your learner is absent for health reasons.",
-    `<section class="panel"><div class="form-grid"><label>Learner<select class="select" id="sickLearner">${learners().filter((learner) => learner.parent === userName()).map((learner) => `<option>${learner.name} — ${learner.grade} ${learner.class}</option>`).join("") || '<option>No registered learner found</option>'}</select></label><label>Date<input class="input" id="sickDate" type="date"></label><label>Expected return<input class="input" id="sickReturn" type="date"></label><label>Reason<select class="select" id="sickReason"><option>Illness</option><option>Medical appointment</option><option>Other</option></select></label><label class="full">Sick letter (optional)<input class="input" id="sickLetter" type="file" accept="image/*,.pdf,.doc,.docx"><small>Take a photo or attach a sick letter, medical certificate or supporting document.</small></label><label class="full">Additional information<textarea class="textarea" id="sickDetails" placeholder="Optional details for the school..."></textarea></label></div><div class="panel-foot"><button class="btn primary" data-action="submit-sick-notice">Submit sick notice</button></div></section>`,
+    `<section class="panel"><div class="form-grid"><label>Learner<select class="select" id="sickLearner">${
+      learners()
+        .filter((learner) => learner.parent === userName())
+        .map(
+          (learner) =>
+            `<option>${learner.name} — ${learner.grade} ${learner.class}</option>`,
+        )
+        .join("") || "<option>No registered learner found</option>"
+    }</select></label><label>Date<input class="input" id="sickDate" type="date"></label><label>Expected return<input class="input" id="sickReturn" type="date"></label><label>Reason<select class="select" id="sickReason"><option>Illness</option><option>Medical appointment</option><option>Other</option></select></label><label class="full">Sick letter (optional)<input class="input" id="sickLetter" type="file" accept="image/*,.pdf,.doc,.docx"><small>Take a photo or attach a sick letter, medical certificate or supporting document.</small></label><label class="full">Additional information<textarea class="textarea" id="sickDetails" placeholder="Optional details for the school..."></textarea></label></div><div class="panel-foot"><button class="btn primary" data-action="submit-sick-notice">Submit sick notice</button></div></section>`,
   );
 }
 function parentSickNoticePage() {
   const linkedLearner = parentLearner();
   const eligibleLearners = linkedLearner ? [linkedLearner] : [];
-  const submitted = getState().sickNotices.filter((notice) => notice.submittedBy === userName());
+  const submitted = getState().sickNotices.filter(
+    (notice) => notice.submittedBy === userName(),
+  );
   const latestId = sessionStorage.getItem("schoolshieldLastSickNotice");
   const latest = submitted.find((notice) => notice.id === latestId);
-  const confirmation = latest ? `<div class="notice" style="border-left-color:#21845c;border-color:#b9e4cf"><div class="notice-icon" style="background:#eaf8f0;color:#21845c">✓</div><div class="grow"><div class="notice-top"><b>Sick notice submitted</b>${badge(latest.status)}</div><p>${latest.person} has been marked sick for ${latest.date}. The assigned teacher has been alerted and must review the notice.</p></div><button class="btn small" data-action="view-parent-sick-notice" data-sick="${latest.id}">Review submission</button></div>` : "";
-  const historyRows = submitted.map((notice) => `<tr><td><b>${notice.person}</b><small>${notice.id}</small></td><td>${notice.date}</td><td>${notice.reason}</td><td>${badge(notice.status)}</td><td><button class="table-action" data-action="view-parent-sick-notice" data-sick="${notice.id}">Review</button></td></tr>`);
-  const options = eligibleLearners.map((learner) => `<option>${learner.name} — ${learner.grade} ${learner.class}</option>`).join("") || '<option>No registered learner found</option>';
-  return generic("Sick Notice", "Parent / guardian", "Notify the school when your learner is absent for health reasons.", `${confirmation}<section class="panel"><div class="form-grid"><label>Learner<select class="select" id="sickLearner">${options}</select></label><label>Date<input class="input" id="sickDate" type="date"></label><label>Expected return<input class="input" id="sickReturn" type="date"></label><label>Reason<select class="select" id="sickReason"><option>Illness</option><option>Medical appointment</option><option>Other</option></select></label><label class="full">Sick letter (optional)<input class="input" id="sickLetter" type="file" accept="image/*,.pdf,.doc,.docx"><small>Take a photo or attach a sick letter, medical certificate or supporting document.</small></label><label class="full">Additional information<textarea class="textarea" id="sickDetails" placeholder="Optional details for the school..."></textarea></label></div><div class="panel-foot"><button class="btn primary" data-action="submit-sick-notice">Submit sick notice</button></div></section><section class="panel"><div class="panel-head"><div><h3>Past submitted sick notices</h3><p>Track each submission and the teacher-review status.</p></div></div>${table(["Learner", "Date", "Reason", "Teacher review", ""], historyRows, "You have not submitted any sick notices yet.")}</section>`);
+  const confirmation = latest
+    ? `<div class="notice" style="border-left-color:#21845c;border-color:#b9e4cf"><div class="notice-icon" style="background:#eaf8f0;color:#21845c">✓</div><div class="grow"><div class="notice-top"><b>Sick notice submitted</b>${badge(latest.status)}</div><p>${latest.person} has been marked sick for ${latest.date}. The assigned teacher has been alerted and must review the notice.</p></div><button class="btn small" data-action="view-parent-sick-notice" data-sick="${latest.id}">Review submission</button></div>`
+    : "";
+  const historyRows = submitted.map(
+    (notice) =>
+      `<tr><td><b>${notice.person}</b><small>${notice.id}</small></td><td>${notice.date}</td><td>${notice.reason}</td><td>${badge(notice.status)}</td><td><button class="table-action" data-action="view-parent-sick-notice" data-sick="${notice.id}">Review</button></td></tr>`,
+  );
+  const options =
+    eligibleLearners
+      .map(
+        (learner) =>
+          `<option>${learner.name} — ${learner.grade} ${learner.class}</option>`,
+      )
+      .join("") || "<option>No registered learner found</option>";
+  return generic(
+    "Sick Notice",
+    "Parent / guardian",
+    "Notify the school when your learner is absent for health reasons.",
+    `${confirmation}<section class="panel"><div class="form-grid"><label>Learner<select class="select" id="sickLearner">${options}</select></label><label>Date<input class="input" id="sickDate" type="date"></label><label>Expected return<input class="input" id="sickReturn" type="date"></label><label>Reason<select class="select" id="sickReason"><option>Illness</option><option>Medical appointment</option><option>Other</option></select></label><label class="full">Sick letter (optional)<input class="input" id="sickLetter" type="file" accept="image/*,.pdf,.doc,.docx"><small>Take a photo or attach a sick letter, medical certificate or supporting document.</small></label><label class="full">Additional information<textarea class="textarea" id="sickDetails" placeholder="Optional details for the school..."></textarea></label></div><div class="panel-foot"><button class="btn primary" data-action="submit-sick-notice">Submit sick notice</button></div></section><section class="panel"><div class="panel-head"><div><h3>Past submitted sick notices</h3><p>Track each submission and the teacher-review status.</p></div></div>${table(["Learner", "Date", "Reason", "Teacher review", ""], historyRows, "You have not submitted any sick notices yet.")}</section>`,
+  );
 }
 function appointments() {
   const s = getState();
   const isPrincipal = role() === "principal";
   const items = isPrincipal
-    ? s.appointments.filter((appointment) => appointment.with.includes(SCHOOL.principal))
+    ? s.appointments.filter((appointment) =>
+        appointment.with.includes(SCHOOL.principal),
+      )
     : s.appointments;
   return generic(
     isPrincipal ? "My Appointments" : "Appointments",
     isPrincipal ? "Principal review" : "Administration",
-    isPrincipal ? "Appointments set by the clerk for your review." : "Schedule and track parent, learner and staff appointments.",
+    isPrincipal
+      ? "Appointments set by the clerk for your review."
+      : "Schedule and track parent, learner and staff appointments.",
     `<section class="panel">${table(
       ["Appointment", "With", "Date", "Time", "Status", ""],
       items.map(
@@ -2134,7 +3336,9 @@ function appointments() {
           `<tr><td><b>${a.title}</b><small>${a.id}</small></td><td>${a.with}</td><td>${a.date}</td><td>${a.time}</td><td>${badge(a.status)}</td><td><button class="table-action" data-action="manage-appointment" data-appointment="${a.id}">${isPrincipal ? "Review" : "Open"}</button></td></tr>`,
       ),
     )}</section>`,
-    role() === "clerk" ? '<button class="btn primary" data-action="add-appointment">+ New appointment</button>' : "",
+    role() === "clerk"
+      ? '<button class="btn primary" data-action="add-appointment">+ New appointment</button>'
+      : "",
   );
 }
 
@@ -2145,7 +3349,16 @@ function visitors() {
   const controls = `<div class="action-row"><button class="btn ghost" data-action="preview-visitors">Preview report</button><button class="btn ghost" data-action="download-visitors">Download PDF</button>${canManage ? '<button class="btn ghost" data-action="scan">Scan QR</button><button class="btn primary" data-action="register">+ Register visitor</button>' : ""}</div>`;
   return shell(
     `<div class="page-intro"><div><span class="pill">Front office & gate</span><h1>Visitors</h1><p>${canManage ? "Register visitors, track campus presence and complete check-outs." : "View visitor activity and campus presence."}</p></div>${controls}</div><div class="stats-grid compact">${stat("Inside", s.visitors.filter((v) => v.status === "Inside").length, "Currently on campus")}${stat("Visits today", s.visitors.length, "All registrations")}${stat("Checked out", s.visitors.filter((v) => v.status === "Checked Out").length, "Completed visits")}</div>${searchBar("visitorSearch", "Search visitor, ID, host or purpose")}<section class="panel">${table(
-      ["Visitor", "Type", "Host", "Purpose", "Check-in", "Check-out", "Status", ""],
+      [
+        "Visitor",
+        "Type",
+        "Host",
+        "Purpose",
+        "Check-in",
+        "Check-out",
+        "Status",
+        "",
+      ],
       s.visitors.map(
         (v) =>
           `<tr class="visitor-row"><td><b>${v.name}</b><small>${v.id}</small></td><td>${v.type}</td><td>${v.host}</td><td>${v.purpose}</td><td>${v.in}</td><td>${v.out}</td><td>${badge(v.status)}</td><td><button class="table-action" data-visitor="${v.id}">View</button>${canManage ? `<button class="table-action" data-action="generate-visitor-qr" data-visitor="${v.id}">QR pass</button>` : ""}${canManage && v.status === "Inside" ? `<button class="table-action" data-action="checkout-visitor" data-visitor="${v.id}">Check out</button>` : ""}</td></tr>`,
@@ -2191,7 +3404,7 @@ function modal(title, body) {
   el.innerHTML = `<div class="modal" style="max-height:90vh;display:flex;flex-direction:column"><div class="modal-head"><h3>${title}</h3><button class="close">×</button></div><div class="modal-body" style="overflow-y:auto;max-height:calc(90vh - 70px)">${body}</div></div>`;
   document.body.appendChild(el);
   markRequiredFields(el);
-  $$('[data-action]', el).forEach(
+  $$("[data-action]", el).forEach(
     (button) => (button.onclick = () => action(button.dataset.action, button)),
   );
   el.querySelector(".close").onclick = () => el.remove();
@@ -2227,50 +3440,134 @@ function todayLabel() {
 }
 
 const REQUIRED_FIELDS = {
-  "save-visitor": ["visitorName", "visitorIdentity", "visitorType", "visitorPurpose", "visitorHost"],
-  "save-incident": ["incidentDate", "incidentTime", "incidentLocation", "incidentCategory", "incidentPriority", "incidentDescription"],
-  "save-learner": ["learnerName", "learnerClass", "learnerParent", "learnerRelation"],
+  "save-visitor": [
+    "visitorName",
+    "visitorIdentity",
+    "visitorType",
+    "visitorPurpose",
+    "visitorHost",
+  ],
+  "save-incident": [
+    "incidentDate",
+    "incidentTime",
+    "incidentLocation",
+    "incidentCategory",
+    "incidentPriority",
+    "incidentDescription",
+  ],
+  "save-learner": [
+    "learnerName",
+    "learnerClass",
+    "learnerParent",
+    "learnerRelation",
+  ],
   "save-staff": ["staffName", "staffRole", "staffDepartment"],
-  "save-staff-changes": ["editStaffName", "editStaffRole", "editStaffDepartment", "editStaffStatus"],
+  "save-staff-changes": [
+    "editStaffName",
+    "editStaffRole",
+    "editStaffDepartment",
+    "editStaffStatus",
+  ],
   "save-parent": ["editParentName", "editParentRelation", "editParentPhone"],
-  "save-appointment": ["appointmentTitle", "appointmentWith", "appointmentDate", "appointmentTime"],
+  "save-appointment": [
+    "appointmentTitle",
+    "appointmentWith",
+    "appointmentDate",
+    "appointmentTime",
+  ],
   "submit-sick-notice": ["sickLearner", "sickDate", "sickReason"],
-  "save-officer-new": ["newOfficerName", "newOfficerEmployee", "newOfficerShift", "newOfficerSite"],
-  "save-officer": ["editOfficerName", "editOfficerEmployee", "editOfficerShift", "editOfficerSite", "editOfficerStatus"],
-  "send-announcement": ["audienceSelect", "deliverySelect", "annTitle", "annBody"],
-  "save-assessment": ["assessmentClass", "assessmentSubject", "assessmentTitle", "assessmentDate"],
+  "save-officer-new": [
+    "newOfficerName",
+    "newOfficerEmployee",
+    "newOfficerShift",
+    "newOfficerSite",
+  ],
+  "save-officer": [
+    "editOfficerName",
+    "editOfficerEmployee",
+    "editOfficerShift",
+    "editOfficerSite",
+    "editOfficerStatus",
+  ],
+  "send-announcement": [
+    "audienceSelect",
+    "deliverySelect",
+    "annTitle",
+    "annBody",
+  ],
+  "save-assessment": [
+    "assessmentClass",
+    "assessmentSubject",
+    "assessmentTitle",
+    "assessmentDate",
+  ],
   "submit-teacher-assignment": ["assignmentClass", "assignmentTeacher"],
   "save-daily-attendance": ["attendanceDate"],
 };
 
 function markRequiredFields(root = document) {
-  Object.values(REQUIRED_FIELDS).flat().forEach((id) => {
-    const field = document.getElementById(id);
-    if (!field || !root.contains(field)) return;
-    field.required = true;
-    const label = field.closest("label");
-    if (label && !label.querySelector(".required-mark")) label.insertAdjacentHTML("beforeend", '<span class="required-mark" aria-label="Required"> *</span>');
-  });
+  Object.values(REQUIRED_FIELDS)
+    .flat()
+    .forEach((id) => {
+      const field = document.getElementById(id);
+      if (!field || !root.contains(field)) return;
+      field.required = true;
+      const label = field.closest("label");
+      if (label && !label.querySelector(".required-mark"))
+        label.insertAdjacentHTML(
+          "beforeend",
+          '<span class="required-mark" aria-label="Required"> *</span>',
+        );
+    });
   applyFieldFormats(root);
 }
 function validateRequiredFields(actionName) {
-  const fields = (REQUIRED_FIELDS[actionName] || []).map((id) => document.getElementById(id)).filter(Boolean);
+  const fields = (REQUIRED_FIELDS[actionName] || [])
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
   const missing = fields.filter((field) => !String(field.value || "").trim());
   fields.forEach((field) => field.removeAttribute("aria-invalid"));
   if (!missing.length) return true;
   missing.forEach((field) => field.setAttribute("aria-invalid", "true"));
   missing[0].focus();
-  modal("Important information missing", `<p class="muted">Complete the required fields marked with <b>*</b> before submitting.</p>`);
+  modal(
+    "Important information missing",
+    `<p class="muted">Complete the required fields marked with <b>*</b> before submitting.</p>`,
+  );
   return false;
 }
 
 const FIELD_FORMATS = {
-  visitorName: { maxLength: 100 }, visitorIdentity: { maxLength: 15 }, visitorPhone: { maxLength: 13, inputMode: "tel" }, visitorEmail: { maxLength: 120 }, visitorCompany: { maxLength: 100 }, visitorPurpose: { maxLength: 160 }, visitorHost: { maxLength: 100 }, visitorVehicle: { maxLength: 16 },
-  incidentLocation: { maxLength: 120 }, incidentPeople: { maxLength: 180 }, incidentCctv: { maxLength: 40 }, incidentDescription: { maxLength: 1500 }, incidentAction: { maxLength: 1000 }, incidentNotes: { maxLength: 1000 },
-  learnerName: { maxLength: 100 }, learnerParent: { maxLength: 100 }, editParentName: { maxLength: 100 }, editParentPhone: { maxLength: 13, inputMode: "tel" },
-  staffName: { maxLength: 100 }, editStaffName: { maxLength: 100 }, staffDepartment: { maxLength: 80 }, editStaffDepartment: { maxLength: 80 },
-  newOfficerName: { maxLength: 100 }, newOfficerEmployee: { maxLength: 24 }, editOfficerName: { maxLength: 100 }, editOfficerEmployee: { maxLength: 24 },
-  appointmentTitle: { maxLength: 120 }, annTitle: { maxLength: 140 }, annBody: { maxLength: 2000 }, sickDetails: { maxLength: 1000 },
+  visitorName: { maxLength: 100 },
+  visitorIdentity: { maxLength: 15 },
+  visitorPhone: { maxLength: 13, inputMode: "tel" },
+  visitorEmail: { maxLength: 120 },
+  visitorCompany: { maxLength: 100 },
+  visitorPurpose: { maxLength: 160 },
+  visitorHost: { maxLength: 100 },
+  visitorVehicle: { maxLength: 16 },
+  incidentLocation: { maxLength: 120 },
+  incidentPeople: { maxLength: 180 },
+  incidentCctv: { maxLength: 40 },
+  incidentDescription: { maxLength: 1500 },
+  incidentAction: { maxLength: 1000 },
+  incidentNotes: { maxLength: 1000 },
+  learnerName: { maxLength: 100 },
+  learnerParent: { maxLength: 100 },
+  editParentName: { maxLength: 100 },
+  editParentPhone: { maxLength: 13, inputMode: "tel" },
+  staffName: { maxLength: 100 },
+  editStaffName: { maxLength: 100 },
+  staffDepartment: { maxLength: 80 },
+  editStaffDepartment: { maxLength: 80 },
+  newOfficerName: { maxLength: 100 },
+  newOfficerEmployee: { maxLength: 24 },
+  editOfficerName: { maxLength: 100 },
+  editOfficerEmployee: { maxLength: 24 },
+  appointmentTitle: { maxLength: 120 },
+  annTitle: { maxLength: 140 },
+  annBody: { maxLength: 2000 },
+  sickDetails: { maxLength: 1000 },
 };
 function applyFieldFormats(root = document) {
   Object.entries(FIELD_FORMATS).forEach(([id, config]) => {
@@ -2286,7 +3583,8 @@ function applyFieldFormats(root = document) {
       const southAfricanId = identityType?.value === "South African ID";
       identity.maxLength = southAfricanId ? 13 : 15;
       identity.inputMode = southAfricanId ? "numeric" : "text";
-      if (southAfricanId) identity.value = identity.value.replace(/\D/g, "").slice(0, 13);
+      if (southAfricanId)
+        identity.value = identity.value.replace(/\D/g, "").slice(0, 13);
     };
     applyIdentityFormat();
     identityType?.addEventListener("change", applyIdentityFormat);
@@ -2299,16 +3597,27 @@ function validateFieldFormats(actionName) {
   if (actionName === "save-visitor") {
     const identity = inputValue("visitorIdentity");
     const idType = inputValue("visitorIdType");
-    if (idType === "South African ID" && !/^\d{13}$/.test(identity)) errors.push("South African ID number must contain exactly 13 digits.");
-    if (idType !== "South African ID" && !/^[A-Za-z0-9-]{6,15}$/.test(identity)) errors.push("Passport or driving-licence number must contain 6–15 letters, numbers or hyphens.");
+    if (idType === "South African ID" && !/^\d{13}$/.test(identity))
+      errors.push("South African ID number must contain exactly 13 digits.");
+    if (idType !== "South African ID" && !/^[A-Za-z0-9-]{6,15}$/.test(identity))
+      errors.push(
+        "Passport or driving-licence number must contain 6–15 letters, numbers or hyphens.",
+      );
     const phone = cleanPhone(inputValue("visitorPhone"));
-    if (phone && !/^(?:0\d{9}|\+27\d{9})$/.test(phone)) errors.push("Cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.");
+    if (phone && !/^(?:0\d{9}|\+27\d{9})$/.test(phone))
+      errors.push(
+        "Cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.",
+      );
     const email = $("#visitorEmail");
-    if (email?.value && !email.checkValidity()) errors.push("Enter a valid email address.");
+    if (email?.value && !email.checkValidity())
+      errors.push("Enter a valid email address.");
   }
   if (actionName === "save-parent") {
     const phone = cleanPhone(inputValue("editParentPhone"));
-    if (!/^(?:0\d{9}|\+27\d{9})$/.test(phone)) errors.push("Parent cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.");
+    if (!/^(?:0\d{9}|\+27\d{9})$/.test(phone))
+      errors.push(
+        "Parent cell phone number must be 10 digits starting with 0, or use +27 followed by 9 digits.",
+      );
   }
   if (!errors.length) return true;
   modal("Check field format", `<p class="muted">${errors.join("<br>")}</p>`);
@@ -2324,13 +3633,24 @@ function notificationTimestamp() {
 }
 function notificationTime(notice) {
   const created = notice?.createdAt ? new Date(notice.createdAt) : null;
-  if (!created || Number.isNaN(created.getTime())) return notice?.time || "No time recorded";
-  const seconds = Math.max(0, Math.floor((Date.now() - created.getTime()) / 1000));
+  if (!created || Number.isNaN(created.getTime()))
+    return notice?.time || "No time recorded";
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - created.getTime()) / 1000),
+  );
   if (seconds < 60) return "Just now";
   if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
   if (seconds < 172800) return "Yesterday";
-  return created.toLocaleDateString([], { day: "numeric", month: "short", year: created.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  return created.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year:
+      created.getFullYear() === new Date().getFullYear()
+        ? undefined
+        : "numeric",
+  });
 }
 
 /* ------------------------------- downloads ------------------------------- */
@@ -2352,24 +3672,58 @@ function downloadHtmlFile(filename, html) {
 }
 function downloadAttendanceWeek(classId, weekStart) {
   const start = new Date(weekStart + "T00:00:00");
-  const dates = Array.from({ length: 6 }, (_, index) => new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10));
-  const labels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const rows = learnersInClass(classId).map((learner) => [learner.name, ...dates.map((date) => attendanceRegisterFor(classId, date)?.entries?.[learner.id] || "Present")].join(","));
-  downloadTextFile(`${classId}-attendance-${weekStart}.csv`, ["Learner," + labels.join(","), ...rows].join("\n"));
+  const dates = Array.from({ length: 6 }, (_, index) =>
+    new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10),
+  );
+  const labels = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ];
+  const rows = learnersInClass(classId).map((learner) =>
+    [
+      learner.name,
+      ...dates.map(
+        (date) =>
+          attendanceRegisterFor(classId, date)?.entries?.[learner.id] ||
+          "Present",
+      ),
+    ].join(","),
+  );
+  downloadTextFile(
+    `${classId}-attendance-${weekStart}.csv`,
+    ["Learner," + labels.join(","), ...rows].join("\n"),
+  );
 }
 function learnerSickNotices(learner) {
-  return getState().sickNotices.filter((notice) => notice.person === learner.name);
+  return getState().sickNotices.filter(
+    (notice) => notice.person === learner.name,
+  );
 }
 function reportTerms() {
   const active = Number(String(TERM).replace(/\D/g, "")) || 1;
-  return Array.from({ length: Math.min(4, active) }, (_, index) => `Term ${index + 1}`);
+  return Array.from(
+    { length: Math.min(4, active) },
+    (_, index) => `Term ${index + 1}`,
+  );
 }
 function reportMark(learner, subject, term) {
-  const current = assessmentsForClass(learner.class).find((assessment) => assessment.subject === subject && assessment.term === term);
-  if (current && current.scores?.[learner.id] !== undefined) return current.scores[learner.id];
-  const subjectOffset = Array.from(subject).reduce((total, char) => total + char.charCodeAt(0), 0) % 13;
+  const current = assessmentsForClass(learner.class).find(
+    (assessment) => assessment.subject === subject && assessment.term === term,
+  );
+  if (current && current.scores?.[learner.id] !== undefined)
+    return current.scores[learner.id];
+  const subjectOffset =
+    Array.from(subject).reduce((total, char) => total + char.charCodeAt(0), 0) %
+    13;
   const termOffset = Number(String(term).replace(/\D/g, "")) * 3;
-  return Math.max(30, Math.min(100, learner.average + subjectOffset - 7 + termOffset));
+  return Math.max(
+    30,
+    Math.min(100, learner.average + subjectOffset - 7 + termOffset),
+  );
 }
 function achievementLevel(mark) {
   if (mark >= 80) return 7;
@@ -2384,12 +3738,27 @@ function learnerReportMarkup(learner) {
   const classInfo = classById(learner.class);
   const terms = reportTerms();
   const gradeNumber = Number(String(learner.grade).replace(/\D/g, ""));
-  const subjects = gradeNumber <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
+  const subjects =
+    gradeNumber <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
   const sick = learnerSickNotices(learner);
   const headers = terms.map((term) => `<th colspan="2">${term}</th>`).join("");
   const subHeaders = terms.map(() => "<th>Mark %</th><th>Level</th>").join("");
-  const subjectRows = subjects.map((subject) => `<tr><td>${subject}</td>${terms.map((term) => { const mark = reportMark(learner, subject, term); return `<td>${mark}</td><td>${achievementLevel(mark)}</td>`; }).join("")}</tr>`).join("");
-  const averages = terms.map((term) => Math.round(mean(subjects.map((subject) => reportMark(learner, subject, term)))));
+  const subjectRows = subjects
+    .map(
+      (subject) =>
+        `<tr><td>${subject}</td>${terms
+          .map((term) => {
+            const mark = reportMark(learner, subject, term);
+            return `<td>${mark}</td><td>${achievementLevel(mark)}</td>`;
+          })
+          .join("")}</tr>`,
+    )
+    .join("");
+  const averages = terms.map((term) =>
+    Math.round(
+      mean(subjects.map((subject) => reportMark(learner, subject, term))),
+    ),
+  );
   return `<!doctype html><html><head><meta charset="utf-8"><title>${learner.name} ${TERM} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div><div class="brand">${SCHOOL.name}</div><div class="small">Academic term report · ${SCHOOL.code}</div><div class="small">Generated ${todayLabel()}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${learner.name} · ${learner.id}<br>Parent / guardian: ${learner.parent}</div><div class="box"><b>Grade / class</b><br>${learner.grade} · ${learner.class}<br>Class teacher: ${classInfo.teacher}</div><div class="box"><b>Attendance</b><br>${learner.attendance}% · ${daysAbsent(learner)} days absent</div><div class="box"><b>Report period</b><br>${terms.join(" · ")} · 2026<br>Status: ${standingFor(learner)}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${average}</td><td>${achievementLevel(average)}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended."}<br><span class="small">Sick notices recorded this term: ${sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None"}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
 }
 let pdfLibraryPromise;
@@ -2398,8 +3767,12 @@ function loadPdfLibrary() {
   if (pdfLibraryPromise) return pdfLibraryPromise;
   pdfLibraryPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
-    script.onload = () => window.jspdf?.jsPDF ? resolve(window.jspdf.jsPDF) : reject(new Error("PDF library unavailable"));
+    script.src =
+      "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    script.onload = () =>
+      window.jspdf?.jsPDF
+        ? resolve(window.jspdf.jsPDF)
+        : reject(new Error("PDF library unavailable"));
     script.onerror = () => reject(new Error("Could not load PDF library"));
     document.head.appendChild(script);
   });
@@ -2410,30 +3783,67 @@ async function downloadPdf(filename, title, lines) {
   try {
     const JsPdf = await loadPdfLibrary();
     const documentPdf = new JsPdf({ unit: "mm", format: "a4" });
-    const margin = 16, width = 178, pageBottom = 280;
+    const margin = 16,
+      width = 178,
+      pageBottom = 280;
     let y = 18;
     documentPdf.setFont("helvetica", "bold");
-    documentPdf.setFontSize(16); documentPdf.text(SCHOOL.name, margin, y); y += 9;
-    documentPdf.setFontSize(12); documentPdf.text(title, margin, y); y += 10;
-    documentPdf.setDrawColor(8, 117, 80); documentPdf.line(margin, y, margin + width, y); y += 8;
-    documentPdf.setFont("helvetica", "normal"); documentPdf.setFontSize(10);
+    documentPdf.setFontSize(16);
+    documentPdf.text(SCHOOL.name, margin, y);
+    y += 9;
+    documentPdf.setFontSize(12);
+    documentPdf.text(title, margin, y);
+    y += 10;
+    documentPdf.setDrawColor(8, 117, 80);
+    documentPdf.line(margin, y, margin + width, y);
+    y += 8;
+    documentPdf.setFont("helvetica", "normal");
+    documentPdf.setFontSize(10);
     lines.forEach((line) => {
       const wrapped = documentPdf.splitTextToSize(String(line), width);
-      if (y + wrapped.length * 5 > pageBottom) { documentPdf.addPage(); y = 18; }
-      documentPdf.text(wrapped, margin, y); y += wrapped.length * 5 + 2;
+      if (y + wrapped.length * 5 > pageBottom) {
+        documentPdf.addPage();
+        y = 18;
+      }
+      documentPdf.text(wrapped, margin, y);
+      y += wrapped.length * 5 + 2;
     });
     documentPdf.save(filename);
-  } catch (error) { alert("The PDF could not be created. Please check your internet connection and try again."); }
+  } catch (error) {
+    alert(
+      "The PDF could not be created. Please check your internet connection and try again.",
+    );
+  }
 }
 
 function historyReportDetails(learnerId) {
-  const learner = learnerById(learnerId), grade = inputValue("historyGrade"), selectedTerm = Number(inputValue("historyTerm"));
+  const learner = learnerById(learnerId),
+    grade = inputValue("historyGrade"),
+    selectedTerm = Number(inputValue("historyTerm"));
   if (!learner || !grade || !selectedTerm) return null;
-  const terms = Array.from({ length: selectedTerm }, (_, index) => `Term ${index + 1}`);
-  const subjects = Number(grade) <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
-  const lines = [`Learner: ${learner.name} (${learner.id})`, `Grade ${grade} · 2026`, `Included: ${terms.join(", ")}`, "", "Subject performance"];
-  subjects.forEach((subject, index) => lines.push(`${subject} — ${terms.map((term, termIndex) => `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`).join(" · ")}`));
-  lines.push("", `Attendance: ${learner.attendance}%`, `Current standing: ${standingFor(learner)}`);
+  const terms = Array.from(
+    { length: selectedTerm },
+    (_, index) => `Term ${index + 1}`,
+  );
+  const subjects =
+    Number(grade) <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
+  const lines = [
+    `Learner: ${learner.name} (${learner.id})`,
+    `Grade ${grade} · 2026`,
+    `Included: ${terms.join(", ")}`,
+    "",
+    "Subject performance",
+  ];
+  subjects.forEach((subject, index) =>
+    lines.push(
+      `${subject} — ${terms.map((term, termIndex) => `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`).join(" · ")}`,
+    ),
+  );
+  lines.push(
+    "",
+    `Attendance: ${learner.attendance}%`,
+    `Current standing: ${standingFor(learner)}`,
+  );
   return { learner, grade, selectedTerm, lines };
 }
 
@@ -2443,9 +3853,26 @@ async function downloadReport(classId, learnerId) {
   const classInfo = classById(classId);
   if (!report) return;
   if (pupil) {
-    const reportLines = [`Learner: ${pupil.name} (${pupil.id})`, `Grade / class: ${pupil.grade} · ${pupil.class}`, `Class teacher: ${classInfo.teacher}`, `Attendance: ${pupil.attendance}%`, `Overall average: ${pupil.average}%`, `Standing: ${standingFor(pupil)}`, "", "Assessments:"];
-    assessmentsForClass(classId).forEach((assessment) => reportLines.push(`${assessment.subject} ${assessment.title}: ${assessment.scores?.[pupil.id] ?? "Not captured"}%`));
-    await downloadPdf(`${pupil.id}-${TERM.toLowerCase().replace(/\s+/g, "-")}-report.pdf`, `${report.term} learner report`, reportLines);
+    const reportLines = [
+      `Learner: ${pupil.name} (${pupil.id})`,
+      `Grade / class: ${pupil.grade} · ${pupil.class}`,
+      `Class teacher: ${classInfo.teacher}`,
+      `Attendance: ${pupil.attendance}%`,
+      `Overall average: ${pupil.average}%`,
+      `Standing: ${standingFor(pupil)}`,
+      "",
+      "Assessments:",
+    ];
+    assessmentsForClass(classId).forEach((assessment) =>
+      reportLines.push(
+        `${assessment.subject} ${assessment.title}: ${assessment.scores?.[pupil.id] ?? "Not captured"}%`,
+      ),
+    );
+    await downloadPdf(
+      `${pupil.id}-${TERM.toLowerCase().replace(/\s+/g, "-")}-report.pdf`,
+      `${report.term} learner report`,
+      reportLines,
+    );
     return;
   }
   const lines = [
@@ -2506,52 +3933,142 @@ function previewLearnerReport(classId, learnerId) {
   const learner = learnerById(learnerId);
   if (!learner || learner.class !== classId) return;
   const source = encodeURIComponent(learnerReportMarkup(learner));
-  modal(`${learner.name} — report preview`, `<p class="muted">This is the report that will be sent only to ${learner.parent}, the learner’s registered parent / guardian, after teacher release.</p><iframe title="Learner report preview" src="data:text/html;charset=utf-8,${source}" style="width:100%;height:68vh;border:1px solid #dce6e8;border-radius:8px;background:white"></iframe><div class="modal-foot"><button class="btn primary" data-action="download-report" data-class="${classId}" data-learner="${learnerId}">Download learner report</button></div>`);
+  modal(
+    `${learner.name} — report preview`,
+    `<p class="muted">This is the report that will be sent only to ${learner.parent}, the learner’s registered parent / guardian, after teacher release.</p><iframe title="Learner report preview" src="data:text/html;charset=utf-8,${source}" style="width:100%;height:68vh;border:1px solid #dce6e8;border-radius:8px;background:white"></iframe><div class="modal-foot"><button class="btn primary" data-action="download-report" data-class="${classId}" data-learner="${learnerId}">Download learner report</button></div>`,
+  );
 }
 
 async function downloadHistory(learnerId) {
   const selected = historyReportDetails(learnerId);
   if (!selected) return;
-  await downloadPdf(`${selected.learner.id}-grade-${selected.grade}-term-${selected.selectedTerm}-report-history.pdf`, "Academic report history", selected.lines);
+  await downloadPdf(
+    `${selected.learner.id}-grade-${selected.grade}-term-${selected.selectedTerm}-report-history.pdf`,
+    "Academic report history",
+    selected.lines,
+  );
   return;
   const learner = learnerById(learnerId);
   const grade = inputValue("historyGrade");
   const selectedTerm = Number(inputValue("historyTerm"));
   if (!learner || !grade || !selectedTerm) return;
-  const terms = Array.from({ length: selectedTerm }, (_, index) => `Term ${index + 1}`);
-  const subjects = Number(grade) <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
-  const lines = [SCHOOL.name, "Academic report history", `Learner: ${learner.name} (${learner.id})`, `Grade ${grade} · 2026`, `Included: ${terms.join(", ")}`, "", "Subject performance"];
+  const terms = Array.from(
+    { length: selectedTerm },
+    (_, index) => `Term ${index + 1}`,
+  );
+  const subjects =
+    Number(grade) <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
+  const lines = [
+    SCHOOL.name,
+    "Academic report history",
+    `Learner: ${learner.name} (${learner.id})`,
+    `Grade ${grade} · 2026`,
+    `Included: ${terms.join(", ")}`,
+    "",
+    "Subject performance",
+  ];
   subjects.forEach((subject, index) => {
-    const results = terms.map((term, termIndex) => `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`).join(" · ");
+    const results = terms
+      .map(
+        (term, termIndex) =>
+          `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`,
+      )
+      .join(" · ");
     lines.push(`${subject} — ${results}`);
   });
-  lines.push("", `Attendance: ${learner.attendance}%`, `Current standing: ${standingFor(learner)}`);
-  downloadTextFile(`${learner.id}-grade-${grade}-term-${selectedTerm}-report-history.txt`, lines.join("\n"));
+  lines.push(
+    "",
+    `Attendance: ${learner.attendance}%`,
+    `Current standing: ${standingFor(learner)}`,
+  );
+  downloadTextFile(
+    `${learner.id}-grade-${grade}-term-${selectedTerm}-report-history.txt`,
+    lines.join("\n"),
+  );
 }
 function viewHistory(learnerId) {
   const selected = historyReportDetails(learnerId);
   if (!selected) return;
-  modal(`${selected.learner.name} — selected report`, `<div style="white-space:pre-wrap;line-height:1.7;padding:6px">${selected.lines.join("\n")}</div><div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${learnerId}">Download PDF</button></div>`);
+  modal(
+    `${selected.learner.name} — selected report`,
+    `<div style="white-space:pre-wrap;line-height:1.7;padding:6px">${selected.lines.join("\n")}</div><div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${learnerId}">Download PDF</button></div>`,
+  );
 }
 function visitorReportLines() {
   const visitors = getState().visitors;
-  return [`${SCHOOL.name} — Visitor report`, `Generated ${todayLabel()} · ${visitors.length} visitor record(s)`, "", "Visitor | Type | Host | Purpose | Check-in | Check-out | Status", ...visitors.map((visitor) => [visitor.name, visitor.type, visitor.host, visitor.purpose, visitor.in, visitor.out, visitor.status].join(" | "))];
+  return [
+    `${SCHOOL.name} — Visitor report`,
+    `Generated ${todayLabel()} · ${visitors.length} visitor record(s)`,
+    "",
+    "Visitor | Type | Host | Purpose | Check-in | Check-out | Status",
+    ...visitors.map((visitor) =>
+      [
+        visitor.name,
+        visitor.type,
+        visitor.host,
+        visitor.purpose,
+        visitor.in,
+        visitor.out,
+        visitor.status,
+      ].join(" | "),
+    ),
+  ];
 }
 function incidentReportLines() {
   const incidents = getState().incidents;
-  return [`${SCHOOL.name} — Incident report`, `Generated ${todayLabel()} · ${incidents.length} incident(s)`, "", "Incident | Date | Time | Category | Priority | Location | Officer | Status | Description", ...incidents.map((incident) => [incident.id, incident.date, incident.time, incident.category, incident.priority, incident.location, incident.reporter || incident.officer, incident.status, incident.description].join(" | "))];
+  return [
+    `${SCHOOL.name} — Incident report`,
+    `Generated ${todayLabel()} · ${incidents.length} incident(s)`,
+    "",
+    "Incident | Date | Time | Category | Priority | Location | Officer | Status | Description",
+    ...incidents.map((incident) =>
+      [
+        incident.id,
+        incident.date,
+        incident.time,
+        incident.category,
+        incident.priority,
+        incident.location,
+        incident.reporter || incident.officer,
+        incident.status,
+        incident.description,
+      ].join(" | "),
+    ),
+  ];
 }
 function previewReport(title, lines) {
-  const safeText = lines.map((line) => String(line).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")).join("\n");
-  modal(title, `<div style="white-space:pre-wrap;line-height:1.7;padding:4px">${safeText}</div>`);
+  const safeText = lines
+    .map((line) =>
+      String(line)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;"),
+    )
+    .join("\n");
+  modal(
+    title,
+    `<div style="white-space:pre-wrap;line-height:1.7;padding:4px">${safeText}</div>`,
+  );
 }
-function previewVisitorReport() { previewReport("Visitor report preview", visitorReportLines()); }
-function previewIncidentReport() { previewReport("Incident report preview", incidentReportLines()); }
+function previewVisitorReport() {
+  previewReport("Visitor report preview", visitorReportLines());
+}
+function previewIncidentReport() {
+  previewReport("Incident report preview", incidentReportLines());
+}
 function downloadVisitorReport() {
-  return downloadPdf(`schoolshield-visitor-report-${todayLabel().replace(/\s/g, "-")}.pdf`, "Visitor report", visitorReportLines());
+  return downloadPdf(
+    `schoolshield-visitor-report-${todayLabel().replace(/\s/g, "-")}.pdf`,
+    "Visitor report",
+    visitorReportLines(),
+  );
 }
 function downloadIncidentReport() {
-  return downloadPdf(`schoolshield-incident-report-${todayLabel().replace(/\s/g, "-")}.pdf`, "Incident report", incidentReportLines());
+  return downloadPdf(
+    `schoolshield-incident-report-${todayLabel().replace(/\s/g, "-")}.pdf`,
+    "Incident report",
+    incidentReportLines(),
+  );
 }
 
 /* -------------------------------- actions -------------------------------- */
@@ -2568,28 +4085,62 @@ function action(type, el) {
   else if (type === "incident") {
     modal(
       "Report incident",
-      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState().security.map((officer) => `<option>${officer.name}</option>`).join("")}</select></label><label>Persons involved<input class="input" id="incidentPeople"></label><label>Linked visitor (optional)<select class="select" id="incidentVisitor"><option value="">None</option>${getState().visitors.map((visitor) => `<option value="${visitor.id}">${visitor.name}</option>`).join("")}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${learners().map((learner) => `<option value="${learner.id}">${learner.name}</option>`).join("")}</select></label><label>Staff member (optional)<select class="select" id="incidentStaff"><option value="">None</option>${getState().staff.map((staff) => `<option>${staff.name}</option>`).join("")}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label><label class="full">Photos & documents<input class="input" id="incidentFiles" type="file" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
+      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
+        .security.map((officer) => `<option>${officer.name}</option>`)
+        .join(
+          "",
+        )}</select></label><label>Persons involved<input class="input" id="incidentPeople"></label><label>Linked visitor (optional)<select class="select" id="incidentVisitor"><option value="">None</option>${getState()
+        .visitors.map(
+          (visitor) => `<option value="${visitor.id}">${visitor.name}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${learners()
+        .map(
+          (learner) => `<option value="${learner.id}">${learner.name}</option>`,
+        )
+        .join(
+          "",
+        )}</select></label><label>Staff member (optional)<select class="select" id="incidentStaff"><option value="">None</option>${getState()
+        .staff.map((staff) => `<option>${staff.name}</option>`)
+        .join(
+          "",
+        )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label><label class="full">Photos & documents<input class="input" id="incidentFiles" type="file" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
     );
     const incidentDate = $("#incidentDate");
     if (incidentDate) incidentDate.max = todayIso();
     const officerSelect = $("#incidentOfficer");
     if (officerSelect && role() !== "security") {
-      officerSelect.insertAdjacentHTML("afterbegin", '<option value="" selected>Not assigned</option>');
-      officerSelect.closest("label").firstChild.textContent = "Security officer (optional)";
+      officerSelect.insertAdjacentHTML(
+        "afterbegin",
+        '<option value="" selected>Not assigned</option>',
+      );
+      officerSelect.closest("label").firstChild.textContent =
+        "Security officer (optional)";
     }
-  }
-  else if (type === "scan")
+  } else if (type === "scan")
     modal(
       "Gate QR scanner",
-      `<p class="muted">Scan a visitor-pass QR code or enter the visitor ID to record check-in and check-out automatically.</p><div class="scan-box" style="border:1px dashed #75aef7;background:#f1f7ff;border-radius:14px;padding:28px"><div class="qr" style="font-size:64px;color:#1468d4">⌗</div><b>Waiting for a scan…</b><p>Camera scanning is represented in this prototype. Use the ID field below.</p></div><div class="form-grid"><label class="full">Visitor ID or QR payload<input class="input" id="scanVisitorId" placeholder="e.g. VIS-1042 or SCHOOLSHIELD:VIS-1042"></label></div><div class="modal-foot"><button class="btn primary" data-action="process-visitor-scan">⌗ Scan visitor</button></div><section class="panel"><div class="panel-head"><div><h3>Currently on campus</h3></div></div>${getState().visitors.filter((visitor) => visitor.status === "Inside").map((visitor) => `<div class="report-row"><span><b>${visitor.name}</b><small>${visitor.id}</small></span><button class="btn small" data-action="checkout-visitor" data-visitor="${visitor.id}">Check out</button></div>`).join("") || '<p class="muted">No visitors currently on campus.</p>'}</section>`,
+      `<p class="muted">Scan a visitor-pass QR code or enter the visitor ID to record check-in and check-out automatically.</p><div class="scan-box" style="border:1px dashed #75aef7;background:#f1f7ff;border-radius:14px;padding:28px"><div class="qr" style="font-size:64px;color:#1468d4">⌗</div><b>Waiting for a scan…</b><p>Camera scanning is represented in this prototype. Use the ID field below.</p></div><div class="form-grid"><label class="full">Visitor ID or QR payload<input class="input" id="scanVisitorId" placeholder="e.g. VIS-1042 or SCHOOLSHIELD:VIS-1042"></label></div><div class="modal-foot"><button class="btn primary" data-action="process-visitor-scan">⌗ Scan visitor</button></div><section class="panel"><div class="panel-head"><div><h3>Currently on campus</h3></div></div>${
+        getState()
+          .visitors.filter((visitor) => visitor.status === "Inside")
+          .map(
+            (visitor) =>
+              `<div class="report-row"><span><b>${visitor.name}</b><small>${visitor.id}</small></span><button class="btn small" data-action="checkout-visitor" data-visitor="${visitor.id}">Check out</button></div>`,
+          )
+          .join("") || '<p class="muted">No visitors currently on campus.</p>'
+      }</section>`,
     );
   else if (type === "process-visitor-scan") processVisitorScan();
-  else if (type === "generate-visitor-qr") generateVisitorQr(el.dataset.visitor);
-  else if (type === "download-visitor-qr") downloadVisitorQr(el.dataset.visitor);
+  else if (type === "generate-visitor-qr")
+    generateVisitorQr(el.dataset.visitor);
+  else if (type === "download-visitor-qr")
+    downloadVisitorQr(el.dataset.visitor);
   else if (type === "view-learner")
     go("class-records.html?class=" + classId + "&learner=" + learnerId);
   else if (type === "download-report") downloadReport(classId, learnerId);
-  else if (type === "preview-learner-report") previewLearnerReport(classId, learnerId);
+  else if (type === "preview-learner-report")
+    previewLearnerReport(classId, learnerId);
   else if (type === "download-history") downloadHistory(el.dataset.learner);
   else if (type === "view-history") viewHistory(el.dataset.learner);
   else if (type === "preview-visitors") previewVisitorReport();
@@ -2597,54 +4148,60 @@ function action(type, el) {
   else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
-  else if (type === "submit-marks") saveTestScores(classId, "teacher", el.dataset.assessment);
+  else if (type === "submit-marks") saveTestScores(classId, "teacher");
   else if (type === "update-scores") saveTestScores(classId, "clerk", el.dataset.assessment);
-  else if (type === "notify-parent-critical-subject") notifyParentCriticalSubject(el.dataset.assessment, learnerId);
   else if (type === "save-attendance") saveAttendance(classId);
-  else if (type === "open-attendance-day") go(`attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || new Date().toISOString().slice(0, 10)}`);
+  else if (type === "open-attendance-day")
+    go(
+      `attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || new Date().toISOString().slice(0, 10)}`,
+    );
   else if (type === "save-daily-attendance") saveDailyAttendance(classId);
   else if (type === "delete-daily-attendance") deleteDailyAttendance(classId, el.dataset.date);
   else if (type === "submit-daily-week") submitDailyWeek(classId, el.dataset.week);
   else if (type === "save-weekly-attendance") saveWeeklyAttendance(classId, el.dataset.week);
   else if (type === "download-attendance-week") downloadAttendanceWeek(classId, el.dataset.week);
-  else if (type === "add-assessment") addAssessment(classId, el.dataset.subject || "");
+  else if (type === "add-assessment") addAssessment(classId);
   else if (type === "assign-teacher") assignTeacher();
   else if (type === "submit-teacher-assignment") submitTeacherAssignment();
-  else if (type === "approve-teacher-assignment") approveTeacherAssignment(el.dataset.assignment);
-  else if (type === "approve-account-request") approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
-  else if (type === "reject-account-request") rejectAccountRequest(el.dataset.request);
+  else if (type === "approve-teacher-assignment")
+    approveTeacherAssignment(el.dataset.assignment);
+  else if (type === "approve-account-request")
+    approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
+  else if (type === "reject-account-request")
+    rejectAccountRequest(el.dataset.request);
   else if (type === "refresh-account-requests") loadAccountRequests();
   else if (type === "refresh-parent-workspace") refreshCloudWorkspace(true);
   else if (type === "close-modal") el.closest(".modal-backdrop")?.remove();
   else if (type === "save-assessment") saveAssessment();
-  else if (type === "request-report")
-    {
-      persist((state) => {
-        state.reportRequests = state.reportRequests || [];
-        const existing = state.reportRequests.find(
-          (request) => request.class === classId,
-        );
-        if (!existing)
-          state.reportRequests.unshift({
-            id: "REQ-" + Date.now().toString().slice(-6),
-            class: classId,
-            requestedBy: userName(),
-            requestedOn: todayLabel(),
-          });
-      });
-      modal(
-        "Class report requested",
-        `<p>A compiled ${TERM} report for class <b>${classId}</b> has been added to the clerk's request queue. The clerk will compile the individual learner reports and return them to the class teacher for finalisation.</p>`,
+  else if (type === "request-report") {
+    persist((state) => {
+      state.reportRequests = state.reportRequests || [];
+      const existing = state.reportRequests.find(
+        (request) => request.class === classId,
       );
-    }
-  else if (type === "compile-report") setReportStatus(classId, "compiled");
-  else if (type === "review-learner-report") reviewLearnerReport(classId, learnerId);
-  else if (type === "release-learner-report") releaseLearnerReport(classId, learnerId);
+      if (!existing)
+        state.reportRequests.unshift({
+          id: "REQ-" + Date.now().toString().slice(-6),
+          class: classId,
+          requestedBy: userName(),
+          requestedOn: todayLabel(),
+        });
+    });
+    modal(
+      "Class report requested",
+      `<p>A compiled ${TERM} report for class <b>${classId}</b> has been added to the clerk's request queue. The clerk will compile the individual learner reports and return them to the class teacher for finalisation.</p>`,
+    );
+  } else if (type === "compile-report") setReportStatus(classId, "compiled");
+  else if (type === "review-learner-report")
+    reviewLearnerReport(classId, learnerId);
+  else if (type === "release-learner-report")
+    releaseLearnerReport(classId, learnerId);
   else if (type === "finalise-report") setReportStatus(classId, "finalised");
   else if (type === "publish-report") setReportStatus(classId, "published");
   else if (type === "send-announcement") sendAnnouncement();
   else if (type === "open-chat") go(el.dataset.url);
-  else if (type === "send-message") sendMessage(el.dataset.store, el.dataset.chat, el.dataset.sender);
+  else if (type === "send-message")
+    sendMessage(el.dataset.store, el.dataset.chat, el.dataset.sender);
   else if (type === "add-learner")
     modal(
       "Add learner",
@@ -2668,33 +4225,68 @@ function action(type, el) {
   else if (type === "save-incident") saveIncident();
   else if (type === "save-learner") saveLearner();
   else if (type === "save-staff") saveStaff();
-  else if (type === "approve-staff-change") approveStaffChange(el.dataset.staffChange);
-  else if (type === "manage-staff") manageStaffRecord(el.dataset.staff, [...el.closest("tbody").querySelectorAll('[data-action="manage-staff"]')].indexOf(el));
+  else if (type === "approve-staff-change")
+    approveStaffChange(el.dataset.staffChange);
+  else if (type === "manage-staff")
+    manageStaffRecord(
+      el.dataset.staff,
+      [
+        ...el.closest("tbody").querySelectorAll('[data-action="manage-staff"]'),
+      ].indexOf(el),
+    );
   else if (type === "manage-parent") manageParent(el.dataset.learner);
   else if (type === "save-parent") saveParent(el.dataset.learner);
-  else if (type === "save-staff-changes") saveStaffChanges(el.dataset.staff, el.dataset.staffIndex);
+  else if (type === "save-staff-changes")
+    saveStaffChanges(el.dataset.staff, el.dataset.staffIndex);
   else if (type === "save-appointment") saveAppointment();
   else if (type === "submit-sick-notice") saveSickNotice();
   else if (type === "checkout-visitor") checkoutVisitor(el.dataset.visitor);
-  else if (type === "view-notification") viewNotification(el.dataset.notification);
+  else if (type === "view-notification")
+    viewNotification(el.dataset.notification);
   else if (type === "view-incident") viewIncident(el.dataset.incident);
-  else if (type === "add-incident-response") addIncidentResponse(el.dataset.incident);
+  else if (type === "add-incident-response")
+    addIncidentResponse(el.dataset.incident);
   else if (type === "resolve-incident") resolveIncident(el.dataset.incident);
-  else if (type === "comment-notification") commentNotification(el.dataset.notification);
-  else if (type === "manage-officer") manageOfficer(el.dataset.officer);
-  else if (type === "add-officer") addOfficer();
-  else if (type === "save-officer-new") saveNewOfficer();
-  else if (type === "save-officer") saveOfficer(el.dataset.officer);
+  else if (type === "comment-notification")
+    commentNotification(el.dataset.notification);
+  else if (type === "manage-officer")
+  manageOfficer(el.dataset.officer);
+
+else if (type === "add-officer")
+  addOfficer();
+
+else if (type === "save-officer-new")
+  saveNewOfficer();
+
+else if (type === "save-officer")
+  saveOfficer(el.dataset.officer);
+
+else if (type === "clock-in-security")
+  clockInSecurityOfficer(el.dataset.officer);
+
+else if (type === "clock-out-security")
+  clockOutSecurityOfficer(el.dataset.officer);
+
+else if (type === "security-attendance-history")
+  securityAttendanceHistory(el.dataset.officer);
   else if (type === "view-sick-notice") viewSickNotice(el.dataset.sick);
-  else if (type === "view-parent-sick-notice") viewParentSickNotice(el.dataset.sick);
+  else if (type === "view-parent-sick-notice")
+    viewParentSickNotice(el.dataset.sick);
   else if (type === "review-sick-notice") reviewSickNotice(el.dataset.sick);
-  else if (type === "manage-announcement") manageAnnouncement(el.dataset.announcement);
-  else if (type === "save-announcement") saveAnnouncement(el.dataset.announcement);
-  else if (type === "delete-announcement") deleteAnnouncement(el.dataset.announcement);
-  else if (type === "manage-appointment") manageAppointment(el.dataset.appointment);
-  else if (type === "choose-appointment-slot") chooseAppointmentSlot(el.dataset.appointment);
-  else if (type === "confirm-appointment-slot") confirmAppointmentSlot(el.dataset.appointment);
-  else if (type === "set-appointment-status") setAppointmentStatus(el.dataset.appointment, el.dataset.status);
+  else if (type === "manage-announcement")
+    manageAnnouncement(el.dataset.announcement);
+  else if (type === "save-announcement")
+    saveAnnouncement(el.dataset.announcement);
+  else if (type === "delete-announcement")
+    deleteAnnouncement(el.dataset.announcement);
+  else if (type === "manage-appointment")
+    manageAppointment(el.dataset.appointment);
+  else if (type === "choose-appointment-slot")
+    chooseAppointmentSlot(el.dataset.appointment);
+  else if (type === "confirm-appointment-slot")
+    confirmAppointmentSlot(el.dataset.appointment);
+  else if (type === "set-appointment-status")
+    setAppointmentStatus(el.dataset.appointment, el.dataset.status);
   else if (type === "filter")
     modal(
       "Search filters",
@@ -2707,33 +4299,48 @@ function action(type, el) {
     );
 }
 function alertToast() {
-  const latest = notificationsForRole().find((notice) => !notice.read && ["Critical", "High"].includes(notice.priority));
+  const latest = notificationsForRole().find(
+    (notice) => !notice.read && ["Critical", "High"].includes(notice.priority),
+  );
   if (!latest) return "";
   return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${latest.id}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${latest.title}</b><small style="display:block;margin-top:2px">${latest.description}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
 }
 function notificationsForRole() {
   const notices = getState().notifications;
   if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
+  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && (notice.scope !== "teacher" || notice.recipient === userName()));
+  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
   const child = parentLearner();
   return notices.filter(
-    (notice) => (notice.scope === "parents" && (!notice.class || (child && notice.class === child.class))) || notice.scope === "whole-school" || (child && notice.learnerId === child.id),
+    (notice) =>
+      (notice.scope === "parents" &&
+        (!notice.class || (child && notice.class === child.class))) ||
+      notice.scope === "whole-school" ||
+      (child && notice.learnerId === child.id),
   );
 }
 
 function inputValue(id) {
   return ($("#" + id)?.value || "").trim();
 }
-function finishForm(title = "Saved successfully", message = "Your update has been saved and shared with the school workspace.") {
+function finishForm(
+  title = "Saved successfully",
+  message = "Your update has been saved and shared with the school workspace.",
+) {
   $$(".modal-backdrop").forEach((el) => el.remove());
   render();
-  if (title) modal(title, `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  if (title)
+    modal(
+      title,
+      `<p>${message}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+    );
 }
 function requireValues(values) {
   if (values.every(Boolean)) return true;
-  modal("Missing information", '<p class="muted">Complete all required fields before saving.</p>');
+  modal(
+    "Missing information",
+    '<p class="muted">Complete all required fields before saving.</p>',
+  );
   return false;
 }
 function saveVisitor() {
@@ -2743,12 +4350,26 @@ function saveVisitor() {
   const identity = inputValue("visitorIdentity");
   const type = inputValue("visitorType");
   if (!requireValues([name, host, purpose, identity, type])) return;
-  if (inputValue("visitorIdType") === "South African ID" && !/^\d{13}$/.test(identity)) {
-    modal("Invalid South African ID", '<p class="muted">Enter a valid 13-digit South African ID number.</p>');
+  if (
+    inputValue("visitorIdType") === "South African ID" &&
+    !/^\d{13}$/.test(identity)
+  ) {
+    modal(
+      "Invalid South African ID",
+      '<p class="muted">Enter a valid 13-digit South African ID number.</p>',
+    );
     return;
   }
-  if (getState().visitors.some((visitor) => visitor.identity === identity && visitor.date === todayLabel())) {
-    modal("Duplicate visitor", '<p class="muted">This identity has already been registered today.</p>');
+  if (
+    getState().visitors.some(
+      (visitor) =>
+        visitor.identity === identity && visitor.date === todayLabel(),
+    )
+  ) {
+    modal(
+      "Duplicate visitor",
+      '<p class="muted">This identity has already been registered today.</p>',
+    );
     return;
   }
   persist((state) => {
@@ -2757,7 +4378,10 @@ function saveVisitor() {
       name,
       host,
       purpose,
-      in: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      in: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       out: "—",
       status: "Inside",
       type,
@@ -2786,24 +4410,38 @@ function saveVisitor() {
       read: false,
     });
   });
-  finishForm("Visitor registered", `${name} has been added to the visitor register and shared with connected school users.`);
+  finishForm(
+    "Visitor registered",
+    `${name} has been added to the visitor register and shared with connected school users.`,
+  );
 }
 function saveIncident() {
   const location = inputValue("incidentLocation");
   const description = inputValue("incidentDescription");
   if (!requireValues([location, description])) return;
-  if (inputValue("incidentDate") > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">An incident can only be reported for today or an earlier date.</p>");
+  if (inputValue("incidentDate") > todayIso())
+    return modal(
+      "Future date not allowed",
+      '<p class="muted">An incident can only be reported for today or an earlier date.</p>',
+    );
   persist((state) => {
     const id = "INC-" + Date.now().toString().slice(-6);
     state.incidents.unshift({
       id,
       date: inputValue("incidentDate") || todayLabel(),
-      time: inputValue("incidentTime") || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time:
+        inputValue("incidentTime") ||
+        new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       category: inputValue("incidentCategory"),
       location,
       priority: inputValue("incidentPriority"),
       status: "Open",
-      officer: inputValue("incidentOfficer") || (role() === "security" ? userName() : "Unassigned"),
+      officer:
+        inputValue("incidentOfficer") ||
+        (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
       description,
       people: inputValue("incidentPeople"),
@@ -2814,7 +4452,14 @@ function saveIncident() {
       immediateAction: inputValue("incidentAction"),
       notes: inputValue("incidentNotes"),
       comments: [],
-      audit: [{ action: "Created", author: userName(), date: todayLabel(), time: inputValue("incidentTime") || "Now" }],
+      audit: [
+        {
+          action: "Created",
+          author: userName(),
+          date: todayLabel(),
+          time: inputValue("incidentTime") || "Now",
+        },
+      ],
     });
     state.notifications.unshift({
       id: "NTF-" + Date.now().toString().slice(-6),
@@ -2830,7 +4475,10 @@ function saveIncident() {
       comments: [],
     });
   });
-  finishForm("Incident successfully reported", `The ${inputValue("incidentCategory")} incident has been recorded and alerts have been sent to authorised users.`);
+  finishForm(
+    "Incident successfully reported",
+    `The ${inputValue("incidentCategory")} incident has been recorded and alerts have been sent to authorised users.`,
+  );
 }
 function saveLearner() {
   const name = inputValue("learnerName");
@@ -2859,7 +4507,13 @@ function saveStaff() {
   const staffRole = inputValue("staffRole");
   const department = inputValue("staffDepartment");
   if (!requireValues([name, staffRole, department])) return;
-  const proposed = { id: "EMP-" + Date.now().toString().slice(-5), name, role: staffRole, department, status: "Active" };
+  const proposed = {
+    id: "EMP-" + Date.now().toString().slice(-5),
+    name,
+    role: staffRole,
+    department,
+    status: "Active",
+  };
   if (role() === "clerk") return submitStaffChange("add", proposed);
   persist((state) => state.staff.push(proposed));
   finishForm();
@@ -2867,7 +4521,10 @@ function saveStaff() {
 function manageParent(learnerId) {
   const learner = learnerById(learnerId);
   if (!learner) return;
-  modal("Manage parent / guardian", `<div class="form-grid"><label>Parent / guardian name<input class="input" id="editParentName" value="${learner.parent}"></label><label>Relationship<select class="select" id="editParentRelation"><option ${learner.relation === "Mother" ? "selected" : ""}>Mother</option><option ${learner.relation === "Father" ? "selected" : ""}>Father</option><option ${learner.relation === "Guardian" ? "selected" : ""}>Guardian</option></select></label><label>Cell phone<input class="input" id="editParentPhone" value="${learner.phone || ""}"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-parent" data-learner="${learnerId}">Save parent record</button></div>`);
+  modal(
+    "Manage parent / guardian",
+    `<div class="form-grid"><label>Parent / guardian name<input class="input" id="editParentName" value="${learner.parent}"></label><label>Relationship<select class="select" id="editParentRelation"><option ${learner.relation === "Mother" ? "selected" : ""}>Mother</option><option ${learner.relation === "Father" ? "selected" : ""}>Father</option><option ${learner.relation === "Guardian" ? "selected" : ""}>Guardian</option></select></label><label>Cell phone<input class="input" id="editParentPhone" value="${learner.phone || ""}"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-parent" data-learner="${learnerId}">Save parent record</button></div>`,
+  );
 }
 function saveParent(learnerId) {
   persist((state) => {
@@ -2882,20 +4539,38 @@ function saveParent(learnerId) {
 function manageStaff(id) {
   const member = getState().staff.find((item) => item.id === id);
   if (!member) return;
-  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${id}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`);
+  modal(
+    "Manage staff member",
+    `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${id}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`,
+  );
 }
 function manageStaffRecord(id, index) {
-  const member = Number.isInteger(Number(index)) ? getState().staff[Number(index)] : getState().staff.find((item) => item.id === id);
+  const member = Number.isInteger(Number(index))
+    ? getState().staff[Number(index)]
+    : getState().staff.find((item) => item.id === id);
   if (!member) return;
-  modal("Manage staff member", `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${member.id}" data-staff-index="${index}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`);
+  modal(
+    "Manage staff member",
+    `<div class="form-grid"><label>Full name<input class="input" id="editStaffName" value="${member.name}"></label><label>Role<select class="select" id="editStaffRole"><option ${member.role === "Teacher" ? "selected" : ""}>Teacher</option><option ${member.role === "Clerk" ? "selected" : ""}>Clerk</option><option ${member.role === "Security Officer" ? "selected" : ""}>Security Officer</option></select></label><label>Department<input class="input" id="editStaffDepartment" value="${member.department}"></label><label>Status<select class="select" id="editStaffStatus"><option ${member.status === "Active" ? "selected" : ""}>Active</option><option ${member.status === "On Leave" ? "selected" : ""}>On Leave</option><option ${member.status === "Inactive" ? "selected" : ""}>Inactive</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-staff-changes" data-staff="${member.id}" data-staff-index="${index}">${role() === "clerk" ? "Submit for dual approval" : "Save changes"}</button></div>`,
+  );
 }
 function saveStaffChanges(id, index) {
-  const current = Number.isInteger(Number(index)) ? getState().staff[Number(index)] : getState().staff.find((item) => item.id === id);
+  const current = Number.isInteger(Number(index))
+    ? getState().staff[Number(index)]
+    : getState().staff.find((item) => item.id === id);
   if (!current) return;
-  const proposed = { ...current, name: inputValue("editStaffName"), role: inputValue("editStaffRole"), department: inputValue("editStaffDepartment"), status: inputValue("editStaffStatus") };
+  const proposed = {
+    ...current,
+    name: inputValue("editStaffName"),
+    role: inputValue("editStaffRole"),
+    department: inputValue("editStaffDepartment"),
+    status: inputValue("editStaffStatus"),
+  };
   if (role() === "clerk") return submitStaffChange("edit", proposed, current);
   persist((state) => {
-    const member = Number.isInteger(Number(index)) ? state.staff[Number(index)] : state.staff.find((item) => item.id === id);
+    const member = Number.isInteger(Number(index))
+      ? state.staff[Number(index)]
+      : state.staff.find((item) => item.id === id);
     if (!member) return;
     Object.assign(member, proposed);
   });
@@ -2904,18 +4579,43 @@ function saveStaffChanges(id, index) {
 function submitStaffChange(type, proposed, previous = null) {
   persist((state) => {
     state.staffChangeRequests = state.staffChangeRequests || [];
-    const request = { id: `SCR-${Date.now().toString().slice(-7)}`, type, staffId: proposed.id, proposed, previous, requestedBy: userName(), requestedOn: todayLabel(), status: "Pending", approvals: { principal: false, deputy: false } };
+    const request = {
+      id: `SCR-${Date.now().toString().slice(-7)}`,
+      type,
+      staffId: proposed.id,
+      proposed,
+      previous,
+      requestedBy: userName(),
+      requestedOn: todayLabel(),
+      status: "Pending",
+      approvals: { principal: false, deputy: false },
+    };
     state.staffChangeRequests.unshift(request);
-    state.notifications.unshift({ id: `NTF-STAFF-${Date.now().toString().slice(-6)}`, createdAt: notificationTimestamp(), category: "Staff approval", priority: "Medium", title: "Staff change requires approval", description: `${request.requestedBy} submitted a ${type} request for ${proposed.name}. Principal and deputy approval are both required.`, scope: "leadership", staffChangeId: request.id, read: false });
+    state.notifications.unshift({
+      id: `NTF-STAFF-${Date.now().toString().slice(-6)}`,
+      createdAt: notificationTimestamp(),
+      category: "Staff approval",
+      priority: "Medium",
+      title: "Staff change requires approval",
+      description: `${request.requestedBy} submitted a ${type} request for ${proposed.name}. Principal and deputy approval are both required.`,
+      scope: "leadership",
+      staffChangeId: request.id,
+      read: false,
+    });
   });
   $$(".modal-backdrop").forEach((element) => element.remove());
-  modal("Staff change submitted", `<p>Your ${type === "add" ? "new staff member" : "staff edit"} is pending approval from both the principal and deputy. The live staff register has not changed.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  modal(
+    "Staff change submitted",
+    `<p>Your ${type === "add" ? "new staff member" : "staff edit"} is pending approval from both the principal and deputy. The live staff register has not changed.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+  );
 }
 function approveStaffChange(id) {
   if (!["principal", "deputy"].includes(role())) return;
   let completed = false;
   persist((state) => {
-    const request = (state.staffChangeRequests || []).find((item) => item.id === id && item.status === "Pending");
+    const request = (state.staffChangeRequests || []).find(
+      (item) => item.id === id && item.status === "Pending",
+    );
     if (!request || request.approvals[role()]) return;
     request.approvals[role()] = true;
     if (!request.approvals.principal || !request.approvals.deputy) return;
@@ -2928,7 +4628,12 @@ function approveStaffChange(id) {
     request.completedOn = todayLabel();
     completed = true;
   });
-  modal(completed ? "Staff change applied" : "Approval recorded", completed ? "<p>Both leadership approvals are recorded and the live staff register has been updated.</p>" : "<p>Your approval has been recorded. The register will update after the other leader approves.</p>");
+  modal(
+    completed ? "Staff change applied" : "Approval recorded",
+    completed
+      ? "<p>Both leadership approvals are recorded and the live staff register has been updated.</p>"
+      : "<p>Your approval has been recorded. The register will update after the other leader approves.</p>",
+  );
   render();
 }
 function saveAppointment() {
@@ -2954,7 +4659,11 @@ function saveSickNotice() {
   const date = inputValue("sickDate");
   const reason = inputValue("sickReason");
   if (!requireValues([learner, date, reason])) return;
-  if (date > todayIso()) return modal("Future date not allowed", "<p class=\"muted\">A sick notice can only be submitted for today or an earlier date.</p>");
+  if (date > todayIso())
+    return modal(
+      "Future date not allowed",
+      '<p class="muted">A sick notice can only be submitted for today or an earlier date.</p>',
+    );
   persist((state) =>
     state.sickNotices.unshift({
       id: "SN-" + Date.now().toString().slice(-5),
@@ -2968,32 +4677,78 @@ function saveSickNotice() {
   );
   persist((state) => {
     const notice = state.sickNotices[0];
-    const learnerRecord = state.learners.find((item) => item.name === notice?.person);
+    const learnerRecord = state.learners.find(
+      (item) => item.name === notice?.person,
+    );
     if (!notice || !learnerRecord) return;
     notice.status = "Pending teacher review";
     state.attendanceRegisters = state.attendanceRegisters || [];
-    const index = state.attendanceRegisters.findIndex((register) => register.class === learnerRecord.class && register.date === date);
+    const index = state.attendanceRegisters.findIndex(
+      (register) =>
+        register.class === learnerRecord.class && register.date === date,
+    );
     const existing = index >= 0 ? state.attendanceRegisters[index] : null;
-    const entries = Object.fromEntries(state.learners.filter((item) => item.class === learnerRecord.class).map((item) => [item.id, existing?.entries?.[item.id] || "Present"]));
+    const entries = Object.fromEntries(
+      state.learners
+        .filter((item) => item.class === learnerRecord.class)
+        .map((item) => [item.id, existing?.entries?.[item.id] || "Present"]),
+    );
     entries[learnerRecord.id] = "Sick";
-    const register = { ...(existing || {}), class: learnerRecord.class, date, teacher: existing?.teacher || teacherForClass(learnerRecord.class), entries, capturedOn: todayLabel(), source: "Parent sick notice", pendingSickNoticeIds: [...new Set([...(existing?.pendingSickNoticeIds || []), notice.id])] };
+    const register = {
+      ...(existing || {}),
+      class: learnerRecord.class,
+      date,
+      teacher: existing?.teacher || teacherForClass(learnerRecord.class),
+      entries,
+      capturedOn: todayLabel(),
+      source: "Parent sick notice",
+      pendingSickNoticeIds: [
+        ...new Set([...(existing?.pendingSickNoticeIds || []), notice.id]),
+      ],
+    };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
     refreshClassAttendance(state, learnerRecord.class);
-    state.notifications.unshift({ id: "NTF-SICK-" + Date.now().toString().slice(-6), createdAt: notificationTimestamp(), category: "Sick notice", priority: "High", title: "Sick notice requires attention", description: `${learnerRecord.name} was reported sick by ${notice.submittedBy} for ${date}. Attendance has been marked sick pending your review.`, scope: "teacher", recipient: teacherForClass(learnerRecord.class), sickNoticeId: notice.id, read: false });
+    state.notifications.unshift({
+      id: "NTF-SICK-" + Date.now().toString().slice(-6),
+      createdAt: notificationTimestamp(),
+      category: "Sick notice",
+      priority: "High",
+      title: "Sick notice requires attention",
+      description: `${learnerRecord.name} was reported sick by ${notice.submittedBy} for ${date}. Attendance has been marked sick pending your review.`,
+      scope: "teacher",
+      recipient: teacherForClass(learnerRecord.class),
+      sickNoticeId: notice.id,
+      read: false,
+    });
   });
-  sessionStorage.setItem("schoolshieldLastSickNotice", getState().sickNotices[0]?.id || "");
+  sessionStorage.setItem(
+    "schoolshieldLastSickNotice",
+    getState().sickNotices[0]?.id || "",
+  );
   finishForm();
 }
 
 function qrMarkup(payload) {
-  let seedValue = [...payload].reduce((total, character) => total + character.charCodeAt(0), 0);
+  let seedValue = [...payload].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
   const cells = Array.from({ length: 225 }, (_, index) => {
     const row = Math.floor(index / 15);
     const column = index % 15;
-    const finder = (row < 5 && column < 5) || (row < 5 && column > 9) || (row > 9 && column < 5);
+    const finder =
+      (row < 5 && column < 5) ||
+      (row < 5 && column > 9) ||
+      (row > 9 && column < 5);
     seedValue = (seedValue * 9301 + 49297) % 233280;
-    const dark = finder ? (row === 0 || row === 4 || column === 0 || column === 4 || (row >= 1 && row <= 3 && column >= 1 && column <= 3)) : seedValue % 2 === 0;
+    const dark = finder
+      ? row === 0 ||
+        row === 4 ||
+        column === 0 ||
+        column === 4 ||
+        (row >= 1 && row <= 3 && column >= 1 && column <= 3)
+      : seedValue % 2 === 0;
     return `<span style="display:block;background:${dark ? "#092e38" : "#fff"}"></span>`;
   }).join("");
   return `<div aria-label="Visitor QR code" style="width:210px;height:210px;padding:10px;background:#fff;display:grid;grid-template-columns:repeat(15,1fr);gap:1px;border:1px solid #dce6e8;border-radius:8px;margin:15px auto">${cells}</div>`;
@@ -3002,19 +4757,28 @@ function generateVisitorQr(id) {
   const visitor = getState().visitors.find((item) => item.id === id);
   if (!visitor) return;
   const payload = `SCHOOLSHIELD:${visitor.id}:${visitor.identity || visitor.name}`;
-  modal("Visitor QR pass", `<div class="scan-box"><b>${visitor.name}</b><p>${visitor.id} · ${visitor.type}</p>${qrMarkup(payload)}<p class="muted">Present this pass at the gate. Payload: ${payload}</p><div class="modal-foot"><button class="btn primary" data-action="download-visitor-qr" data-visitor="${id}">Download QR pass</button></div></div>`);
+  modal(
+    "Visitor QR pass",
+    `<div class="scan-box"><b>${visitor.name}</b><p>${visitor.id} · ${visitor.type}</p>${qrMarkup(payload)}<p class="muted">Present this pass at the gate. Payload: ${payload}</p><div class="modal-foot"><button class="btn primary" data-action="download-visitor-qr" data-visitor="${id}">Download QR pass</button></div></div>`,
+  );
 }
 function downloadVisitorQr(id) {
   const visitor = getState().visitors.find((item) => item.id === id);
   if (!visitor) return;
-  downloadTextFile(`${visitor.id}-qr-pass.txt`, `${SCHOOL.name}\nVisitor QR pass\nVisitor: ${visitor.name}\nVisitor ID: ${visitor.id}\nPayload: SCHOOLSHIELD:${visitor.id}:${visitor.identity || visitor.name}\n\nUse the generated QR pass at the school gate.`);
+  downloadTextFile(
+    `${visitor.id}-qr-pass.txt`,
+    `${SCHOOL.name}\nVisitor QR pass\nVisitor: ${visitor.name}\nVisitor ID: ${visitor.id}\nPayload: SCHOOLSHIELD:${visitor.id}:${visitor.identity || visitor.name}\n\nUse the generated QR pass at the school gate.`,
+  );
 }
 function processVisitorScan() {
   const raw = inputValue("scanVisitorId");
   const id = raw.replace("SCHOOLSHIELD:", "").split(":")[0].toUpperCase();
   const visitor = getState().visitors.find((item) => item.id === id);
   if (!visitor) {
-    modal("Visitor not found", '<p class="muted">Enter a valid visitor ID or QR payload.</p>');
+    modal(
+      "Visitor not found",
+      '<p class="muted">Enter a valid visitor ID or QR payload.</p>',
+    );
     return;
   }
   if (visitor.status === "Inside") {
@@ -3024,35 +4788,55 @@ function processVisitorScan() {
   persist((state) => {
     const item = state.visitors.find((entry) => entry.id === visitor.id);
     item.status = "Inside";
-    item.in = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    item.in = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     item.out = "—";
     item.processedBy = userName();
   });
   finishForm();
 }
+
 function checkoutVisitor(id) {
-  let visitorName = "";
-  let checkedOut = false;
   persist((state) => {
     const visitor = state.visitors.find((item) => item.id === id);
     if (visitor && visitor.status === "Inside") {
-      visitorName = visitor.name;
       visitor.status = "Checked Out";
-      visitor.out = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      visitor.checkedOutBy = userName();
-      checkedOut = true;
+      visitor.out = new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
     }
   });
-  if (!checkedOut) return modal("Visitor already checked out", "<p class=\"muted\">This visitor is no longer marked as being on campus.</p>");
-  finishForm("Visitor checked out", `${visitorName} has been checked out and the shared visitor register has been updated.`);
+  $$(".modal-backdrop").forEach((element) => element.remove());
+  render();
 }
 function viewIncident(id) {
   const incident = getState().incidents.find((item) => item.id === id);
   if (!incident) return;
-  const comments = (incident.comments || []).map((comment) => `<div class="report-row"><span><b>${comment.author}</b><small>${comment.date}</small></span><span>${comment.text}</span></div>`).join("") || '<p class="muted">No responses yet.</p>';
-  const audit = (incident.audit || []).map((entry) => `<li><b>${entry.action}</b> — ${entry.author} · ${entry.date} · ${entry.time}</li>`).join("") || '<li>Initial incident record</li>';
-  const response = role() !== "sgb" ? `<label>Add response<textarea class="textarea" id="incidentResponse" placeholder="Add an update or request further details..."></textarea></label><div class="modal-foot"><button class="btn" data-action="resolve-incident" data-incident="${id}">Mark as resolved</button><button class="btn primary" data-action="add-incident-response" data-incident="${id}">Send response</button></div>` : "";
-  modal(incident.id, `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section><section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`);
+  const comments =
+    (incident.comments || [])
+      .map(
+        (comment) =>
+          `<div class="report-row"><span><b>${comment.author}</b><small>${comment.date}</small></span><span>${comment.text}</span></div>`,
+      )
+      .join("") || '<p class="muted">No responses yet.</p>';
+  const audit =
+    (incident.audit || [])
+      .map(
+        (entry) =>
+          `<li><b>${entry.action}</b> — ${entry.author} · ${entry.date} · ${entry.time}</li>`,
+      )
+      .join("") || "<li>Initial incident record</li>";
+  const response =
+    role() !== "sgb"
+      ? `<label>Add response<textarea class="textarea" id="incidentResponse" placeholder="Add an update or request further details..."></textarea></label><div class="modal-foot"><button class="btn" data-action="resolve-incident" data-incident="${id}">Mark as resolved</button><button class="btn primary" data-action="add-incident-response" data-incident="${id}">Send response</button></div>`
+      : "";
+  modal(
+    incident.id,
+    `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section><section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
+  );
 }
 function addIncidentResponse(id) {
   const text = inputValue("incidentResponse");
@@ -3063,7 +4847,12 @@ function addIncidentResponse(id) {
     incident.comments = incident.comments || [];
     incident.audit = incident.audit || [];
     incident.comments.push({ author: userName(), text, date: todayLabel() });
-    incident.audit.push({ action: "Response added", author: userName(), date: todayLabel(), time: "Now" });
+    incident.audit.push({
+      action: "Response added",
+      author: userName(),
+      date: todayLabel(),
+      time: "Now",
+    });
   });
   finishForm();
 }
@@ -3073,8 +4862,15 @@ function resolveIncident(id) {
     if (!incident) return;
     incident.status = "Resolved";
     incident.audit = incident.audit || [];
-    incident.audit.push({ action: "Status changed — Open → Resolved", author: userName(), date: todayLabel(), time: "Now" });
-    state.notifications.forEach((notice) => { if (notice.incidentId === id) notice.read = true; });
+    incident.audit.push({
+      action: "Status changed — Open → Resolved",
+      author: userName(),
+      date: todayLabel(),
+      time: "Now",
+    });
+    state.notifications.forEach((notice) => {
+      if (notice.incidentId === id) notice.read = true;
+    });
   });
   $(".incident-toast")?.remove();
   finishForm();
@@ -3087,11 +4883,23 @@ function viewNotification(id) {
     if (item) item.read = true;
   });
   $(".incident-toast")?.remove();
-  const comments = (notice.comments || []).map((comment) => `<div class="report-row"><span><b>${comment.author}</b><small>${comment.date}</small></span><span>${comment.text}</span></div>`).join("") || '<p class="muted">No follow-up comments yet.</p>';
-  const principalControls = role() === "principal" ? `<label>Comment or request details<textarea class="textarea" id="notificationComment" placeholder="Ask the reporter for further information or record a follow-up..."></textarea></label><div class="modal-foot"><button class="btn primary" data-action="comment-notification" data-notification="${id}">Send follow-up</button></div>` : "";
+  const comments =
+    (notice.comments || [])
+      .map(
+        (comment) =>
+          `<div class="report-row"><span><b>${comment.author}</b><small>${comment.date}</small></span><span>${comment.text}</span></div>`,
+      )
+      .join("") || '<p class="muted">No follow-up comments yet.</p>';
+  const principalControls =
+    role() === "principal"
+      ? `<label>Comment or request details<textarea class="textarea" id="notificationComment" placeholder="Ask the reporter for further information or record a follow-up..."></textarea></label><div class="modal-foot"><button class="btn primary" data-action="comment-notification" data-notification="${id}">Send follow-up</button></div>`
+      : "";
   const drawer = $("#notificationCenter");
   if (drawer) drawer.style.display = "none";
-  modal(notice.title, `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`);
+  modal(
+    notice.title,
+    `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`,
+  );
 }
 function commentNotification(id) {
   const text = inputValue("notificationComment");
@@ -3105,19 +4913,53 @@ function commentNotification(id) {
   finishForm();
 }
 function addOfficer() {
-  modal("Add security officer", `<div class="form-grid"><label>Full name<input class="input" id="newOfficerName"></label><label>Employee ID<input class="input" id="newOfficerEmployee"></label><label>Shift<select class="select" id="newOfficerShift"><option>06:00–14:00</option><option>14:00–22:00</option><option>22:00–06:00</option></select></label><label>Assigned site<select class="select" id="newOfficerSite"><option>Main Gate</option><option>Admin Block</option><option>Sports Field</option><option>Vehicle Gate</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer-new">Save officer</button></div>`);
+  modal(
+    "Add security officer",
+    `<div class="form-grid"><label>Full name<input class="input" id="newOfficerName"></label><label>Employee ID<input class="input" id="newOfficerEmployee"></label><label>Shift<select class="select" id="newOfficerShift"><option>06:00–14:00</option><option>14:00–22:00</option><option>22:00–06:00</option></select></label><label>Assigned site<select class="select" id="newOfficerSite"><option>Main Gate</option><option>Admin Block</option><option>Sports Field</option><option>Vehicle Gate</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer-new">Save officer</button></div>`,
+  );
 }
 function saveNewOfficer() {
   const name = inputValue("newOfficerName");
   const employee = inputValue("newOfficerEmployee");
+
   if (!requireValues([name, employee])) return;
-  persist((state) => state.security.push({ id: `SEC-${String(state.security.length + 1).padStart(3, "0")}`, name, employee, shift: inputValue("newOfficerShift"), site: inputValue("newOfficerSite"), status: "Scheduled" }));
-  finishForm();
+
+  persist((state) => {
+    state.security = state.security || [];
+
+    state.securityAttendance =
+      state.securityAttendance || [];
+
+    const officerNumber =
+      state.security.length + 1;
+
+    state.security.push({
+      id: `SEC-${String(officerNumber).padStart(3, "0")}`,
+
+      name,
+
+      employee,
+
+      shift: inputValue("newOfficerShift"),
+
+      site: inputValue("newOfficerSite"),
+
+      status: "Scheduled"
+    });
+  });
+
+  finishForm(
+    "Security officer added",
+    `${name} has been added to the security officer register.`
+  );
 }
 function manageOfficer(id) {
   const officer = getState().security.find((item) => item.id === id);
   if (!officer) return;
-  modal("Manage " + officer.name, `<div class="form-grid"><label>Shift<input class="input" id="officerShift" value="${officer.shift}"></label><label>Assigned site<input class="input" id="officerSite" value="${officer.site}"></label><label>Status<select class="select" id="officerStatus"><option ${officer.status === "On Duty" ? "selected" : ""}>On Duty</option><option ${officer.status === "Scheduled" ? "selected" : ""}>Scheduled</option><option ${officer.status === "Off Duty" ? "selected" : ""}>Off Duty</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer" data-officer="${id}">Save changes</button></div>`);
+  modal(
+    "Manage " + officer.name,
+    `<div class="form-grid"><label>Shift<input class="input" id="officerShift" value="${officer.shift}"></label><label>Assigned site<input class="input" id="officerSite" value="${officer.site}"></label><label>Status<select class="select" id="officerStatus"><option ${officer.status === "On Duty" ? "selected" : ""}>On Duty</option><option ${officer.status === "Scheduled" ? "selected" : ""}>Scheduled</option><option ${officer.status === "Off Duty" ? "selected" : ""}>Off Duty</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer" data-officer="${id}">Save changes</button></div>`,
+  );
 }
 function saveOfficer(id) {
   persist((state) => {
@@ -3130,66 +4972,122 @@ function saveOfficer(id) {
   finishForm();
 }
 function viewParentSickNotice(id) {
-  const notice = getState().sickNotices.find((item) => item.id === id && item.submittedBy === userName());
+  const notice = getState().sickNotices.find(
+    (item) => item.id === id && item.submittedBy === userName(),
+  );
   if (!notice) return;
-  modal("Submitted sick notice", `<div class="detail-grid"><div><small>Learner</small><b>${notice.person}</b></div><div><small>Absence date</small><b>${notice.date}</b></div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Teacher review</small>${badge(notice.status)}</div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div><p class="muted" style="margin-top:16px">The learner has been marked sick for this date. The assigned teacher will review the notice.</p>`);
+  modal(
+    "Submitted sick notice",
+    `<div class="detail-grid"><div><small>Learner</small><b>${notice.person}</b></div><div><small>Absence date</small><b>${notice.date}</b></div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Teacher review</small>${badge(notice.status)}</div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div><p class="muted" style="margin-top:16px">The learner has been marked sick for this date. The assigned teacher will review the notice.</p>`,
+  );
 }
 function viewSickNotice(id) {
   const notice = getState().sickNotices.find((item) => item.id === id);
   if (!notice) return;
-  modal("Sick notice", `<div class="detail-grid"><div><small>Submitted by</small><b>${notice.submittedBy}</b></div><div><small>Learner / staff</small><b>${notice.person}</b></div><div><small>Date</small><b>${notice.date}</b></div><div><small>Status</small>${badge(notice.status)}</div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div>${notice.status !== "Reviewed" ? `<div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${id}">Review & acknowledge</button></div>` : ""}`);
+  modal(
+    "Sick notice",
+    `<div class="detail-grid"><div><small>Submitted by</small><b>${notice.submittedBy}</b></div><div><small>Learner / staff</small><b>${notice.person}</b></div><div><small>Date</small><b>${notice.date}</b></div><div><small>Status</small>${badge(notice.status)}</div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div>${notice.status !== "Reviewed" ? `<div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${id}">Review & acknowledge</button></div>` : ""}`,
+  );
 }
 function reviewSickNotice(id) {
   persist((state) => {
     const notice = state.sickNotices.find((item) => item.id === id);
     if (!notice) return;
     notice.status = "Reviewed";
-    const learnerRecord = state.learners.find((item) => item.name === notice.person);
-    const register = learnerRecord && state.attendanceRegisters?.find((item) => item.class === learnerRecord.class && item.date === notice.date);
-    if (register) register.pendingSickNoticeIds = (register.pendingSickNoticeIds || []).filter((noticeId) => noticeId !== id);
-    state.notifications.forEach((notification) => { if (notification.sickNoticeId === id) notification.read = true; });
+    const learnerRecord = state.learners.find(
+      (item) => item.name === notice.person,
+    );
+    const register =
+      learnerRecord &&
+      state.attendanceRegisters?.find(
+        (item) =>
+          item.class === learnerRecord.class && item.date === notice.date,
+      );
+    if (register)
+      register.pendingSickNoticeIds = (
+        register.pendingSickNoticeIds || []
+      ).filter((noticeId) => noticeId !== id);
+    state.notifications.forEach((notification) => {
+      if (notification.sickNoticeId === id) notification.read = true;
+    });
   });
   finishForm();
 }
 function showPendingSickNoticePopup() {
   if (role() !== "teacher") return;
   const notice = getState().sickNotices.find((item) => {
-    const learnerRecord = learners().find((learner) => learner.name === item.person);
-    return item.status !== "Reviewed" && learnerRecord && teacherForClass(learnerRecord.class) === userName();
+    const learnerRecord = learners().find(
+      (learner) => learner.name === item.person,
+    );
+    return (
+      item.status !== "Reviewed" &&
+      learnerRecord &&
+      teacherForClass(learnerRecord.class) === userName()
+    );
   });
   if (!notice) return;
   const key = `schoolshield:sick-popup:${SCHOOL.code}:${notice.id}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "shown");
-  modal("Sick notice requires attention", `<p><b>${notice.person}</b> was reported sick by ${notice.submittedBy} for <b>${notice.date}</b>.</p><p class="muted">The learner has been marked sick in attendance. Review and acknowledge this notice to complete the teacher review.</p><div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${notice.id}">Review & acknowledge</button></div>`);
+  modal(
+    "Sick notice requires attention",
+    `<p><b>${notice.person}</b> was reported sick by ${notice.submittedBy} for <b>${notice.date}</b>.</p><p class="muted">The learner has been marked sick in attendance. Review and acknowledge this notice to complete the teacher review.</p><div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${notice.id}">Review & acknowledge</button></div>`,
+  );
 }
 function manageAnnouncement(id) {
   const announcement = getState().announcements.find((item) => item.id === id);
   if (!announcement || announcement.author !== userName()) return;
-  modal("Manage announcement", `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcement.title}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcement.body || ""}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`);
+  modal(
+    "Manage announcement",
+    `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcement.title}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcement.body || ""}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`,
+  );
 }
 function saveAnnouncement(id) {
   const title = inputValue("editAnnouncementTitle");
   if (!title) return;
   persist((state) => {
-    const item = state.announcements.find((announcement) => announcement.id === id && announcement.author === userName());
-    if (item) { item.title = title; item.body = inputValue("editAnnouncementBody"); }
+    const item = state.announcements.find(
+      (announcement) =>
+        announcement.id === id && announcement.author === userName(),
+    );
+    if (item) {
+      item.title = title;
+      item.body = inputValue("editAnnouncementBody");
+    }
   });
   finishForm();
 }
 function deleteAnnouncement(id) {
-  persist((state) => { state.announcements = state.announcements.filter((item) => !(item.id === id && item.author === userName())); });
+  persist((state) => {
+    state.announcements = state.announcements.filter(
+      (item) => !(item.id === id && item.author === userName()),
+    );
+  });
   finishForm();
 }
 function manageAppointment(id) {
   const appointment = getState().appointments.find((item) => item.id === id);
   if (!appointment) return;
-  const controls = role() === "principal" ? `<div class="modal-foot"><button class="btn" data-action="set-appointment-status" data-appointment="${id}" data-status="Declined">Decline</button><button class="btn" data-action="choose-appointment-slot" data-appointment="${id}">Reschedule</button><button class="btn primary" data-action="set-appointment-status" data-appointment="${id}" data-status="Accepted">Accept</button></div>` : "";
-  modal("Appointment review", `<div class="detail-grid"><div><small>Title</small><b>${appointment.title}</b></div><div><small>With</small><b>${appointment.with}</b></div><div><small>Date</small><b>${appointment.date}</b></div><div><small>Time</small><b>${appointment.time}</b></div></div>${controls}`);
+  const controls =
+    role() === "principal"
+      ? `<div class="modal-foot"><button class="btn" data-action="set-appointment-status" data-appointment="${id}" data-status="Declined">Decline</button><button class="btn" data-action="choose-appointment-slot" data-appointment="${id}">Reschedule</button><button class="btn primary" data-action="set-appointment-status" data-appointment="${id}" data-status="Accepted">Accept</button></div>`
+      : "";
+  modal(
+    "Appointment review",
+    `<div class="detail-grid"><div><small>Title</small><b>${appointment.title}</b></div><div><small>With</small><b>${appointment.with}</b></div><div><small>Date</small><b>${appointment.date}</b></div><div><small>Time</small><b>${appointment.time}</b></div></div>${controls}`,
+  );
 }
 function chooseAppointmentSlot(id) {
-  const slots = ["18 Sep 2026 · 09:00", "18 Sep 2026 · 13:30", "19 Sep 2026 · 10:00", "19 Sep 2026 · 15:00"];
-  modal("Available reschedule slots", `<p class="muted">Select an available principal appointment slot.</p><label>Available slots<select class="select" id="rescheduleSlot">${slots.map((slot) => `<option>${slot}</option>`).join("")}</select></label><div class="modal-foot"><button class="btn primary" data-action="confirm-appointment-slot" data-appointment="${id}">Confirm new time</button></div>`);
+  const slots = [
+    "18 Sep 2026 · 09:00",
+    "18 Sep 2026 · 13:30",
+    "19 Sep 2026 · 10:00",
+    "19 Sep 2026 · 15:00",
+  ];
+  modal(
+    "Available reschedule slots",
+    `<p class="muted">Select an available principal appointment slot.</p><label>Available slots<select class="select" id="rescheduleSlot">${slots.map((slot) => `<option>${slot}</option>`).join("")}</select></label><div class="modal-foot"><button class="btn primary" data-action="confirm-appointment-slot" data-appointment="${id}">Confirm new time</button></div>`,
+  );
 }
 function confirmAppointmentSlot(id) {
   const [date, time] = inputValue("rescheduleSlot").split(" · ");
@@ -3203,7 +5101,12 @@ function confirmAppointmentSlot(id) {
   finishForm();
 }
 function setAppointmentStatus(id, status) {
-  persist((state) => { const item = state.appointments.find((appointment) => appointment.id === id); if (item) item.status = status; });
+  persist((state) => {
+    const item = state.appointments.find(
+      (appointment) => appointment.id === id,
+    );
+    if (item) item.status = status;
+  });
   finishForm();
 }
 
@@ -3211,53 +5114,114 @@ function setAppointmentStatus(id, status) {
 function saveAttendance(classId) {
   const date = inputValue("attendanceDate");
   if (!date) return;
-  const entries = Object.fromEntries($$("[data-attendance]").map((input) => [input.dataset.attendance, input.value]));
+  const entries = Object.fromEntries(
+    $$("[data-attendance]").map((input) => [
+      input.dataset.attendance,
+      input.value,
+    ]),
+  );
   persist((state) => {
     state.attendanceRegisters = state.attendanceRegisters || [];
-    const index = state.attendanceRegisters.findIndex((register) => register.class === classId && register.date === date);
-    const register = { class: classId, date, teacher: userName(), entries, capturedOn: todayLabel() };
+    const index = state.attendanceRegisters.findIndex(
+      (register) => register.class === classId && register.date === date,
+    );
+    const register = {
+      class: classId,
+      date,
+      teacher: userName(),
+      entries,
+      capturedOn: todayLabel(),
+    };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
-    const classRegisters = state.attendanceRegisters.filter((item) => item.class === classId);
-    state.learners.filter((learner) => learner.class === classId).forEach((learner) => {
-      const absenceCount = classRegisters.reduce((total, item) => total + (["Absent", "Sick", "Excused"].includes(item.entries?.[learner.id]) ? 1 : 0), 0);
-      learner.absentDays = (learner.initialAbsentDays || 0) + absenceCount;
-      const totalDays = (learner.attendanceDays || 60) + classRegisters.length;
-      learner.attendance = Math.max(0, Math.round(((totalDays - learner.absentDays) / totalDays) * 100));
-    });
+    const classRegisters = state.attendanceRegisters.filter(
+      (item) => item.class === classId,
+    );
+    state.learners
+      .filter((learner) => learner.class === classId)
+      .forEach((learner) => {
+        const absenceCount = classRegisters.reduce(
+          (total, item) =>
+            total +
+            (["Absent", "Sick", "Excused"].includes(item.entries?.[learner.id])
+              ? 1
+              : 0),
+          0,
+        );
+        learner.absentDays = (learner.initialAbsentDays || 0) + absenceCount;
+        const totalDays =
+          (learner.attendanceDays || 60) + classRegisters.length;
+        learner.attendance = Math.max(
+          0,
+          Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
+        );
+      });
   });
   render();
 }
 function saveWeeklyAttendance(classId, weekStart) {
-  const inputs = $$('[data-week-status]');
+  const inputs = $$("[data-week-status]");
   const weekly = {};
   inputs.forEach((input) => {
     const learnerId = input.dataset.weekLearner;
     const day = input.dataset.weekDay;
     weekly[day] = weekly[day] || {};
     if (!weekly[day][learnerId]) weekly[day][learnerId] = "Present";
-    if (input.checked && input.dataset.weekStatus !== "Present") weekly[day][learnerId] = input.dataset.weekStatus;
+    if (input.checked && input.dataset.weekStatus !== "Present")
+      weekly[day][learnerId] = input.dataset.weekStatus;
   });
   persist((state) => {
     state.attendanceRegisters = state.attendanceRegisters || [];
     Object.entries(weekly).forEach(([date, entries]) => {
-      const index = state.attendanceRegisters.findIndex((register) => register.class === classId && register.date === date);
-      const register = { class: classId, date, teacher: userName(), entries, capturedOn: todayLabel() };
+      const index = state.attendanceRegisters.findIndex(
+        (register) => register.class === classId && register.date === date,
+      );
+      const register = {
+        class: classId,
+        date,
+        teacher: userName(),
+        entries,
+        capturedOn: todayLabel(),
+      };
       if (index >= 0) state.attendanceRegisters[index] = register;
       else state.attendanceRegisters.unshift(register);
     });
     state.attendanceWeeks = state.attendanceWeeks || [];
-    const summary = { class: classId, weekStart, teacher: userName(), updatedOn: todayLabel() };
-    const weekIndex = state.attendanceWeeks.findIndex((week) => week.class === classId && week.weekStart === weekStart);
+    const summary = {
+      class: classId,
+      weekStart,
+      teacher: userName(),
+      updatedOn: todayLabel(),
+    };
+    const weekIndex = state.attendanceWeeks.findIndex(
+      (week) => week.class === classId && week.weekStart === weekStart,
+    );
     if (weekIndex >= 0) state.attendanceWeeks[weekIndex] = summary;
     else state.attendanceWeeks.unshift(summary);
-    const classRegisters = state.attendanceRegisters.filter((item) => item.class === classId);
-    state.learners.filter((learner) => learner.class === classId).forEach((learner) => {
-      const absences = classRegisters.reduce((total, register) => total + (["Absent", "Excused", "Sick"].includes(register.entries?.[learner.id]) ? 1 : 0), 0);
-      learner.absentDays = (learner.initialAbsentDays || 0) + absences;
-      const totalDays = (learner.attendanceDays || 60) + classRegisters.length;
-      learner.attendance = Math.max(0, Math.round(((totalDays - learner.absentDays) / totalDays) * 100));
-    });
+    const classRegisters = state.attendanceRegisters.filter(
+      (item) => item.class === classId,
+    );
+    state.learners
+      .filter((learner) => learner.class === classId)
+      .forEach((learner) => {
+        const absences = classRegisters.reduce(
+          (total, register) =>
+            total +
+            (["Absent", "Excused", "Sick"].includes(
+              register.entries?.[learner.id],
+            )
+              ? 1
+              : 0),
+          0,
+        );
+        learner.absentDays = (learner.initialAbsentDays || 0) + absences;
+        const totalDays =
+          (learner.attendanceDays || 60) + classRegisters.length;
+        learner.attendance = Math.max(
+          0,
+          Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
+        );
+      });
   });
   render();
 }
@@ -3280,7 +5244,9 @@ function saveTestScores(classId, mode, assessmentId = "") {
   let savedAssessment = null;
   let criticalLearners = [];
   persist((state) => {
-    const assessment = state.assessments.find((a) => a.id === assessmentId) || state.assessments.find((a) => a.class === classId);
+    const assessment =
+      state.assessments.find((a) => a.id === assessmentId) ||
+      state.assessments.find((a) => a.class === classId);
     if (assessment) {
       assessment.scores = { ...assessment.scores, ...scores };
       criticalLearners = Object.entries(assessment.scores || {}).filter(([, score]) => Number(score) < 40).map(([learnerId, score]) => {
@@ -3400,8 +5366,24 @@ function showTeacherCriticalMarkPopup() {
 }
 
 function assignTeacher() {
-  const teacherOptions = getState().staff.filter((member) => member.role === "Teacher").map((teacher) => `<option value="${teacher.name}">${teacher.name} — ${teacher.department}</option>`).join("");
-  modal("Assign teacher to class", `<p class="muted">This request must be approved by the principal before it changes the class, teacher portal, or parent notification.</p><div class="form-grid"><label>Class<select class="select" id="assignmentClass">${classes().map((schoolClass) => `<option value="${schoolClass.id}">${schoolClass.grade} · ${schoolClass.id} — current: ${schoolClass.teacher}</option>`).join("")}</select></label><label>Registered teacher<select class="select" id="assignmentTeacher">${teacherOptions}</select></label></div><div class="modal-foot"><button class="btn primary" data-action="submit-teacher-assignment">Submit for approval</button></div>`);
+  const teacherOptions = getState()
+    .staff.filter((member) => member.role === "Teacher")
+    .map(
+      (teacher) =>
+        `<option value="${teacher.name}">${teacher.name} — ${teacher.department}</option>`,
+    )
+    .join("");
+  modal(
+    "Assign teacher to class",
+    `<p class="muted">This request must be approved by the principal before it changes the class, teacher portal, or parent notification.</p><div class="form-grid"><label>Class<select class="select" id="assignmentClass">${classes()
+      .map(
+        (schoolClass) =>
+          `<option value="${schoolClass.id}">${schoolClass.grade} · ${schoolClass.id} — current: ${schoolClass.teacher}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><label>Registered teacher<select class="select" id="assignmentTeacher">${teacherOptions}</select></label></div><div class="modal-foot"><button class="btn primary" data-action="submit-teacher-assignment">Submit for approval</button></div>`,
+  );
 }
 function submitTeacherAssignment() {
   const classId = inputValue("assignmentClass");
@@ -3409,30 +5391,47 @@ function submitTeacherAssignment() {
   if (!requireValues([classId, teacher])) return;
   persist((state) => {
     state.teacherAssignments = state.teacherAssignments || [];
-    state.teacherAssignments.unshift({ id: `TAS-${Date.now().toString().slice(-6)}`, class: classId, teacher, requestedBy: userName(), requestedOn: todayLabel(), status: "Pending" });
+    state.teacherAssignments.unshift({
+      id: `TAS-${Date.now().toString().slice(-6)}`,
+      class: classId,
+      teacher,
+      requestedBy: userName(),
+      requestedOn: todayLabel(),
+      status: "Pending",
+    });
   });
   finishForm();
 }
 function approveTeacherAssignment(id) {
   persist((state) => {
-    const assignment = (state.teacherAssignments || []).find((item) => item.id === id);
-    const schoolClass = assignment && state.classes.find((item) => item.id === assignment.class);
+    const assignment = (state.teacherAssignments || []).find(
+      (item) => item.id === id,
+    );
+    const schoolClass =
+      assignment && state.classes.find((item) => item.id === assignment.class);
     if (!assignment || !schoolClass) return;
     schoolClass.teacher = assignment.teacher;
     assignment.status = "Approved";
     assignment.approvedBy = userName();
-    state.notifications.unshift({ id: `NTF-${Date.now().toString().slice(-6)}`, createdAt: notificationTimestamp(), category: "Class update", priority: "Medium", title: `New class teacher for ${schoolClass.class || schoolClass.id}`, description: `${assignment.teacher} is now the class teacher for ${schoolClass.grade} ${schoolClass.id}.`, scope: "parents", class: schoolClass.id, read: false });
+    state.notifications.unshift({
+      id: `NTF-${Date.now().toString().slice(-6)}`,
+      createdAt: notificationTimestamp(),
+      category: "Class update",
+      priority: "Medium",
+      title: `New class teacher for ${schoolClass.class || schoolClass.id}`,
+      description: `${assignment.teacher} is now the class teacher for ${schoolClass.grade} ${schoolClass.id}.`,
+      scope: "parents",
+      class: schoolClass.id,
+      read: false,
+    });
   });
   render();
 }
-function addAssessment(classId = "", selectedSubject = "") {
-  const availableClasses = role() === "teacher" ? teacherClasses(userName()) : classes();
-  const classOptions = availableClasses
+function addAssessment(classId = "") {
+  const classOptions = classes()
     .map((schoolClass) => `<option value="${schoolClass.id}" ${schoolClass.id === classId ? "selected" : ""}>${schoolClass.grade} · ${schoolClass.id} — ${schoolClass.teacher}</option>`)
     .join("");
-  const subjectLocked = Boolean(selectedSubject);
-  modal("Add assessment", `<p class="muted">${subjectLocked ? `This assessment is being added to <b>${selectedSubject}</b>; the subject is locked for this workflow.` : "Choose the subject, assessment type, date and weighting."} Saving opens the learner score sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject" ${subjectLocked ? "disabled" : ""}><option>Mathematics</option><option>Physics</option><option>Life Sciences</option><option>English</option><option>Sesotho</option><option>Life Orientation</option><option>Computer Applications Technology</option><option>History</option><option>Natural Sciences</option><option>Social Sciences</option><option>Technology</option></select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option>${TERM}</option><option>Term 1</option><option>Term 3</option><option>Term 4</option></select></label><label>Date<input class="input" id="assessmentDate" type="date" max="${todayIso()}"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`);
-  if (selectedSubject && $("#assessmentSubject")) $("#assessmentSubject").value = selectedSubject;
+  modal("Add assessment", `<p class="muted">Set the assessment details first. Saving opens the full class mark sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject"><option>Mathematics</option><option>Physics</option><option>Life Sciences</option><option>English</option><option>Sesotho</option><option>Life Orientation</option><option>Computer Applications Technology</option><option>History</option><option>Natural Sciences</option><option>Social Sciences</option><option>Technology</option></select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option>${TERM}</option><option>Term 1</option><option>Term 3</option><option>Term 4</option></select></label><label>Date<input class="input" id="assessmentDate" type="date"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`);
 }
 function saveAssessment() {
   const classId = inputValue("assessmentClass");
@@ -3444,22 +5443,24 @@ function saveAssessment() {
   const schoolClass = classById(classId);
   if (!schoolClass) return;
   const id = `ASM-${Date.now().toString().slice(-7)}`;
-  persist((state) => state.assessments.unshift({
-    id,
-    class: classId,
-    grade: schoolClass.grade,
-    subject,
-    title,
-    type: inputValue("assessmentType"),
-    term: inputValue("assessmentTerm"),
-    date,
-    weighting: Number(inputValue("assessmentWeight")),
-    total: Number(inputValue("assessmentTotal")),
-    notes: inputValue("assessmentNotes"),
-    status: "draft",
-    submittedBy: "",
-    scores: {},
-  }));
+  persist((state) =>
+    state.assessments.unshift({
+      id,
+      class: classId,
+      grade: schoolClass.grade,
+      subject,
+      title,
+      type: inputValue("assessmentType"),
+      term: inputValue("assessmentTerm"),
+      date,
+      weighting: Number(inputValue("assessmentWeight")),
+      total: Number(inputValue("assessmentTotal")),
+      notes: inputValue("assessmentNotes"),
+      status: "draft",
+      submittedBy: "",
+      scores: {},
+    }),
+  );
   $$(".modal-backdrop").forEach((element) => element.remove());
   go(`test-scores.html?class=${classId}&subject=${encodeURIComponent(subject)}&assessment=${id}`);
 }
@@ -3473,8 +5474,31 @@ function setReportStatus(classId, status) {
     if (status === "compiled") report.compiledOn = todayLabel();
     if (status === "finalised") report.finalisedOn = todayLabel();
     if (status === "published") report.publishedOn = todayLabel();
-    if (status === "compiled" && schoolClass) state.notifications.unshift({ id: "NTF-REPORT-" + Date.now(), title: `${classId} learner reports ready for review`, description: `The clerk compiled ${TERM} reports for your class. Review every learner report before release.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "teacher", class: classId, recipient: schoolClass.teacher });
-    if (status === "published" && schoolClass) state.notifications.unshift({ id: "NTF-PARENT-REPORT-" + Date.now(), title: `${TERM} learner reports released`, description: `Your child’s ${TERM} academic report is now available to view and download.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "parents", class: schoolClass.id });
+    if (status === "compiled" && schoolClass)
+      state.notifications.unshift({
+        id: "NTF-REPORT-" + Date.now(),
+        title: `${classId} learner reports ready for review`,
+        description: `The clerk compiled ${TERM} reports for your class. Review every learner report before release.`,
+        category: "Reports",
+        priority: "Medium",
+        createdAt: notificationTimestamp(),
+        read: false,
+        scope: "teacher",
+        class: classId,
+        recipient: schoolClass.teacher,
+      });
+    if (status === "published" && schoolClass)
+      state.notifications.unshift({
+        id: "NTF-PARENT-REPORT-" + Date.now(),
+        title: `${TERM} learner reports released`,
+        description: `Your child’s ${TERM} academic report is now available to view and download.`,
+        category: "Reports",
+        priority: "Medium",
+        createdAt: notificationTimestamp(),
+        read: false,
+        scope: "parents",
+        class: schoolClass.id,
+      });
   });
   render();
 }
@@ -3490,12 +5514,32 @@ function reviewLearnerReport(classId, learnerId) {
 function releaseLearnerReport(classId, learnerId) {
   persist((state) => {
     const report = state.reports.find((item) => item.class === classId);
-    const learner = state.learners.find((item) => item.id === learnerId && item.class === classId);
-    if (!report || !learner || !report.learnerReviews?.[learnerId] || !["finalised", "published"].includes(report.status)) return;
+    const learner = state.learners.find(
+      (item) => item.id === learnerId && item.class === classId,
+    );
+    if (
+      !report ||
+      !learner ||
+      !report.learnerReviews?.[learnerId] ||
+      !["finalised", "published"].includes(report.status)
+    )
+      return;
     report.releasedLearners = report.releasedLearners || {};
     report.releasedLearners[learnerId] = todayLabel();
-    state.notifications.unshift({ id: "NTF-LEARNER-REPORT-" + Date.now(), title: `${TERM} report available for ${learner.name}`, description: `${learner.name}'s reviewed term report is ready to view and download.`, category: "Reports", priority: "Medium", createdAt: notificationTimestamp(), read: false, scope: "parents", learnerId });
-    const total = state.learners.filter((item) => item.class === classId).length;
+    state.notifications.unshift({
+      id: "NTF-LEARNER-REPORT-" + Date.now(),
+      title: `${TERM} report available for ${learner.name}`,
+      description: `${learner.name}'s reviewed term report is ready to view and download.`,
+      category: "Reports",
+      priority: "Medium",
+      createdAt: notificationTimestamp(),
+      read: false,
+      scope: "parents",
+      learnerId,
+    });
+    const total = state.learners.filter(
+      (item) => item.class === classId,
+    ).length;
     if (Object.keys(report.releasedLearners).length >= total) {
       report.status = "published";
       report.publishedOn = todayLabel();
@@ -3538,32 +5582,58 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
   if (!input || !input.value.trim()) return;
   const text = input.value.trim();
   if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
-    const child = role() === "parent"
-      ? parentLearner()
-      : getState().parentChat?.[Number(chatIndex) || 0] && learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
-    const { data: { session } } = await window.schoolshieldSupabase.auth.getSession();
+    const child =
+      role() === "parent"
+        ? parentLearner()
+        : getState().parentChat?.[Number(chatIndex) || 0] &&
+          learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
+    const {
+      data: { session },
+    } = await window.schoolshieldSupabase.auth.getSession();
     const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
     const response = await fetch(`${config.url}/functions/v1/parent-chat`, {
       method: "POST",
-      headers: { apikey: config.publishableKey, Authorization: `Bearer ${session?.access_token || ""}`, "Content-Type": "application/json" },
+      headers: {
+        apikey: config.publishableKey,
+        Authorization: `Bearer ${session?.access_token || ""}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({ learner_id: child?.id, text }),
     });
     const result = await response.json().catch(() => ({}));
-    if (!response.ok) return modal("Message not sent", `<p class="muted">${result.error || "Please try again."}</p>`);
+    if (!response.ok)
+      return modal(
+        "Message not sent",
+        `<p class="muted">${result.error || "Please try again."}</p>`,
+      );
     await refreshCloudWorkspace(true);
     if (role() === "teacher") render();
     return;
   }
   if (Array.isArray(getState()[storeKey])) {
     persist((state) => {
-      const conversation = state[storeKey][Number(chatIndex)] || state[storeKey][0];
-      if (conversation) conversation.messages.push({ from: sender, sender: userName(), text, date: todayLabel(), sentAt: new Date().toISOString() });
+      const conversation =
+        state[storeKey][Number(chatIndex)] || state[storeKey][0];
+      if (conversation)
+        conversation.messages.push({
+          from: sender,
+          sender: userName(),
+          text,
+          date: todayLabel(),
+          sentAt: new Date().toISOString(),
+        });
     });
   } else {
     persist((state) => {
       state.chatExtras = state.chatExtras || {};
       state.chatExtras[storeKey] = state.chatExtras[storeKey] || [];
-      state.chatExtras[storeKey].push({ from: sender, sender: userName(), text, date: todayLabel(), sentAt: new Date().toISOString() });
+      state.chatExtras[storeKey].push({
+        from: sender,
+        sender: userName(),
+        text,
+        date: todayLabel(),
+        sentAt: new Date().toISOString(),
+      });
     });
   }
   render();
@@ -3652,63 +5722,161 @@ function render() {
 }
 
 function accountRequests() {
-  return shell(`<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends an invitation email; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`, "Account Requests");
+  return shell(
+    `<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends an invitation email; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`,
+    "Account Requests",
+  );
 }
 
 async function loadAccountRequestDashboardAlert() {
   const client = window.schoolshieldSupabase;
   if (!client || !["principal", "clerk"].includes(role())) return;
-  const { count } = await client.from("account_request_notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+  const { count } = await client
+    .from("account_request_notifications")
+    .select("id", { count: "exact", head: true })
+    .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = count || 0;
   if (!count || page() !== "dashboard") return;
   const content = $(".content");
   if (!content || $("#accountApprovalDashboardAlert")) return;
-  content.insertAdjacentHTML("afterbegin", `<section class="panel" id="accountApprovalDashboardAlert" style="border-left:4px solid #e6a400"><div class="panel-head"><div><span class="pill">Action required</span><h3>${count} new account request${count === 1 ? "" : "s"}</h3><p>A parent, teacher or security officer is waiting for approval.</p></div><a class="btn primary" href="account-requests.html">Review requests</a></div></section>`);
+  content.insertAdjacentHTML(
+    "afterbegin",
+    `<section class="panel" id="accountApprovalDashboardAlert" style="border-left:4px solid #e6a400"><div class="panel-head"><div><span class="pill">Action required</span><h3>${count} new account request${count === 1 ? "" : "s"}</h3><p>A parent, teacher or security officer is waiting for approval.</p></div><a class="btn primary" href="account-requests.html">Review requests</a></div></section>`,
+  );
 }
 
 async function loadAccountRequests() {
-  const client = window.schoolshieldSupabase, rows = $("#accountRequestRows");
+  const client = window.schoolshieldSupabase,
+    rows = $("#accountRequestRows");
   if (!client || !rows) return;
-  const { data, error } = await client.from("account_requests").select("id, display_name, email, requested_role, created_at").eq("status", "pending").order("created_at");
-  await client.from("account_request_notifications").update({ read_at: new Date().toISOString() }).is("read_at", null);
+  const { data, error } = await client
+    .from("account_requests")
+    .select("id, display_name, email, requested_role, created_at")
+    .eq("status", "pending")
+    .order("created_at");
+  await client
+    .from("account_request_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = 0;
-  if (error) { rows.innerHTML = `<tr><td colspan="5" class="muted">${error.message}</td></tr>`; return; }
-  const roles = ["parent", "teacher", "security", "sgb", "deputy", "clerk", "principal"];
-  rows.innerHTML = data?.length ? data.map((request) => `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`).join("") : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
-  $$('[data-action="approve-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
-  $$('[data-action="reject-account-request"]', rows).forEach((button) => button.onclick = () => action(button.dataset.action, button));
+  if (error) {
+    rows.innerHTML = `<tr><td colspan="5" class="muted">${error.message}</td></tr>`;
+    return;
+  }
+  const roles = [
+    "parent",
+    "teacher",
+    "security",
+    "sgb",
+    "deputy",
+    "clerk",
+    "principal",
+  ];
+  rows.innerHTML = data?.length
+    ? data
+        .map(
+          (request) =>
+            `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`,
+        )
+        .join("")
+    : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
+  $$('[data-action="approve-account-request"]', rows).forEach(
+    (button) => (button.onclick = () => action(button.dataset.action, button)),
+  );
+  $$('[data-action="reject-account-request"]', rows).forEach(
+    (button) => (button.onclick = () => action(button.dataset.action, button)),
+  );
 }
 
 async function approveAccountRequest(id, delivery = "email") {
-  const client = window.schoolshieldSupabase, approvedRole = $(`[data-approval-role="${id}"]`)?.value;
+  const client = window.schoolshieldSupabase,
+    approvedRole = $(`[data-approval-role="${id}"]`)?.value;
   if (!client || !approvedRole) return;
-  const { data: { session } } = await client.auth.getSession();
+  const {
+    data: { session },
+  } = await client.auth.getSession();
   const setupPath = location.pathname.replace(/[^/]+$/, "account-setup.html");
-  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, role: approvedRole, delivery, redirect_to: `${location.origin}${setupPath}` }) });
+  const response = await fetch(
+    `${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session?.access_token || ""}`,
+        apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        request_id: id,
+        role: approvedRole,
+        delivery,
+        redirect_to: `${location.origin}${setupPath}`,
+      }),
+    },
+  );
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) return alert(result.error || "Could not approve this account.");
+  if (!response.ok)
+    return alert(result.error || "Could not approve this account.");
   if (delivery === "setup_link" && result.setup_link) {
     const link = String(result.setup_link);
     let trustedLink = "";
-    try { if (new URL(link).host === new URL(window.SCHOOLSHIELD_SUPABASE_CONFIG.url).host) trustedLink = link.replace(/&/g, "&amp;").replace(/"/g, "&quot;"); } catch (_) { /* Do not render an invalid link. */ }
+    try {
+      if (
+        new URL(link).host ===
+        new URL(window.SCHOOLSHIELD_SUPABASE_CONFIG.url).host
+      )
+        trustedLink = link.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+    } catch (_) {
+      /* Do not render an invalid link. */
+    }
     if (trustedLink) {
-      modal("Account approved", `<p><b>The account has been approved.</b> No email was sent. Open this one-time setup link to test the applicant onboarding page.</p><div class="modal-foot"><a class="btn primary" href="${trustedLink}" target="_blank" rel="noopener">Open setup page</a><button class="btn ghost" data-action="close-modal">Done</button></div>`);
-    } else alert("The account was approved, but the setup link could not be displayed safely.");
+      modal(
+        "Account approved",
+        `<p><b>The account has been approved.</b> No email was sent. Open this one-time setup link to test the applicant onboarding page.</p><div class="modal-foot"><a class="btn primary" href="${trustedLink}" target="_blank" rel="noopener">Open setup page</a><button class="btn ghost" data-action="close-modal">Done</button></div>`,
+      );
+    } else
+      alert(
+        "The account was approved, but the setup link could not be displayed safely.",
+      );
   } else {
-    modal("Account approved", `<p><b>The account has been approved.</b> An invitation was sent to the applicant's email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+    modal(
+      "Account approved",
+      `<p><b>The account has been approved.</b> An invitation was sent to the applicant's email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+    );
   }
   loadAccountRequests();
 }
 
 async function rejectAccountRequest(id) {
-  if (!confirm("Reject this account request? The applicant will not receive an invitation.")) return;
+  if (
+    !confirm(
+      "Reject this account request? The applicant will not receive an invitation.",
+    )
+  )
+    return;
   const client = window.schoolshieldSupabase;
   if (!client) return;
-  const { data: { session } } = await client.auth.getSession();
-  const response = await fetch(`${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`, { method: "POST", headers: { Authorization: `Bearer ${session?.access_token || ""}`, apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey, "Content-Type": "application/json" }, body: JSON.stringify({ request_id: id, action: "reject" }) });
+  const {
+    data: { session },
+  } = await client.auth.getSession();
+  const response = await fetch(
+    `${window.SCHOOLSHIELD_SUPABASE_CONFIG.url}/functions/v1/approve-account`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session?.access_token || ""}`,
+        apikey: window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ request_id: id, action: "reject" }),
+    },
+  );
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) return alert(result.error || "Could not reject this request.");
-  modal("Account request rejected", `<p>The request has been rejected and no account invitation was sent.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  if (!response.ok)
+    return alert(result.error || "Could not reject this request.");
+  modal(
+    "Account request rejected",
+    `<p>The request has been rejected and no account invitation was sent.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+  );
   loadAccountRequests();
 }
 
@@ -3749,7 +5917,11 @@ function initWorkspaceChrome() {
     const rail = compact || innerWidth <= 980;
     sidebar.style.transform = "";
     sidebar.style.width = rail ? "70px" : "252px";
-    sidebar.querySelectorAll(".brand div, .menu-title, .nav-item span:not(.icon):not(.nav-update), .role-card div:nth-child(2), .logout span").forEach((element) => (element.style.display = rail ? "none" : ""));
+    sidebar
+      .querySelectorAll(
+        ".brand div, .menu-title, .nav-item span:not(.icon):not(.nav-update), .role-card div:nth-child(2), .logout span",
+      )
+      .forEach((element) => (element.style.display = rail ? "none" : ""));
     main.style.marginLeft = rail ? "70px" : "252px";
     main.style.width = rail ? "calc(100% - 70px)" : "calc(100% - 252px)";
   };
@@ -3789,7 +5961,8 @@ function initWorkspaceChrome() {
   if (!$("#notificationCenter")) {
     const drawer = document.createElement("aside");
     drawer.id = "notificationCenter";
-    drawer.style.cssText = "display:none;position:fixed;right:22px;top:78px;width:min(380px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;z-index:60;background:#fff;border:1px solid #dce6e8;border-radius:14px;box-shadow:0 18px 45px rgba(4,34,42,.18);padding:14px";
+    drawer.style.cssText =
+      "display:none;position:fixed;right:22px;top:78px;width:min(380px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;z-index:60;background:#fff;border:1px solid #dce6e8;border-radius:14px;box-shadow:0 18px 45px rgba(4,34,42,.18);padding:14px";
     document.body.appendChild(drawer);
   }
 }
@@ -3804,24 +5977,47 @@ function toggleNotificationCenter() {
   drawer.style.display = opening ? "block" : "none";
   if (!opening) return;
   drawer.innerHTML = notificationCenterMarkup();
-  $$("[data-action]", drawer).forEach((button) => (button.onclick = () => action(button.dataset.action, button)));
-  $("#closeNotifications", drawer).onclick = () => (drawer.style.display = "none");
-  $("#drawerMarkRead", drawer).onclick = () => { const ids = new Set(notificationsForRole().map((notice) => notice.id)); persist((state) => state.notifications.forEach((notice) => { if (ids.has(notice.id)) notice.read = true; })); toggleNotificationCenter(); };
-  $("#notificationSearch", drawer).oninput = (event) => $$(".notification-center-item", drawer).forEach((item) => (item.style.display = item.innerText.toLowerCase().includes(event.target.value.toLowerCase()) ? "" : "none"));
+  $$("[data-action]", drawer).forEach(
+    (button) => (button.onclick = () => action(button.dataset.action, button)),
+  );
+  $("#closeNotifications", drawer).onclick = () =>
+    (drawer.style.display = "none");
+  $("#drawerMarkRead", drawer).onclick = () => {
+    const ids = new Set(notificationsForRole().map((notice) => notice.id));
+    persist((state) =>
+      state.notifications.forEach((notice) => {
+        if (ids.has(notice.id)) notice.read = true;
+      }),
+    );
+    toggleNotificationCenter();
+  };
+  $("#notificationSearch", drawer).oninput = (event) =>
+    $$(".notification-center-item", drawer).forEach(
+      (item) =>
+        (item.style.display = item.innerText
+          .toLowerCase()
+          .includes(event.target.value.toLowerCase())
+          ? ""
+          : "none"),
+    );
 }
 function bind() {
   initWorkspaceChrome();
   markRequiredFields(document);
   if (!window.__schoolshieldCloudRefreshListener) {
     window.__schoolshieldCloudRefreshListener = true;
-    const refreshWhenVisible = () => { if (document.visibilityState === "visible") refreshCloudWorkspace(true); };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshCloudWorkspace(true);
+    };
     window.addEventListener("focus", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
   }
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
   if (page() === "dashboard") {
-    const quickHeading = $$("h3").find((heading) => heading.textContent === "Quick access");
+    const quickHeading = $$("h3").find(
+      (heading) => heading.textContent === "Quick access",
+    );
     const quickPanel = quickHeading && quickHeading.closest("section");
     const dashboardPanels = $(".dashboard-grid");
     if (quickPanel && dashboardPanels) dashboardPanels.before(quickPanel);
@@ -3846,12 +6042,22 @@ function bind() {
   $$("[data-week-status]").forEach((box) => {
     box.onchange = () => {
       if (!box.checked) return;
-      $$(`[data-week-learner="${box.dataset.weekLearner}"][data-week-day="${box.dataset.weekDay}"]`).forEach((other) => { if (other !== box) other.checked = false; });
+      $$(
+        `[data-week-learner="${box.dataset.weekLearner}"][data-week-day="${box.dataset.weekDay}"]`,
+      ).forEach((other) => {
+        if (other !== box) other.checked = false;
+      });
     };
   });
   $("#markRead")?.addEventListener("click", () => {
-    const visibleIds = new Set(notificationsForRole().map((notice) => notice.id));
-    persist((state) => state.notifications.forEach((n) => { if (visibleIds.has(n.id)) n.read = true; }));
+    const visibleIds = new Set(
+      notificationsForRole().map((notice) => notice.id),
+    );
+    persist((state) =>
+      state.notifications.forEach((n) => {
+        if (visibleIds.has(n.id)) n.read = true;
+      }),
+    );
     render();
   });
   $$("[data-visitor]:not([data-action])").forEach(
@@ -3875,7 +6081,12 @@ function bind() {
   });
   $("#chatSearch")?.addEventListener("input", (event) => {
     const query = event.target.value.toLowerCase();
-    $$("[data-chat-contact]").forEach((contact) => (contact.style.display = contact.innerText.toLowerCase().includes(query) ? "" : "none"));
+    $$("[data-chat-contact]").forEach(
+      (contact) =>
+        (contact.style.display = contact.innerText.toLowerCase().includes(query)
+          ? ""
+          : "none"),
+    );
   });
   $("#exportCsv")?.addEventListener("click", exportCsv);
   $("#audienceSelect")?.addEventListener("change", (e) => {
@@ -3891,7 +6102,10 @@ function bind() {
     }
   });
   const messagePane = $("#messages");
-  if (messagePane) requestAnimationFrame(() => { messagePane.scrollTop = messagePane.scrollHeight; });
+  if (messagePane)
+    requestAnimationFrame(() => {
+      messagePane.scrollTop = messagePane.scrollHeight;
+    });
   setTimeout(showPendingSickNoticePopup, 0);
   setTimeout(showClerkAssessmentPopup, 0);
   setTimeout(showTeacherCriticalMarkPopup, 0);
@@ -3902,22 +6116,47 @@ function bind() {
 async function startWorkspace() {
   const client = window.schoolshieldSupabase;
   if (client) {
-    const { data: { session } } = await client.auth.getSession();
+    const {
+      data: { session },
+    } = await client.auth.getSession();
     if (!session?.user) return location.replace("login.html");
-    const { data: profile } = await client.from("profiles")
+    const { data: profile } = await client
+      .from("profiles")
       .select("role, display_name, school:schools(id, code, name)")
-      .eq("id", session.user.id).maybeSingle();
-    const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school;
+      .eq("id", session.user.id)
+      .maybeSingle();
+    const school = Array.isArray(profile?.school)
+      ? profile.school[0]
+      : profile?.school;
     if (!profile || !school) {
       await client.auth.signOut();
       return location.replace("login.html");
     }
-    let principalName = profile.role === "principal" ? profile.display_name : "";
+    let principalName =
+      profile.role === "principal" ? profile.display_name : "";
     if (!principalName) {
-      const { data: principalProfile } = await client.from("profiles").select("display_name").eq("school_id", school.id).eq("role", "principal").maybeSingle();
-      principalName = principalProfile?.display_name || `${school.name} Principal`;
+      const { data: principalProfile } = await client
+        .from("profiles")
+        .select("display_name")
+        .eq("school_id", school.id)
+        .eq("role", "principal")
+        .maybeSingle();
+      principalName =
+        principalProfile?.display_name || `${school.name} Principal`;
     }
-    sessionStorage.setItem("schoolshieldSession", JSON.stringify({ userId: session.user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, principalName, role: profile.role, displayName: profile.display_name, email: session.user.email }));
+    sessionStorage.setItem(
+      "schoolshieldSession",
+      JSON.stringify({
+        userId: session.user.id,
+        schoolId: school.id,
+        schoolCode: school.code,
+        schoolName: school.name,
+        principalName,
+        role: profile.role,
+        displayName: profile.display_name,
+        email: session.user.email,
+      }),
+    );
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
@@ -3926,14 +6165,24 @@ async function startWorkspace() {
     // full workspace channel. This lightweight fallback also keeps every open
     // portal current if a browser or network blocks realtime websockets.
     if (!window.schoolshieldWorkspaceRefreshTimer) {
-      window.schoolshieldWorkspaceRefreshTimer = setInterval(() => refreshCloudWorkspace(true), 15000);
+      window.schoolshieldWorkspaceRefreshTimer = setInterval(
+        () => refreshCloudWorkspace(true),
+        15000,
+      );
     }
     if (["principal", "clerk"].includes(profile.role)) {
-      const { count } = await client.from("account_request_notifications").select("id", { count: "exact", head: true }).is("read_at", null);
+      const { count } = await client
+        .from("account_request_notifications")
+        .select("id", { count: "exact", head: true })
+        .is("read_at", null);
       window.schoolshieldPendingAccountAlerts = count || 0;
     }
   }
-  if (!sessionStorage.getItem("schoolshieldSession") && !sessionStorage.getItem("schoolshieldRole")) return location.replace("login.html");
+  if (
+    !sessionStorage.getItem("schoolshieldSession") &&
+    !sessionStorage.getItem("schoolshieldRole")
+  )
+    return location.replace("login.html");
   render();
 }
 startWorkspace();
