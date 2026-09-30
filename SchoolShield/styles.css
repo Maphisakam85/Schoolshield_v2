@@ -696,6 +696,8 @@ a {
 
 .panel-head {
     display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px
@@ -740,8 +742,202 @@ a {
     border-bottom: 0
 }
 
+.report-row>span:first-child {
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: anywhere
+}
+
+.report-row>span>b {
+    display: block;
+    font-size: 13px;
+    line-height: 1.5
+}
+
+.report-row>span>small {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6
+}
+
+a.report-row {
+    padding: 16px 12px;
+    border-radius: 8px;
+    transition: background-color .15s
+}
+
+a.report-row:hover {
+    background: var(--bg)
+}
+
+a.report-row:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px
+}
+
+.flow-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 12px
+}
+
+.flow-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg)
+}
+
+.flow-index {
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--mint);
+    color: var(--green2);
+    font-size: 12px;
+    font-weight: 700
+}
+
+.flow-step>div {
+    min-width: 0
+}
+
+.flow-step b {
+    display: block;
+    font-size: 12px;
+    line-height: 1.5
+}
+
+.flow-step small {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6
+}
+
+@media (max-width: 540px) {
+    a.report-row {
+        flex-wrap: wrap;
+        gap: 8px 12px
+    }
+
+    a.report-row>span:first-child {
+        flex-basis: 65%
+    }
+}
+
 .overview-list>div>div {
     flex: 1
+}
+
+.class-performance-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(70px, .4fr));
+    gap: 16px;
+    padding: 18px 4px
+}
+
+.report-row .row-metrics b {
+    display: block;
+    font-size: 17px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums
+}
+
+.report-row .row-metrics small {
+    display: block;
+    margin-top: 5px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--muted)
+}
+
+.class-card + .class-card {
+    margin-top: 14px
+}
+
+.class-card-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px
+}
+
+.class-card-head small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.6
+}
+
+.class-metrics>div {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    min-width: 0
+}
+
+.class-metrics small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.5
+}
+
+.class-metrics b {
+    font-size: 20px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums
+}
+
+.class-card-foot {
+    flex-wrap: wrap;
+    gap: 12px
+}
+
+.parent-group + .parent-group {
+    margin-top: 28px
+}
+
+.parent-group-head {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg)
+}
+
+.parent-group-head b {
+    font-size: 14px;
+    line-height: 1.5
+}
+
+.parent-group-head small {
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--muted)
+}
+
+@media (max-width: 540px) {
+    .class-performance-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px
+    }
+
+    .class-performance-row>span:first-child {
+        grid-column: 1 / -1
+    }
 }
 
 .overview-list b {

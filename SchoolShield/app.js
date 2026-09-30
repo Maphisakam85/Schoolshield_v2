@@ -300,11 +300,16 @@ function emptyWorkspace() {
 }
 
 /* ------------------------------ state layer ------------------------------ */
+function workspaceCacheKey() {
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  return `schoolshield:${session.schoolCode || SCHOOL.code}:${session.userId || "signed-out"}`;
+}
+
 function getState() {
   let stored = null;
   try {
     stored = JSON.parse(
-      localStorage.getItem(`schoolshield:${SCHOOL.code}`) || "null",
+      sessionStorage.getItem(workspaceCacheKey()) || "null",
     );
   } catch (err) {
     stored = null;
@@ -330,8 +335,8 @@ function getState() {
 }
 
 function save(state) {
-  localStorage.setItem(`schoolshield:${SCHOOL.code}`, JSON.stringify(state));
-  if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
+  sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(state));
+  if (role() !== "parent" && window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
     const session = JSON.parse(
       sessionStorage.getItem("schoolshieldSession") || "{}",
     );
@@ -375,21 +380,13 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   );
   if (!client || !session.schoolId) return false;
   if (session.role === "parent") {
-    const {
-      data: { session: authSession },
-    } = await client.auth.getSession();
-    if (!authSession?.access_token) return false;
-    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await fetch(
-      `${config.url}/functions/v1/parent-workspace`,
-      {
-        method: "POST",
-        headers: {
-          apikey: config.publishableKey,
-          Authorization: `Bearer ${authSession.access_token}`,
-        },
-      },
-    );
+    let response;
+    try {
+      response = await window.schoolshieldFunctionRequest("parent-workspace");
+    } catch (error) {
+      window.schoolshieldParentWorkspaceError = error.message;
+      return false;
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.payload) {
       window.schoolshieldParentWorkspaceError =
@@ -401,10 +398,10 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
       return false;
     }
     window.schoolshieldParentWorkspaceError = "";
-    const key = `schoolshield:${session.schoolCode}`;
+    const key = workspaceCacheKey();
     const incoming = JSON.stringify(data.payload);
-    const changed = localStorage.getItem(key) !== incoming;
-    localStorage.setItem(key, incoming);
+    const changed = sessionStorage.getItem(key) !== incoming;
+    sessionStorage.setItem(key, incoming);
     window.schoolshieldParentLearnerLinked = Boolean(data.linked);
     if (changed && renderAfterRefresh) render();
     return changed;
@@ -416,13 +413,41 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     .maybeSingle();
   if (error || !data?.payload || !Object.keys(data.payload).length)
     return false;
-  const key = `schoolshield:${session.schoolCode}`;
+  const key = workspaceCacheKey();
   const incoming = JSON.stringify(data.payload);
-  const changed = localStorage.getItem(key) !== incoming;
-  localStorage.setItem(key, incoming);
+  const changed = sessionStorage.getItem(key) !== incoming;
+  sessionStorage.setItem(key, incoming);
   window.schoolshieldCloudWorkspaceReady = true;
   if (changed && renderAfterRefresh) render();
   return changed;
+}
+
+// Keep receiving even when Realtime is unavailable (parents use a restricted
+// endpoint). Schedule after completion so slow requests never overlap.
+function startWorkspaceAutoRefresh() {
+  if (window.schoolshieldAutoRefreshStarted) return;
+  window.schoolshieldAutoRefreshStarted = true;
+  let pending = null;
+  const refresh = () => {
+    if (document.visibilityState === "hidden") return Promise.resolve();
+    if (!pending) {
+      pending = refreshCloudWorkspace(true)
+        .catch((error) => console.warn("Automatic workspace refresh failed", error.message))
+        .finally(() => { pending = null; });
+    }
+    return pending;
+  };
+  const schedule = () => {
+    const chatPage = ["parent-chat", "teacher-chat", "sgb-chat"].includes(page());
+    window.schoolshieldWorkspaceRefreshTimer = setTimeout(async () => {
+      await refresh();
+      schedule();
+    }, chatPage ? 3000 : 15000);
+  };
+  window.addEventListener("focus", refresh);
+  window.addEventListener("online", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  schedule();
 }
 
 async function refreshWorkspaceManually() {
@@ -463,10 +488,10 @@ function startWorkspaceRealtime() {
       (change) => {
         const payload = change.new?.payload;
         if (!payload || typeof payload !== "object") return;
-        const key = `schoolshield:${session.schoolCode}`;
+        const key = workspaceCacheKey();
         const incoming = JSON.stringify(payload);
-        if (localStorage.getItem(key) === incoming) return;
-        localStorage.setItem(key, incoming);
+        if (sessionStorage.getItem(key) === incoming) return;
+        sessionStorage.setItem(key, incoming);
         render();
       },
     )
@@ -1067,7 +1092,7 @@ function dashboard() {
     .slice(0, 5)
     .map((c) => {
       const st = classStats(c.id);
-      return `<div class="report-row" style="display:grid;grid-template-columns:minmax(220px,1fr) 110px 100px;gap:18px;align-items:center;padding:15px 4px"><span><b style="font-size:12px">${c.grade} · ${c.id}</b><small style="display:block;margin-top:4px">${c.teacher} · ${st.learners} learners</small></span><span class="row-metrics"><b>${st.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${st.passRate}%</b><small>pass rate</small></span></div>`;
+      return `<div class="report-row class-performance-row"><span><b>${c.grade} · ${c.id}</b><small>${c.teacher} · ${st.learners} learners</small></span><span class="row-metrics"><b>${st.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${st.passRate}%</b><small>pass rate</small></span></div>`;
     })
     .join("");
 
@@ -5579,7 +5604,7 @@ function sendAnnouncement() {
 
 async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
   const input = $("#chatInput");
-  if (!input || !input.value.trim()) return;
+  if (!input || !input.value.trim() || window.schoolshieldChatSending) return;
   const text = input.value.trim();
   if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
     const child =
@@ -5587,27 +5612,35 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
         ? parentLearner()
         : getState().parentChat?.[Number(chatIndex) || 0] &&
           learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
-    const {
-      data: { session },
-    } = await window.schoolshieldSupabase.auth.getSession();
-    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await fetch(`${config.url}/functions/v1/parent-chat`, {
-      method: "POST",
-      headers: {
-        apikey: config.publishableKey,
-        Authorization: `Bearer ${session?.access_token || ""}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ learner_id: child?.id, text }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok)
-      return modal(
-        "Message not sent",
-        `<p class="muted">${result.error || "Please try again."}</p>`,
-      );
-    await refreshCloudWorkspace(true);
-    if (role() === "teacher") render();
+    const button = $("[data-action='send-message']");
+    window.schoolshieldChatSending = true;
+    if (button) button.disabled = true;
+    try {
+      if (!child?.id) throw new Error("This conversation is not linked to a learner. Refresh the page and select the parent again.");
+      if (text.length > 2000) throw new Error("Keep your message under 2,000 characters.");
+      // Finish queued staff changes before the endpoint appends to the workspace.
+      if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
+      const response = await window.schoolshieldFunctionRequest("parent-chat", { learner_id: child.id, text });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "The message could not be saved. Please try again.");
+      if (input.value.trim() === text) input.value = "";
+      const currentInput = $("#chatInput");
+      if (currentInput?.value.trim() === text) currentInput.value = "";
+      try {
+        await refreshCloudWorkspace(true);
+      } catch (error) {
+        modal("Message sent", '<p class="muted">Your message was saved. Refresh the conversation to load the latest messages.</p>');
+      }
+    } catch (error) {
+      const message = String(error.message || "Check your connection and try again.")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      modal("Message not sent", `<p class="muted">${message}</p>`);
+    } finally {
+      window.schoolshieldChatSending = false;
+      if (button) button.disabled = false;
+      const currentButton = $("[data-action='send-message']");
+      if (currentButton) currentButton.disabled = false;
+    }
     return;
   }
   if (Array.isArray(getState()[storeKey])) {
@@ -5680,6 +5713,13 @@ function filterTable(query, selector) {
 
 /* --------------------------------- render -------------------------------- */
 function render() {
+  const chatInput = $("#chatInput");
+  const oldMessages = $(".messages");
+  const oldScrollTop = oldMessages?.scrollTop;
+  const readingHistory = oldMessages && oldMessages.scrollHeight - oldMessages.clientHeight - oldMessages.scrollTop > 60;
+  const chatDraft = chatInput?.value;
+  const chatFocused = chatInput && document.activeElement === chatInput;
+  const chatSelection = chatInput ? [chatInput.selectionStart, chatInput.selectionEnd] : null;
   if (!allowed()) {
     const first = ACCESS[role()]?.[0] || "dashboard";
     if (page() !== first) {
@@ -5719,6 +5759,18 @@ function render() {
   else html = dashboard();
   $("#app").innerHTML = html;
   bind();
+  const nextChatInput = $("#chatInput");
+  if (nextChatInput && chatDraft !== undefined) {
+    nextChatInput.value = chatDraft;
+    if (chatFocused) {
+      nextChatInput.focus();
+      nextChatInput.setSelectionRange(...chatSelection);
+    }
+  }
+  if (readingHistory) {
+    const nextMessages = $(".messages");
+    if (nextMessages) requestAnimationFrame(() => { nextMessages.scrollTop = oldScrollTop; });
+  }
 }
 
 function accountRequests() {
@@ -6004,14 +6056,6 @@ function toggleNotificationCenter() {
 function bind() {
   initWorkspaceChrome();
   markRequiredFields(document);
-  if (!window.__schoolshieldCloudRefreshListener) {
-    window.__schoolshieldCloudRefreshListener = true;
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refreshCloudWorkspace(true);
-    };
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-  }
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
   if (page() === "dashboard") {
@@ -6101,7 +6145,7 @@ function bind() {
       if (sendButton) action("send-message", sendButton);
     }
   });
-  const messagePane = $("#messages");
+  const messagePane = $(".messages");
   if (messagePane)
     requestAnimationFrame(() => {
       messagePane.scrollTop = messagePane.scrollHeight;
@@ -6161,15 +6205,7 @@ async function startWorkspace() {
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
     startWorkspaceRealtime();
-    // Parents use the restricted parent-workspace endpoint rather than the
-    // full workspace channel. This lightweight fallback also keeps every open
-    // portal current if a browser or network blocks realtime websockets.
-    if (!window.schoolshieldWorkspaceRefreshTimer) {
-      window.schoolshieldWorkspaceRefreshTimer = setInterval(
-        () => refreshCloudWorkspace(true),
-        15000,
-      );
-    }
+    startWorkspaceAutoRefresh();
     if (["principal", "clerk"].includes(profile.role)) {
       const { count } = await client
         .from("account_request_notifications")
