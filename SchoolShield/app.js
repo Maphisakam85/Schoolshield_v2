@@ -1627,6 +1627,14 @@ function testScoresDetail(classId, readOnly) {
 }
 
 /* Teacher: capture and submit marks for their own classes. */
+function scoreRating(score) {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return "Not assessed";
+  if (value < 40) return "Critical";
+  if (value < 50) return "At risk";
+  if (value < 70) return "Satisfactory";
+  return "Good";
+}
 function testScoresTeacher() {
   const mine = teacherClasses(userName());
   const classId = param("class") || (mine[0] && mine[0].id);
@@ -1638,7 +1646,54 @@ function testScoresTeacher() {
       "You have no class assigned to capture marks for.",
       '<section class="panel"><p class="muted">No class assigned.</p></section>',
     );
-  const assessment = assessmentsForClass(classId)[0];
+  const gradeNumber = Number(String(c.grade).match(/\d+/)?.[0]);
+  const subjects = gradeNumber <= 9 ? SUBJECTS_BY_PHASE.junior : SUBJECTS_BY_PHASE.senior;
+  const selectedSubject = subjects.includes(param("subject")) ? param("subject") : "";
+  const selectedAssessments = selectedSubject ? assessmentsForClass(classId).filter((item) => item.subject === selectedSubject) : [];
+  const assessment = selectedAssessments.find((item) => item.id === param("assessment"));
+  const subjectSummary = subjects.map((subject) => {
+    const items = assessmentsForClass(classId).filter((item) => item.subject === subject);
+    const average = items.length ? Math.round(mean(items.map(assessmentAverage))) : null;
+    const critical = learnersInClass(classId).filter((learner) => {
+      const marks = items.map((item) => item.scores?.[learner.id]).filter((mark) => mark !== undefined);
+      return marks.length && mean(marks) < 40;
+    }).length;
+    return `<a class="report-row" style="text-decoration:none;color:inherit" href="test-scores.html?class=${classId}&subject=${encodeURIComponent(subject)}"><span><b>${subject}</b><small>${items.length} assessment${items.length === 1 ? "" : "s"} · ${average === null ? "No scores yet" : `average ${average}%`}</small></span><span>${critical ? badge(`${critical} critical`) : badge("On track")}</span></a>`;
+  }).join("");
+  const quickClassPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px">${mine.map((m) => `<a href="test-scores.html?class=${m.id}" style="display:inline-flex;padding:9px 13px;border-radius:9px;border:1px solid ${m.id === classId ? "#087550" : "#d4e0e3"};background:${m.id === classId ? "#087550" : "#fff"};color:${m.id === classId ? "#fff" : "#14343b"};font-size:12px;font-weight:700;text-decoration:none">${m.grade} · ${m.id}</a>`).join("")}</div>`;
+  if (!selectedSubject) return generic("Test Scores", "Teacher workspace", "Choose a subject to review its assessments and learner progress.", `${quickClassPicker}<section class="panel"><div class="panel-head"><div><h3>${c.grade} · ${c.id} subjects</h3><p>Each subject opens its own assessment history. Learner marks appear only after selecting an assessment.</p></div><button class="btn primary" data-action="add-assessment" data-class="${classId}">+ New assessment score</button></div>${subjectSummary}</section>`);
+  if (!param("assessment") || !assessment) {
+    const assessmentRows = selectedAssessments.map((item) => {
+      const average = Object.keys(item.scores || {}).length ? Math.round(assessmentAverage(item)) : null;
+      const critical = Object.values(item.scores || {}).filter((score) => Number(score) < 40).length;
+      const typeLabel = item.type || "Assessment";
+      const weightLabel = Number.isFinite(Number(item.weighting)) ? `Weight ${item.weighting}%` : "Weight not recorded";
+      return `<a class="report-row" style="text-decoration:none;color:inherit" href="test-scores.html?class=${classId}&subject=${encodeURIComponent(selectedSubject)}&assessment=${item.id}"><span><b>${item.title}</b><small>${typeLabel} · ${item.date || "Date not recorded"} · ${weightLabel}</small></span><span>${average === null ? badge("No scores") : badge(`Average ${average}%`)} ${critical ? badge(`${critical} critical`) : ""}</span></a>`;
+    }).join("") || '<p class="muted">No assessments have been added for this subject yet.</p>';
+    const supportRows = learnersInClass(classId).map((learner) => {
+      const marks = selectedAssessments.map((item) => item.scores?.[learner.id]).filter((mark) => mark !== undefined);
+      const average = marks.length ? Math.round(mean(marks)) : null;
+      return { learner, average };
+    }).filter((item) => item.average !== null && item.average < 50).sort((a, b) => a.average - b.average).map(({ learner, average }) => `<div class="report-row"><span><b>${learner.name}</b><small>${learner.id}</small></span><span>${badge(`${average}% · ${scoreRating(average)}`)}</span></div>`).join("") || '<p class="muted">No learners currently need additional support in this subject.</p>';
+    return generic("Test Scores", "Teacher workspace", "Review this subject's assessments and learner support needs.", `${backLink("All subjects", `test-scores.html?class=${classId}`)}<section class="panel"><div class="panel-head"><div><h3>${selectedSubject}</h3><p>Choose an assessment to capture or review learner marks.</p></div><button class="btn primary" data-action="add-assessment" data-class="${classId}" data-subject="${selectedSubject}">+ New assessment</button></div>${assessmentRows}</section><section class="panel"><div class="panel-head"><div><h3>Learners needing support</h3><p>Only learners below 50% are shown. Critical is below 40%.</p></div></div>${supportRows}</section>`);
+  }
+  const assessmentValueRows = learnersInClass(classId).map((learner) => {
+    const score = assessment.scores && assessment.scores[learner.id] !== undefined ? assessment.scores[learner.id] : "";
+    return `<div class="score-line" style="display:grid;grid-template-columns:minmax(220px,1fr) 96px 18px;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #e3e9eb"><span><b>${learner.name}</b><small style="display:block;margin-top:3px">${learner.id}</small></span><input class="input score" style="margin:0;text-align:center" inputmode="numeric" aria-label="${learner.name} mark" data-score="${learner.id}" value="${score}"><span class="pct">%</span></div>`;
+  }).join("");
+  const assessmentSubmitted = assessment.status === "submitted";
+  const selectedTypeLabel = assessment.type || "Assessment";
+  const selectedWeightLabel = Number.isFinite(Number(assessment.weighting)) ? `Weight ${assessment.weighting}%` : "Weight not recorded";
+  return generic("Test Scores", "Teacher workspace", "Capture marks for this assessment.", `${backLink(selectedSubject + " assessments", `test-scores.html?class=${classId}&subject=${encodeURIComponent(selectedSubject)}`)}<section class="panel"><div class="panel-head"><div><h3>${assessment.subject} — ${assessment.title}</h3><p>${selectedTypeLabel} · ${assessment.date || "Date not recorded"} · ${selectedWeightLabel} · ${learnersInClass(classId).length} learners</p></div>${statusBadge(assessment.status || "draft")}</div><div class="score-list">${assessmentValueRows}</div><div class="panel-foot"><button class="btn primary" data-action="submit-marks" data-class="${classId}" data-assessment="${assessment.id}" ${assessmentSubmitted ? "disabled" : ""}>${assessmentSubmitted ? "Marks submitted" : "Submit scores to clerk"}</button></div></section>`);
+  const pastAssessments = selectedAssessments.map((item) => `<a class="btn small" href="test-scores.html?class=${classId}&subject=${encodeURIComponent(selectedSubject)}&assessment=${item.id}">${item.title} · ${item.date}</a>`).join("") || '<span class="muted">No prior assessments for this subject.</span>';
+  const learnerRatings = learnersInClass(classId).map((learner) => {
+    const ratings = subjects.map((subject) => {
+      const marks = assessmentsForClass(classId).filter((item) => item.subject === subject).map((item) => item.scores?.[learner.id]).filter((mark) => mark !== undefined);
+      const average = marks.length ? Math.round(mean(marks)) : null;
+      return `<small style="display:inline-block;margin:2px 7px 2px 0"><b>${subject}:</b> ${average === null ? "—" : average + "%"} ${badge(scoreRating(average))}</small>`;
+    }).join("");
+    return `<div class="report-row"><span><b>${learner.name}</b><small>${learner.id}</small></span><span>${ratings}</span></div>`;
+  }).join("");
   const valueRows = learnersInClass(classId)
     .map((l) => {
       const score =
@@ -1659,8 +1714,8 @@ function testScoresTeacher() {
   return generic(
     "Test Scores",
     "Teacher workspace",
-    "Capture marks for your class and submit them to the clerk for report compilation.",
-    `<div class="class-picker">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${c.grade} · ${c.id} — ${assessment ? assessment.subject + " " + assessment.title : "No assessment"}</h3><p>${assessment ? assessment.term + " · " + learnersInClass(classId).length + " learners" : "No assessment scheduled"}</p></div>${report ? statusBadge(report.status) : ""}</div><div class="score-list">${valueRows}</div><div class="panel-foot"><button class="btn primary" data-action="submit-marks" data-class="${classId}" ${submitted ? "disabled" : ""}>${submitted ? "Marks submitted" : "Submit marks to clerk"}</button></div></section>${submitted ? '<p class="muted">Marks have been submitted. The clerk will compile the learner reports and return them to you for review.</p>' : ""}`,
+    "Choose a subject, review its previous assessments, then capture and submit one assessment at a time.",
+    `<div class="class-picker">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${c.grade} · ${c.id} subject summary</h3><p>Critical flags identify learners below 40% in a subject.</p></div><button class="btn primary" data-action="add-assessment" data-class="${classId}" data-subject="${selectedSubject}">+ New assessment score</button></div>${subjectSummary}</section><section class="panel"><div class="panel-head"><div><h3>Learner ratings across subjects</h3><p>Good: 70%+ · Satisfactory: 50–69% · At risk: 40–49% · Critical: below 40%.</p></div></div>${learnerRatings}</section><section class="panel"><div class="panel-head"><div><h3>${selectedSubject} past assessments</h3><p>Select one assessment to view or edit its learner scores.</p></div></div><div class="action-row" style="flex-wrap:wrap">${pastAssessments}</div></section><section class="panel"><div class="panel-head"><div><h3>${assessment ? assessment.subject + " — " + assessment.title : "No assessment selected"}</h3><p>${assessment ? assessment.type + " · " + assessment.date + " · Weight " + assessment.weighting + "% · " + learnersInClass(classId).length + " learners" : "Create an assessment for this subject to capture scores."}</p></div>${report ? statusBadge(report.status) : ""}</div><div class="score-list">${valueRows}</div><div class="panel-foot"><button class="btn primary" data-action="submit-marks" data-class="${classId}" data-assessment="${assessment ? assessment.id : ""}" ${submitted ? "disabled" : ""}>${submitted ? "Marks submitted" : "Submit scores to clerk"}</button></div></section>`,
   );
 }
 
@@ -4084,23 +4139,19 @@ function action(type, el) {
   else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
-  else if (type === "submit-marks") saveTestScores(classId, "teacher");
-  else if (type === "update-scores")
-    saveTestScores(classId, "clerk", el.dataset.assessment);
+  else if (type === "submit-marks") saveTestScores(classId, "teacher", el.dataset.assessment);
+  else if (type === "update-scores") saveTestScores(classId, "clerk", el.dataset.assessment);
+  else if (type === "notify-parent-critical-subject") notifyParentCriticalSubject(el.dataset.assessment, learnerId);
   else if (type === "save-attendance") saveAttendance(classId);
   else if (type === "open-attendance-day")
     go(
       `attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || new Date().toISOString().slice(0, 10)}`,
     );
   else if (type === "save-daily-attendance") saveDailyAttendance(classId);
-  else if (type === "delete-daily-attendance")
-    deleteDailyAttendance(classId, el.dataset.date);
-  else if (type === "submit-daily-week")
-    submitDailyWeek(classId, el.dataset.week);
-  else if (type === "save-weekly-attendance")
-    saveWeeklyAttendance(classId, el.dataset.week);
-  else if (type === "download-attendance-week")
-    downloadAttendanceWeek(classId, el.dataset.week);
+  else if (type === "delete-daily-attendance") deleteDailyAttendance(classId, el.dataset.date);
+  else if (type === "submit-daily-week") submitDailyWeek(classId, el.dataset.week);
+  else if (type === "save-weekly-attendance") saveWeeklyAttendance(classId, el.dataset.week);
+  else if (type === "download-attendance-week") downloadAttendanceWeek(classId, el.dataset.week);
   else if (type === "add-assessment") addAssessment(classId);
   else if (type === "assign-teacher") assignTeacher();
   else if (type === "submit-teacher-assignment") submitTeacherAssignment();
@@ -4238,18 +4289,10 @@ function alertToast() {
 }
 function notificationsForRole() {
   const notices = getState().notifications;
-  if (["principal", "deputy"].includes(role()))
-    return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "teacher")
-    return notices.filter(
-      (notice) =>
-        notice.scope !== "leadership" &&
-        (notice.scope !== "teacher" || notice.recipient === userName()),
-    );
-  if (role() !== "parent")
-    return notices.filter(
-      (notice) => notice.scope !== "teacher" && notice.scope !== "leadership",
-    );
+  if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
+  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
+  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
+  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
   const child = parentLearner();
   return notices.filter(
     (notice) =>
@@ -5179,21 +5222,58 @@ function saveTestScores(classId, mode, assessmentId = "") {
     }
     if (raw !== "") scores[input.dataset.score] = value;
   }
+  let savedAssessment = null;
+  let criticalLearners = [];
   persist((state) => {
     const assessment =
       state.assessments.find((a) => a.id === assessmentId) ||
       state.assessments.find((a) => a.class === classId);
     if (assessment) {
       assessment.scores = { ...assessment.scores, ...scores };
+      criticalLearners = Object.entries(assessment.scores || {}).filter(([, score]) => Number(score) < 40).map(([learnerId, score]) => {
+        const learner = state.learners.find((item) => item.id === learnerId);
+        return learner ? { id: learner.id, name: learner.name, score: Number(score) } : null;
+      }).filter(Boolean);
+      const classTeacher = state.classes.find((item) => item.id === classId)?.teacher;
+      criticalLearners.forEach((learner) => {
+        const alreadyAlerted = state.notifications.some((notice) => notice.category === "Critical mark" && notice.scope === "teacher" && notice.assessmentId === assessment.id && notice.learnerId === learner.id);
+        if (!alreadyAlerted) state.notifications.unshift({
+          id: `NTF-CRITICAL-${Date.now().toString().slice(-6)}-${learner.id}`,
+          createdAt: notificationTimestamp(),
+          category: "Critical mark",
+          scope: "teacher",
+          recipient: classTeacher,
+          priority: "High",
+          title: `Critical ${assessment.subject} mark requires attention`,
+          description: `${learner.name} scored ${learner.score}% in ${assessment.title}. Decide whether to contact the learner's parent.`,
+          class: classId,
+          assessmentId: assessment.id,
+          learnerId: learner.id,
+          read: false,
+        });
+      });
       if (mode === "teacher") {
         assessment.status = "submitted";
         assessment.submittedBy = userName();
         assessment.date = todayLabel();
+        state.notifications.unshift({
+          id: "NTF-MARKS-" + Date.now().toString().slice(-6),
+          createdAt: notificationTimestamp(),
+          category: "Assessment scores",
+          scope: "clerk",
+          priority: "Medium",
+          title: `${assessment.subject} scores ready for review`,
+          description: `${userName()} submitted ${assessment.title} scores for ${classId}.`,
+          class: classId,
+          assessmentId: assessment.id,
+          read: false,
+        });
       }
       if (mode === "clerk" && assessment.status === "draft") {
         assessment.status = "submitted";
         assessment.submittedBy = userName();
       }
+      savedAssessment = { id: assessment.id, title: assessment.title, subject: assessment.subject, captured: Object.keys(scores).length };
     }
     if (mode === "teacher") {
       const report = state.reports.find((r) => r.class === classId);
@@ -5203,7 +5283,67 @@ function saveTestScores(classId, mode, assessmentId = "") {
       }
     }
   });
+  if (mode === "teacher") criticalLearners.forEach((learner) => sessionStorage.setItem(`schoolshield:critical-popup:${SCHOOL.code}:${savedAssessment?.id}:${learner.id}`, "shown"));
   render();
+  if (mode === "teacher" && savedAssessment) {
+    const followUps = criticalLearners.map((learner) => `<div class="report-row"><span><b>${learner.name}</b><small>${savedAssessment.subject} · ${learner.score}% (critical)</small></span><button class="btn small" data-action="notify-parent-critical-subject" data-assessment="${savedAssessment.id}" data-learner="${learner.id}">Contact parent</button></div>`).join("");
+    const criticalSection = criticalLearners.length ? `<section class="panel" style="margin-top:14px"><div class="panel-head"><div><h3>Parent contact decision</h3><p>These learners have a critical mark. Contact their parent about this subject where appropriate.</p></div></div>${followUps}</section>` : "";
+    modal("Scores submitted to clerk", `<p><b>${savedAssessment.subject} — ${savedAssessment.title}</b> has been submitted for ${classId}.</p><p class="muted">${savedAssessment.captured} learner score${savedAssessment.captured === 1 ? " was" : "s were"} captured. The clerk has been alerted and can review the marks immediately.</p>${criticalSection}<div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  }
+}
+function showClerkAssessmentPopup() {
+  if (role() !== "clerk") return;
+  const notice = getState().notifications.find((item) => item.scope === "clerk" && item.category === "Assessment scores" && !item.read);
+  if (!notice) return;
+  const key = `schoolshield:assessment-popup:${SCHOOL.code}:${notice.id}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "shown");
+  modal("New scores ready for review", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${notice.class}&assessment=${notice.assessmentId}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
+}
+
+function notifyParentCriticalSubject(assessmentId, learnerId) {
+  let result = "missing";
+  let learnerName = "";
+  let subject = "";
+  persist((state) => {
+    const assessment = state.assessments.find((item) => item.id === assessmentId);
+    const learner = state.learners.find((item) => item.id === learnerId);
+    if (!assessment || !learner) return;
+    learnerName = learner.name;
+    subject = assessment.subject;
+    const existing = state.notifications.some((notice) => notice.category === "Parent contact" && notice.scope === "parents" && notice.assessmentId === assessment.id && notice.learnerId === learner.id);
+    if (existing) {
+      result = "already-sent";
+      return;
+    }
+    state.notifications.unshift({
+      id: `NTF-PARENT-CRITICAL-${Date.now().toString().slice(-6)}-${learner.id}`,
+      createdAt: notificationTimestamp(),
+      category: "Parent contact",
+      scope: "parents",
+      priority: "High",
+      title: `${assessment.subject} support discussion`,
+      description: `${userName()} would like to discuss ${learner.name}'s ${assessment.subject} result for ${assessment.title}. Please contact the school.`,
+      class: learner.class,
+      learnerId: learner.id,
+      assessmentId: assessment.id,
+      read: false,
+    });
+    result = "sent";
+  });
+  if (result === "sent") modal("Parent notified", `<p>${learnerName}'s parent or guardian has been notified about the ${subject} support discussion.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  else if (result === "already-sent") modal("Parent already notified", `<p class="muted">A parent-contact notice for ${learnerName}'s ${subject} result has already been sent.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
+  else modal("Unable to notify parent", '<p class="muted">The assessment or learner record could not be found. Refresh the page and try again.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>');
+}
+
+function showTeacherCriticalMarkPopup() {
+  if (role() !== "teacher") return;
+  const notice = notificationsForRole().find((item) => item.category === "Critical mark" && item.scope === "teacher" && !item.read);
+  if (!notice) return;
+  const key = `schoolshield:critical-popup:${SCHOOL.code}:${notice.assessmentId}:${notice.learnerId}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, "shown");
+  modal("Critical mark requires attention", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><button class="btn primary" data-action="notify-parent-critical-subject" data-assessment="${notice.assessmentId}" data-learner="${notice.learnerId}">Contact parent</button><button class="btn ghost" data-action="close-modal">Review later</button></div>`);
 }
 
 function assignTeacher() {
@@ -5270,15 +5410,9 @@ function approveTeacherAssignment(id) {
 }
 function addAssessment(classId = "") {
   const classOptions = classes()
-    .map(
-      (schoolClass) =>
-        `<option value="${schoolClass.id}" ${schoolClass.id === classId ? "selected" : ""}>${schoolClass.grade} · ${schoolClass.id} — ${schoolClass.teacher}</option>`,
-    )
+    .map((schoolClass) => `<option value="${schoolClass.id}" ${schoolClass.id === classId ? "selected" : ""}>${schoolClass.grade} · ${schoolClass.id} — ${schoolClass.teacher}</option>`)
     .join("");
-  modal(
-    "Add assessment",
-    `<p class="muted">Set the assessment details first. Saving opens the full class mark sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject"><option>Mathematics</option><option>Physics</option><option>Life Sciences</option><option>English</option><option>Sesotho</option><option>Life Orientation</option><option>Computer Applications Technology</option><option>History</option><option>Natural Sciences</option><option>Social Sciences</option><option>Technology</option></select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option>${TERM}</option><option>Term 1</option><option>Term 3</option><option>Term 4</option></select></label><label>Date<input class="input" id="assessmentDate" type="date"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`,
-  );
+  modal("Add assessment", `<p class="muted">Set the assessment details first. Saving opens the full class mark sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject"><option>Mathematics</option><option>Physics</option><option>Life Sciences</option><option>English</option><option>Sesotho</option><option>Life Orientation</option><option>Computer Applications Technology</option><option>History</option><option>Natural Sciences</option><option>Social Sciences</option><option>Technology</option></select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option>${TERM}</option><option>Term 1</option><option>Term 3</option><option>Term 4</option></select></label><label>Date<input class="input" id="assessmentDate" type="date"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`);
 }
 function saveAssessment() {
   const classId = inputValue("assessmentClass");
@@ -5286,6 +5420,7 @@ function saveAssessment() {
   const title = inputValue("assessmentTitle");
   const date = inputValue("assessmentDate");
   if (!requireValues([classId, subject, title, date])) return;
+  if (date > todayIso()) return modal("Future date not allowed", '<p class="muted">Assessment dates cannot be after today.</p>');
   const schoolClass = classById(classId);
   if (!schoolClass) return;
   const id = `ASM-${Date.now().toString().slice(-7)}`;
@@ -5308,7 +5443,7 @@ function saveAssessment() {
     }),
   );
   $$(".modal-backdrop").forEach((element) => element.remove());
-  go(`test-scores.html?class=${classId}&assessment=${id}`);
+  go(`test-scores.html?class=${classId}&subject=${encodeURIComponent(subject)}&assessment=${id}`);
 }
 
 function setReportStatus(classId, status) {
@@ -5953,6 +6088,8 @@ function bind() {
       messagePane.scrollTop = messagePane.scrollHeight;
     });
   setTimeout(showPendingSickNoticePopup, 0);
+  setTimeout(showClerkAssessmentPopup, 0);
+  setTimeout(showTeacherCriticalMarkPopup, 0);
 }
 
 /* A configured Supabase client is the source of truth. The legacy session path
