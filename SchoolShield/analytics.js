@@ -1,36 +1,24 @@
-// Vercel Web Analytics - Initialization
-// This file injects Vercel Web Analytics tracking into the page
-(function() {
-  // Initialize the analytics queue
-  if (!window.va) {
-    window.va = function a() {
-      (window.vaq = window.vaq || []).push(arguments);
-    };
-  }
+/* Vercel Web Analytics for the static HTML site. */
+(() => {
+  // Explicit production hosts prevent localhost and preview visits being counted.
+  // Add a custom production domain here when one is configured.
+  if (location.protocol !== 'https:' || location.hostname !== 'schoolshieldv2.vercel.app') return;
+  if (document.querySelector('script[data-schoolshield-analytics]')) return;
 
-  // Detect environment (production vs development)
-  var mode = 'production';
-  try {
-    // Check if we're running locally
-    if (window.location.hostname === 'localhost' || 
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname === '') {
-      mode = 'development';
-    }
-  } catch (e) {
-    // Default to production if detection fails
-  }
-  
-  window.vam = mode;
+  window.va = window.va || function () {
+    (window.vaq = window.vaq || []).push(arguments);
+  };
+  // Record page paths only: query strings can contain learner IDs or auth codes.
+  window.va('beforeSend', (event) => {
+    const url = new URL(event.url, location.origin);
+    url.search = '';
+    url.hash = '';
+    return { ...event, url: url.href };
+  });
 
-  // Load the Vercel Analytics script
-  if (mode === 'production') {
-    var script = document.createElement('script');
-    script.defer = true;
-    script.src = '/_vercel/insights/script.js';
-    document.head.appendChild(script);
-  } else {
-    // In development, log events to console
-    console.log('[Vercel Analytics] Running in development mode - events will be logged to console');
-  }
+  const script = document.createElement('script');
+  script.defer = true;
+  script.src = '/_vercel/insights/script.js';
+  script.dataset.schoolshieldAnalytics = 'true';
+  document.head.appendChild(script);
 })();
