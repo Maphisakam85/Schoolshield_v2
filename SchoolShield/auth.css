@@ -308,6 +308,7 @@
     }
 }
 
+
 /* Compact the form rather than clipping controls or disabling scrolling. */
 @media(max-height:800px), (max-width:620px) {
     .auth {
@@ -369,4 +370,20 @@
     .auth {
         padding: 20px max(20px, env(safe-area-inset-right)) 20px max(20px, env(safe-area-inset-left));
     }
+}
+
+/* Laptop browser chrome can leave only 600px of usable height. */
+@media (max-height: 680px) {
+    .auth { padding: 16px 24px; }
+    .auth-brand { margin-bottom: 10px; }
+    .auth-brand img { width: 34px; height: 34px; }
+    .auth h1 { font-size: 24px; line-height: 1.2; margin-bottom: 6px; }
+    .auth p { margin-bottom: 8px; line-height: 1.4; }
+    .auth-tabs { margin: 10px 0; }
+    .auth label { margin: 8px 0 4px; }
+    .auth .input { min-height: 40px; padding: 8px 12px; margin-top: 4px; }
+    .auth .btn { min-height: 40px; padding: 8px; }
+    .auth form>.btn { margin-top: 10px; }
+    .auth .password-field { margin-top: 4px; }
+    .auth .password-field .input { margin-top: 0; }
 }
