@@ -1,0 +1,12 @@
+{
+  "name": "schoolshield",
+  "version": "1.0.0",
+  "description": "School safety & management system",
+  "scripts": {
+    "build": "node --check SchoolShield/app.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js",
+    "test": "node --test tests/chat.test.cjs tests/portal-scope.test.cjs"
+  },
+  "dependencies": {
+    "@vercel/analytics": "^1.1.1"
+  }
+}
