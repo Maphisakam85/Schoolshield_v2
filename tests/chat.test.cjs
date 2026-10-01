@@ -6,6 +6,27 @@ const path = require('node:path');
 const root = path.join(__dirname, '..', 'SchoolShield');
 const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const clientSource = fs.readFileSync(path.join(root, 'supabase-client.js'), 'utf8');
+test('password eye reveals and conceals text without changing its value or submitting', () => {
+  const elements = [];
+  const input = { type: 'password', id: 'password', value: 'example', before() {} };
+  const context = vm.createContext({ document: {
+    querySelectorAll: () => [input],
+    createElement: () => {
+      const element = { attributes: {}, append() {}, setAttribute(name, value) { this.attributes[name] = value; }, addEventListener(name, callback) { this[name] = callback; } };
+      elements.push(element);
+      return element;
+    },
+  } });
+  vm.runInContext(fs.readFileSync(path.join(root, 'password-toggle.js'), 'utf8'), context);
+  const button = elements[1];
+  assert.equal(button.type, 'button');
+  button.click();
+  assert.equal(input.type, 'text');
+  assert.equal(button.attributes['aria-label'], 'Hide password');
+  button.click();
+  assert.equal(input.type, 'password');
+  assert.equal(input.value, 'example');
+});
 const storage = () => {
   const entries = new Map();
   return { getItem: key => entries.get(key) ?? null, setItem: (key, value) => entries.set(key, value) };

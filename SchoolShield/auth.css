@@ -33,6 +33,13 @@
 .auth-modal-card p { font-size:14px; line-height:1.6 }
 .auth form, .auth label, .auth .input { min-width:0; max-width:100% }
 .auth .input { text-overflow:ellipsis }
+.auth-primary-forms { display:grid; min-width:0; }
+.auth-primary-forms>form { grid-area:1 / 1; align-self:start; margin:0; }
+/* Reserve the taller form's space while keeping inactive controls inaccessible. */
+.auth .auth-primary-forms>form[hidden] { display:block; visibility:hidden; pointer-events:none; }
+.auth-primary-forms:not(:has(>form:not([hidden]))) { display:none; }
+.auth .password-field { margin-top:5px; }
+.auth .password-field .input { margin-top:0; }
 .auth p, .auth-brand strong { overflow-wrap:anywhere }
 @media(max-width:850px) { .auth { padding:30px } .auth-layout { grid-template-columns:1fr 1fr } .auth-story { padding:24px } .auth-story h2 { font-size:25px } }
 @media(max-width:620px) { .auth-page { display:block; padding:0; background:#fff } .auth-layout { display:flex; flex-direction:column; border-radius:0; box-shadow:none; min-height:100svh } .auth-visual { height:190px; flex:none } .auth-story { padding:16px 22px } .auth-story h2 { font-size:21px; margin:7px 0 0; max-width:280px } .auth-story p { display:none } .auth-story span { font-size:8px } .auth { padding:26px 24px max(30px,env(safe-area-inset-bottom)); width:100% } .auth-brand { margin-bottom:24px } .auth h1 { font-size:26px } }

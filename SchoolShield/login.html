@@ -29,6 +29,7 @@
         granted.</p>
       <div class="auth-tabs"><button class="btn small primary" id="showLogin" type="button">Sign in</button><button
           class="btn small ghost" id="showRequest" type="button">Create account</button></div>
+      <div class="auth-primary-forms">
       <form id="loginForm"><label>School code<input class="input" id="schoolCode" required autocomplete="organization"
             placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
             type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
@@ -45,6 +46,7 @@
             <option value="teacher">Teacher</option>
             <option value="security">Security Officer</option>
           </select></label><button class="btn primary" type="submit">Request account approval</button></form>
+      </div>
       <form id="inviteForm" hidden>
         <p class="demo"><b>Your account has been approved.</b> Complete your details and choose a password to finish
           setup.</p><label>Full name<input class="input" id="inviteName" autocomplete="name"
@@ -82,6 +84,7 @@
         sign in</button>
     </div>
   </div>
+  <script src="password-toggle.js"></script>
   <script src="supabase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-client.js"></script>

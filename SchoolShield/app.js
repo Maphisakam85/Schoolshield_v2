@@ -3798,14 +3798,16 @@ function loadPdfLibrary() {
   if (pdfLibraryPromise) return pdfLibraryPromise;
   pdfLibraryPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src =
-      "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    script.src = "vendor/jspdf.umd.min.js";
     script.onload = () =>
       window.jspdf?.jsPDF
         ? resolve(window.jspdf.jsPDF)
         : reject(new Error("PDF library unavailable"));
-    script.onerror = () => reject(new Error("Could not load PDF library"));
+    script.onerror = () => { script.remove(); reject(new Error("Could not load PDF library")); };
     document.head.appendChild(script);
+  }).catch((error) => {
+    pdfLibraryPromise = null;
+    throw error;
   });
   return pdfLibraryPromise;
 }
@@ -3841,8 +3843,9 @@ async function downloadPdf(filename, title, lines) {
     });
     documentPdf.save(filename);
   } catch (error) {
+    console.error("Report PDF generation failed", error);
     alert(
-      "The PDF could not be created. Please check your internet connection and try again.",
+      "The PDF could not be created. Reload this page and try again. If it still fails, contact your school administrator.",
     );
   }
 }
