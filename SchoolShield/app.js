@@ -3455,6 +3455,7 @@ function visitorModal(id) {
     v.name,
     `<p class="muted">${isLeadership() ? "Read-only visitor record for school leadership." : "Visitor registration record."}</p><div class="detail-grid"><div><small>Visitor ID</small><b>${v.id}</b></div><div><small>Visitor type</small><b>${v.type}</b></div><div><small>Identification</small><b>${v.identificationType || "Not captured"} · ${v.identity || "—"}</b></div><div><small>Person being visited</small><b>${v.host}</b></div><div><small>Department</small><b>${v.department || "—"}</b></div><div><small>Purpose</small><b>${v.purpose}</b></div><div><small>Date</small><b>${v.date || "—"}</b></div><div><small>Check-in / check-out</small><b>${v.in} · ${v.out}</b></div><div><small>Expected check-out</small><b>${v.expectedOut || "—"}</b></div><div><small>Vehicle</small><b>${v.vehicle || "—"}</b></div><div><small>Registered by</small><b>${v.registeredBy || "—"}</b></div><div><small>Processed by</small><b>${v.processedBy || "—"}</b></div></div>`,
   );
+  showRecordDocuments("visitor", id);
 }
 function todayLabel() {
   const months = [
@@ -4260,8 +4261,8 @@ function action(type, el) {
       "New appointment",
       `<div class="form-grid"><label>Appointment title<input class="input" id="appointmentTitle" placeholder="Parent meeting"></label><label>With<select class="select" id="appointmentWith"><option value="${SCHOOL.principal}">Principal — ${SCHOOL.principal}</option><option value="Deputy Principal — Mr Naidoo">Deputy Principal — Mr Naidoo</option><option value="Parent / guardian">Parent / guardian</option><option value="Staff member">Staff member</option></select></label><label>Date<input class="input" id="appointmentDate" type="date"></label><label>Time<input class="input" id="appointmentTime" type="time"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-appointment">Save appointment</button></div>`,
     );
-  else if (type === "save-visitor") saveVisitor();
-  else if (type === "save-incident") saveIncident();
+  else if (type === "save-visitor") saveRecordDocuments("visitor");
+  else if (type === "save-incident") saveRecordDocuments("incident");
   else if (type === "save-learner") saveLearner();
   else if (type === "save-staff") saveStaff();
   else if (type === "approve-staff-change")
@@ -4278,7 +4279,7 @@ function action(type, el) {
   else if (type === "save-staff-changes")
     saveStaffChanges(el.dataset.staff, el.dataset.staffIndex);
   else if (type === "save-appointment") saveAppointment();
-  else if (type === "submit-sick-notice") saveSickNotice();
+  else if (type === "submit-sick-notice") saveRecordDocuments("sick-notice");
   else if (type === "checkout-visitor") checkoutVisitor(el.dataset.visitor);
   else if (type === "view-notification")
     viewNotification(el.dataset.notification);
@@ -4386,10 +4387,107 @@ function notificationsForRole() {
 function inputValue(id) {
   return ($("#" + id)?.value || "").trim();
 }
+async function documentService() {
+  if (window.SchoolShieldDocuments) return window.SchoolShieldDocuments;
+  if (!window.schoolshieldDocumentsLoading) window.schoolshieldDocumentsLoading = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "documents.js";
+    script.onload = () => resolve(window.SchoolShieldDocuments);
+    script.onerror = () => { window.schoolshieldDocumentsLoading = null; reject(new Error("Document upload service could not be loaded. Refresh and try again.")); };
+    document.head.appendChild(script);
+  });
+  return window.schoolshieldDocumentsLoading;
+}
+async function saveRecordDocuments(entity) {
+  const settings = {
+    visitor: { fields: ["visitorPhoto", "visitorDocument"], store: "visitors", save: saveVisitor, prefix: "VIS-" },
+    incident: { fields: ["incidentFiles"], store: "incidents", save: saveIncident, prefix: "INC-" },
+    "sick-notice": { fields: ["sickLetter"], store: "sickNotices", save: saveSickNotice, prefix: "SN-" },
+  }[entity];
+  if (window.schoolshieldDocumentSaving) return;
+  const files = settings.fields.flatMap(id => [...($("#" + id)?.files || [])]);
+  if (!files.length && !window.schoolshieldPendingDocumentRecord) return settings.save();
+  window.schoolshieldDocumentSaving = true;
+  try {
+    const service = await documentService();
+    files.forEach(file => service.validate(file));
+    if (!window.schoolshieldSupabase) throw new Error("Sign in before uploading documents.");
+    let pending = window.schoolshieldPendingDocumentRecord;
+    if (pending && pending.entity !== entity) throw new Error("Retry the unfinished document upload before submitting another record.");
+    if (!pending) {
+      const capture = { recordId: settings.prefix + crypto.randomUUID() };
+      window.schoolshieldDocumentCapture = capture;
+      try { settings.save(); } finally { window.schoolshieldDocumentCapture = null; }
+      const record = getState()[settings.store].find(item => item.id === capture.recordId);
+      if (!record) return; // Existing field/ID/duplicate validation rejected the form.
+      pending = { entity, record, finish: capture.finish, form: settings.fields.map(id => $("#" + id)), files: files.map(file => ({file,retry:{}})), persisted: false };
+      window.schoolshieldPendingDocumentRecord = pending;
+    }
+    if (pending.form.some((field,index) => field !== $("#" + settings.fields[index]))) throw new Error("An earlier record has an unfinished upload. Return to that form or refresh before creating another record.");
+    if (!pending.persisted) {
+      if (role() === "parent") {
+        const current = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+        const learner = getState().learners.find(item => item.name === pending.record.person);
+        if (!learner) throw new Error("This sick notice is not linked to your learner.");
+        pending.record.learnerId = learner.id;
+        pending.record.submittedById = current.userId;
+        const { data, error } = await window.schoolshieldSupabase.rpc("persist_parent_document_notice", { p_record: pending.record });
+        if (error || !data) throw new Error(error?.message || "The notice could not be saved to the school.");
+        pending.record = data;
+      } else {
+        let saved = window.schoolshieldWorkspaceSaveQueue && await window.schoolshieldWorkspaceSaveQueue.catch(() => false);
+        if (saved !== true && window.schoolshieldCloudWorkspaceReady) {
+          const state = getState();
+          if (!state[settings.store].some(item => item.id === pending.record.id)) state[settings.store].unshift(pending.record);
+          saved = await save(state);
+        }
+        if (saved !== true) throw new Error(window.schoolshieldLastSyncError || "The school record could not be saved. Refresh and retry the upload.");
+      }
+      pending.persisted = true;
+    }
+    for (const entry of pending.files) {
+      if (!entry.done) { await service.upload(entity,pending.record.id,entry.file,entry.retry); entry.done = true; }
+    }
+    window.schoolshieldPendingDocumentRecord = null;
+    try { await refreshCloudWorkspace(false); } catch (_) { /* Files are already persistent. */ }
+    finishForm(pending.finish?.title, pending.finish?.message);
+  } catch (error) {
+    // Keep the record ID and each uploaded file's progress for a safe retry.
+    modal("Document upload incomplete", `<p>${announcementText(error.message)}</p><p>The form and selected files are retained. Retry the original Save/Submit button to complete the upload; do not create another record.</p>`);
+  } finally { window.schoolshieldDocumentSaving = false; }
+}
+async function showRecordDocuments(entity, recordId) {
+  if (!window.schoolshieldSupabase) return;
+  const body = $(".modal-backdrop:last-child .modal-body");
+  if (!body) return;
+  const section = document.createElement("section");
+  section.className = "panel";
+  section.textContent = "Loading supporting documents…";
+  body.appendChild(section);
+  try {
+    const service = await documentService(), rows = await service.list(entity,recordId);
+    if (!section.isConnected) return;
+    section.innerHTML = '<h3>Supporting documents</h3>' + (rows.length ? rows.map(row => `<button class="btn small ghost" data-document-id="${row.id}">${announcementText(row.filename)}</button>`).join(" ") : '<p class="muted">No stored documents. A legacy filename alone does not contain an uploaded file.</p>');
+    $$('[data-document-id]', section).forEach(button => button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const url = await service.download(button.dataset.documentId);
+        const link = document.createElement("a");
+        link.href = url; link.download = ""; link.referrerPolicy = "no-referrer";
+        document.body.appendChild(link); link.click(); link.remove();
+      } catch (error) { modal("Document unavailable", `<p>${announcementText(error.message)}</p>`); }
+      finally { button.disabled = false; }
+    });
+  } catch (error) { section.textContent = error.message; }
+}
 function finishForm(
   title = "Saved successfully",
   message = "Your update has been saved and shared with the school workspace.",
 ) {
+  if (window.schoolshieldDocumentCapture) {
+    window.schoolshieldDocumentCapture.finish = { title, message };
+    return;
+  }
   $$(".modal-backdrop").forEach((el) => el.remove());
   render();
   if (title)
@@ -4437,7 +4535,7 @@ function saveVisitor() {
   }
   persist((state) => {
     const visitor = {
-      id: "VIS-" + Date.now().toString().slice(-4),
+      id: window.schoolshieldDocumentCapture?.recordId || "VIS-" + Date.now().toString().slice(-4),
       name,
       host,
       purpose,
@@ -4489,7 +4587,7 @@ function saveIncident() {
       '<p class="muted">An incident can only be reported for today or an earlier date.</p>',
     );
   persist((state) => {
-    const id = "INC-" + Date.now().toString().slice(-6);
+    const id = window.schoolshieldDocumentCapture?.recordId || "INC-" + Date.now().toString().slice(-6);
     state.incidents.unshift({
       id,
       date: inputValue("incidentDate") || todayLabel(),
@@ -4731,7 +4829,7 @@ function saveSickNotice() {
     );
   persist((state) =>
     state.sickNotices.unshift({
-      id: "SN-" + Date.now().toString().slice(-5),
+      id: window.schoolshieldDocumentCapture?.recordId || "SN-" + Date.now().toString().slice(-5),
       submittedBy: userName(),
       person: learner.split(" — ")[0],
       date,
@@ -4902,6 +5000,7 @@ function viewIncident(id) {
     incident.id,
     `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section><section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
   );
+  showRecordDocuments("incident", id);
 }
 function addIncidentResponse(id) {
   if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
@@ -5046,6 +5145,7 @@ function viewParentSickNotice(id) {
     "Submitted sick notice",
     `<div class="detail-grid"><div><small>Learner</small><b>${notice.person}</b></div><div><small>Absence date</small><b>${notice.date}</b></div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Teacher review</small>${badge(notice.status)}</div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div><p class="muted" style="margin-top:16px">The learner has been marked sick for this date. The assigned teacher will review the notice.</p>`,
   );
+  showRecordDocuments("sick-notice", id);
 }
 function viewSickNotice(id) {
   const notice = getState().sickNotices.find((item) => item.id === id);
@@ -5054,6 +5154,7 @@ function viewSickNotice(id) {
     "Sick notice",
     `<div class="detail-grid"><div><small>Submitted by</small><b>${notice.submittedBy}</b></div><div><small>Learner / staff</small><b>${notice.person}</b></div><div><small>Date</small><b>${notice.date}</b></div><div><small>Status</small>${badge(notice.status)}</div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div>${notice.status !== "Reviewed" ? `<div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${id}">Review & acknowledge</button></div>` : ""}`,
   );
+  showRecordDocuments("sick-notice", id);
 }
 function reviewSickNotice(id) {
   persist((state) => {
@@ -5823,6 +5924,9 @@ function patchLiveChat(html) {
   return true;
 }
 function render() {
+  // Keep selected File objects and the original form mounted until its upload
+  // finishes or is retried. Cloud data may refresh without replacing the form.
+  if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return;
   const announcementDraft = page() === "announcements" ? Object.fromEntries(
     ["annTitle", "annBody", "audienceSelect", "deliverySelect"].map(id => [id, $("#" + id)?.value]),
   ) : {};
