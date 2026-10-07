@@ -2201,7 +2201,7 @@ function chatLayout(
     title,
     eyebrow,
     desc,
-    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`,
+    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${encodeURIComponent(storeKey + ":" + active.id)}"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`,
   );
 }
 
@@ -2250,7 +2250,7 @@ function legacyChatLayout(
     title,
     eyebrow,
     desc,
-    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="${ownStoredSide}">Send</button></div></section></div>`,
+    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${encodeURIComponent(storeKey + ":" + active.id)}"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="${ownStoredSide}">Send</button></div></section></div>`,
   );
 }
 
@@ -5782,6 +5782,41 @@ function filterTable(query, selector) {
 }
 
 /* --------------------------------- render -------------------------------- */
+function patchLiveChat(html) {
+  if (!["parent-chat", "teacher-chat", "sgb-chat"].includes(page())) return false;
+  const live = $(".chat-window");
+  if (!live) return false;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const incoming = template.content.querySelector(".chat-window");
+  if (!incoming || live.dataset.conversation !== incoming.dataset.conversation) return false;
+  const messages = live.querySelector(".messages");
+  const nextMessages = incoming.querySelector(".messages");
+  if (messages.innerHTML !== nextMessages.innerHTML) {
+    const scrollTop = messages.scrollTop;
+    const atBottom = messages.scrollHeight - messages.clientHeight - scrollTop <= 60;
+    messages.innerHTML = nextMessages.innerHTML;
+    messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
+  }
+  // Never replace the composer, input or their ancestors. Focus, selection,
+  // IME composition and browser keyboard state therefore remain untouched.
+  const head = live.querySelector(".chat-head");
+  const nextHead = incoming.querySelector(".chat-head");
+  if (head.innerHTML !== nextHead.innerHTML) head.innerHTML = nextHead.innerHTML;
+  const send = live.querySelector("[data-action='send-message']");
+  const nextSend = incoming.querySelector("[data-action='send-message']");
+  if (send && nextSend) Object.assign(send.dataset, nextSend.dataset);
+  for (const selector of [".chat-contact-grid", ".chat-list"]) {
+    const current = $(selector), next = template.content.querySelector(selector);
+    if (current && next && current.innerHTML !== next.innerHTML) {
+      current.innerHTML = next.innerHTML;
+      $$('[data-action]', current).forEach(button => {
+        button.onclick = () => action(button.dataset.action, button);
+      });
+    }
+  }
+  return true;
+}
 function render() {
   const announcementDraft = page() === "announcements" ? Object.fromEntries(
     ["annTitle", "annBody", "audienceSelect", "deliverySelect"].map(id => [id, $("#" + id)?.value]),
@@ -5830,6 +5865,7 @@ function render() {
   else if (p === "parent-chat") html = parentChat();
   else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
+  if (patchLiveChat(html)) return;
   $("#app").innerHTML = html;
   bind();
   Object.entries(announcementDraft).forEach(([id, value]) => {
@@ -5844,7 +5880,7 @@ function render() {
   if (nextChatInput && chatDraft !== undefined) {
     nextChatInput.value = chatDraft;
     if (chatFocused) {
-      nextChatInput.focus();
+      nextChatInput.focus({ preventScroll: true });
       nextChatInput.setSelectionRange(...chatSelection);
     }
   }
@@ -6238,7 +6274,7 @@ function bind() {
     if (count) count.textContent = opt.dataset.count || "0";
   });
   $("#chatInput")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       const sendButton = $("[data-action='send-message']");
       if (sendButton) action("send-message", sendButton);
