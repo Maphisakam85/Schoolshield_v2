@@ -3434,12 +3434,72 @@ function notifications() {
   );
 }
 /* ------------------------------- interactions ---------------------------- */
+function photoCaptureField(prefix) {
+  return `${role() === "security" ? `<label>Take photo<input class="input" id="${prefix}Camera" type="file" accept="image/jpeg,image/png" capture="environment" data-photo-input></label>` : ""}`;
+}
+function affectedItemStatus(category) {
+  return ({ "Theft / Stolen Items": "Stolen", "Missing Property": "Missing", "Property Damage / Broken Items": "Damaged-Broken" })[category];
+}
+function bindIncidentEvidenceForm(root) {
+  const urls = [];
+  $$("[data-photo-input]", root).forEach(input => {
+    const preview = document.createElement("div");
+    input.parentElement.appendChild(preview);
+    input.addEventListener("change", () => {
+      preview.replaceChildren();
+      for (const file of input.files || []) {
+        if (!/\.(jpe?g|png)$/i.test(file.name) || !["image/jpeg", "image/png"].includes(file.type) || !file.size || file.size > 10485760) {
+          preview.textContent = "Choose a JPEG or PNG photo up to 10 MB."; input.value = ""; return;
+        }
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file); urls.push(img.src);
+        img.alt = "Selected photo preview"; img.style.cssText = "max-width:100%;max-height:180px;object-fit:contain;margin-top:8px";
+        preview.appendChild(img);
+      }
+    });
+  });
+  if (root.querySelector("[data-photo-input]")) {
+    const observer = new MutationObserver(() => { if (!root.isConnected) { urls.forEach(url => URL.revokeObjectURL(url)); observer.disconnect(); } });
+    observer.observe(document.body, {childList:true});
+  }
+  const category = root.querySelector("#incidentCategory");
+  if (!category) return;
+  const section = document.createElement("section"); section.className = "full panel"; section.id = "affectedItemsSection";
+  section.innerHTML = '<h3>Affected Items</h3><div id="affectedItemRows"></div><button class="btn" type="button" id="addAffectedItem">Add another item</button>';
+  category.closest(".form-grid").appendChild(section);
+  const rows = section.querySelector("#affectedItemRows");
+  const add = () => {
+    const row = document.createElement("div"); row.className = "form-grid affected-item";
+    row.innerHTML = `<label>Item description<input class="input" data-item="description"></label><label>Quantity<input class="input" type="number" min="1" step="1" value="1" data-item="quantity"></label><label>Status<select class="select" data-item="status">${["Stolen","Missing","Damaged-Broken"].map(status => `<option${status === affectedItemStatus(category.value) ? " selected" : ""}>${status}</option>`).join("")}</select></label><label>Estimated value (R, optional)<input class="input" type="number" min="0" step="0.01" data-item="estimatedValue"></label><label>Owner (optional)<input class="input" data-item="owner"></label><label>Notes (optional)<textarea class="textarea" data-item="notes"></textarea></label><button type="button" class="btn">Remove item</button>`;
+    row.querySelector("button").onclick = () => row.remove(); rows.appendChild(row);
+  };
+  section.querySelector("#addAffectedItem").onclick = add;
+  const update = () => { section.hidden = !affectedItemStatus(category.value); if (!section.hidden && !rows.children.length) add(); };
+  category.addEventListener("change", update); update();
+}
+function readAffectedItems() {
+  if (!affectedItemStatus(inputValue("incidentCategory"))) return [];
+  const rows = $$("#affectedItemRows .affected-item");
+  if (!rows.length) throw new Error("Add at least one affected item for this category.");
+  return rows.map(row => {
+    const value = key => row.querySelector(`[data-item="${key}"]`).value.trim();
+    const quantity = Number(value("quantity")), amount = value("estimatedValue");
+    if (!value("description") || !Number.isSafeInteger(quantity) || quantity < 1 || !["Stolen","Missing","Damaged-Broken"].includes(value("status"))) throw new Error("Each affected item needs a description, a positive whole-number quantity and a valid status.");
+    if (amount && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) throw new Error("Estimated value must be zero or a positive amount.");
+    return { description:value("description"), quantity, status:value("status"), estimatedValue:amount ? Number(amount) : null, owner:value("owner"), notes:value("notes") };
+  });
+}
+function affectedItemsDetails(items) {
+  if (!Array.isArray(items) || !items.length) return "";
+  return `<section class="panel"><h3>Affected Items</h3>${items.map(item => `<div class="report-row"><span><b>${announcementText(item.description)}</b><small>Quantity: ${announcementText(item.quantity)} · ${announcementText(item.status)}</small></span><span>${item.estimatedValue != null ? `R ${announcementText(item.estimatedValue)}` : ""}<small>${announcementText(item.owner || "")}</small><small>${announcementText(item.notes || "")}</small></span></div>`).join("")}</section>`;
+}
 function modal(title, body) {
   const el = document.createElement("div");
   el.className = "modal-backdrop";
   el.innerHTML = `<div class="modal" style="max-height:90vh;display:flex;flex-direction:column"><div class="modal-head"><h3>${title}</h3><button class="close">×</button></div><div class="modal-body" style="overflow-y:auto;max-height:calc(90vh - 70px)">${body}</div></div>`;
   document.body.appendChild(el);
   markRequiredFields(el);
+  bindIncidentEvidenceForm(el);
   $$("[data-action]", el).forEach(
     (button) => (button.onclick = () => action(button.dataset.action, button)),
   );
@@ -4120,12 +4180,12 @@ function action(type, el) {
   if (type === "register")
     modal(
       "Register visitor",
-      `<p class="muted">Captured ${todayLabel()} by ${userName()}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option><option>Government Official</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label><label>Visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/*"></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
+      `<p class="muted">Captured ${todayLabel()} by ${userName()}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option><option>Government Official</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label>${photoCaptureField("visitor")}<label>Select existing visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/jpeg,image/png" data-photo-input></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
     );
   else if (type === "incident") {
     modal(
       "Report incident",
-      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Share with<select class="select" id="incidentScope"><option value="related">Related staff and safety team</option><option value="teachers">All teachers</option><option value="whole-school">Whole school</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
+      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option><option>Theft / Stolen Items</option><option>Missing Property</option><option>Property Damage / Broken Items</option></select></label><label>Share with<select class="select" id="incidentScope"><option value="related">Related staff and safety team</option><option value="teachers">All teachers</option><option value="whole-school">Whole school</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
         .security.map((officer) => `<option>${officer.name}</option>`)
         .join(
           "",
@@ -4145,7 +4205,7 @@ function action(type, el) {
         .staff.map((staff) => `<option>${staff.name}</option>`)
         .join(
           "",
-        )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label><label class="full">Photos & documents<input class="input" id="incidentFiles" type="file" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
+        )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label>${photoCaptureField("incident")}<label>Select existing incident photos<input class="input" id="incidentPhotos" type="file" accept="image/jpeg,image/png" multiple data-photo-input></label><label class="full">Supporting documents<input class="input" id="incidentFiles" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
     );
     const incidentDate = $("#incidentDate");
     if (incidentDate) incidentDate.max = todayIso();
@@ -4400,8 +4460,8 @@ async function documentService() {
 }
 async function saveRecordDocuments(entity) {
   const settings = {
-    visitor: { fields: ["visitorPhoto", "visitorDocument"], store: "visitors", save: saveVisitor, prefix: "VIS-" },
-    incident: { fields: ["incidentFiles"], store: "incidents", save: saveIncident, prefix: "INC-" },
+    visitor: { fields: ["visitorCamera", "visitorPhoto", "visitorDocument"], store: "visitors", save: saveVisitor, prefix: "VIS-" },
+    incident: { fields: ["incidentCamera", "incidentPhotos", "incidentFiles"], store: "incidents", save: saveIncident, prefix: "INC-" },
     "sick-notice": { fields: ["sickLetter"], store: "sickNotices", save: saveSickNotice, prefix: "SN-" },
   }[entity];
   if (window.schoolshieldDocumentSaving) return;
@@ -4580,6 +4640,9 @@ function saveIncident() {
   const location = inputValue("incidentLocation");
   const description = inputValue("incidentDescription");
   if (!requireValues([location, description])) return;
+  let affectedItems;
+  try { affectedItems = readAffectedItems(); }
+  catch (error) { return modal("Affected items required", `<p>${announcementText(error.message)}</p>`); }
   if (role() === "teacher" && inputValue("incidentLearner") && !learnersForScope().some((item) => item.id === inputValue("incidentLearner"))) return;
   if (inputValue("incidentDate") > todayIso())
     return modal(
@@ -4606,6 +4669,7 @@ function saveIncident() {
         (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
       description,
+      affectedItems,
       scope: ["teachers", "whole-school"].includes(inputValue("incidentScope")) ? inputValue("incidentScope") : "related",
       people: inputValue("incidentPeople"),
       visitorId: inputValue("incidentVisitor"),
@@ -4998,7 +5062,7 @@ function viewIncident(id) {
       : "";
   modal(
     incident.id,
-    `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section><section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
+    `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section>${affectedItemsDetails(incident.affectedItems)}<section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
   );
   showRecordDocuments("incident", id);
 }

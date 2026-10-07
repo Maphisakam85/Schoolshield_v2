@@ -45,6 +45,19 @@ test('upload rejects invalid/empty/oversized files before touching Storage',asyn
   for(const file of [{name:'script.html',size:10},{name:'empty.pdf',size:0},{name:'large.pdf',size:10485761}]) await assert.rejects(api.upload('incident','INC-1',file),/Choose a PDF/);
   assert.equal(db.calls.length,0);
 });
+test('visitor and incident photos retain bytes and correct record links across authorized sessions',async()=>{
+  const db=cloud();
+  for(const [entity,id] of [['visitor','VIS-photo'],['incident','INC-photo']]) {
+    const photo={name:'camera.jpg',size:100,type:'image/jpeg',bytes:Buffer.from([255,216,255,217])};
+    const row=await service(db.client).upload(entity,id,photo);
+    const fresh=service(db.client,{userId:'authorized-reader',schoolId:'school-one'});
+    const listed=await fresh.list(entity,id);
+    assert.equal(listed.length,1);assert.equal(listed[0].content_type,'image/jpeg');
+    assert.equal(db.files.get(row.storage_path).bytes,photo.bytes);
+    assert.match(await fresh.download(row.id),/signature=fresh/);
+  }
+  await assert.rejects(service(db.client).upload('incident','INC-photo',{name:'fake.jpg',size:100,type:'text/html'}),/does not match/);
+});
 test('failed upload retains metadata ID and retries without duplicating the object or metadata',async()=>{
   const db=cloud();const original=db.client.storage.from;let failed=true;
   db.client.storage.from=bucket=>{const storage=original(bucket);const upload=storage.upload;storage.upload=async(...args)=>{if(failed){failed=false;return {error:{message:'Offline'}};}return upload(...args);};return storage;};

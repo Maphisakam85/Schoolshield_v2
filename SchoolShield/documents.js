@@ -5,6 +5,7 @@
   function validate(file) {
     const extension = String(file.name || '').split('.').pop().toLowerCase();
     if (!types[extension] || !file.size || file.size > 10485760) throw new Error('Choose a PDF, Word document, PNG or JPEG image up to 10 MB.');
+    if (file.type && file.type !== types[extension] && file.type !== 'application/octet-stream') throw new Error('The file type does not match its filename. Choose a JPEG or PNG photo, PDF or Word document.');
     return { extension, contentType:types[extension] };
   }
   function session() {
