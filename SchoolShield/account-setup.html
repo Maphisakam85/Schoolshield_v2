@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <title>SchoolShield - Complete account setup</title>
   <link rel="stylesheet" href="styles.css">
   <style>
@@ -24,20 +25,16 @@
       <label>Confirm password<input class="input" id="setupConfirmPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Repeat your password"></label>
       <button class="btn primary" type="submit">Complete setup</button>
     </form>
-    <div class="setup-note" id="setupWaiting">Validating your secure setup link…</div>
+    <div class="setup-note" id="setupWaiting">Validating your secure setup link?</div>
     <div class="setup-error" id="setupError"></div>
+  <p><a href="login.html">Go to sign in</a></p>
   </main>
   <script src="password-toggle.js"></script>
   <script src="supabase-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script>window.schoolshieldManualInvitationExchange = true;</script>
   <script src="supabase-client.js"></script>
-  <script>
-    const client = window.schoolshieldSupabase, form = document.getElementById('setupForm'), waiting = document.getElementById('setupWaiting'), errorBox = document.getElementById('setupError');
-    const fail = message => { waiting.hidden = true; errorBox.textContent = message; errorBox.style.display = 'block' };
-    const reveal = async session => { if (!session) return fail('This setup link is invalid or has expired. Ask your school administrator for a new invitation.'); const { data: { user } } = await client.auth.getUser(); document.getElementById('setupName').value = user?.user_metadata?.display_name || ''; waiting.hidden = true; form.hidden = false; };
-    client?.auth.onAuthStateChange((event, session) => { if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') reveal(session) });
-    client?.auth.getSession().then(({ data: { session } }) => reveal(session));
-    form.onsubmit = async event => { event.preventDefault(); const password = document.getElementById('setupPassword').value; if (password !== document.getElementById('setupConfirmPassword').value) return fail('The passwords do not match.'); const { error: passwordError } = await client.auth.updateUser({ password }); if (passwordError) return fail(passwordError.message); const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('setupName').value.trim(), p_phone: document.getElementById('setupPhone').value.trim(), p_address: document.getElementById('setupAddress').value.trim(), p_emergency_contact: document.getElementById('setupEmergency').value.trim() }); if (profileError) return fail(profileError.message); await client.auth.signOut(); location.replace('login.html?setup=complete'); };
-  </script>
+  <script src="invitation.js"></script>
+  <script src="account-setup.js"></script>
 </body>
 </html>

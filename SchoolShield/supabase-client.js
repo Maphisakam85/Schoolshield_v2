@@ -53,7 +53,7 @@ if (window.SCHOOLSHIELD_SUPABASE_CONFIG && window.supabase) {
       removeItem: (key) => sessionStorage.removeItem(key),
     };
     window.schoolshieldSupabase = window.supabase.createClient(url, publishableKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: tabAuthStorage },
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: !window.schoolshieldManualInvitationExchange, storage: tabAuthStorage },
     });
   }
 }

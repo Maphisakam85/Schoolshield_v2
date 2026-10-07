@@ -4200,7 +4200,7 @@ function action(type, el) {
   else if (type === "approve-teacher-assignment")
     approveTeacherAssignment(el.dataset.assignment);
   else if (type === "approve-account-request")
-    approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
+    approveAccountRequest(el.dataset.request, el.dataset.delivery || "preferred");
   else if (type === "reject-account-request")
     rejectAccountRequest(el.dataset.request);
   else if (type === "refresh-account-requests") loadAccountRequests();
@@ -5811,7 +5811,7 @@ function render() {
 
 function accountRequests() {
   return shell(
-    `<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends an invitation email; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`,
+    `<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends the preferred Email/SMS invitation; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`,
     "Account Requests",
   );
 }
@@ -5839,7 +5839,7 @@ async function loadAccountRequests() {
   if (!client || !rows) return;
   const { data, error } = await client
     .from("account_requests")
-    .select("id, display_name, email, requested_role, created_at")
+    .select("id, display_name, email, requested_role, created_at, invitation_method, phone")
     .eq("status", "pending")
     .order("created_at");
   await client
@@ -5864,7 +5864,7 @@ async function loadAccountRequests() {
     ? data
         .map(
           (request) =>
-            `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`,
+            `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}<small>${request.invitation_method === "sms" ? "SMS" : "Email"}</small></td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`,
         )
         .join("")
     : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
@@ -5876,7 +5876,7 @@ async function loadAccountRequests() {
   );
 }
 
-async function approveAccountRequest(id, delivery = "email") {
+async function approveAccountRequest(id, delivery = "preferred") {
   const client = window.schoolshieldSupabase,
     approvedRole = $(`[data-approval-role="${id}"]`)?.value;
   if (!client || !approvedRole) return;
@@ -5909,8 +5909,7 @@ async function approveAccountRequest(id, delivery = "email") {
     let trustedLink = "";
     try {
       if (
-        new URL(link).host ===
-        new URL(window.SCHOOLSHIELD_SUPABASE_CONFIG.url).host
+        new URL(link).pathname.endsWith("/account-setup.html") && (new URL(link).protocol === "https:" || (new URL(link).protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(link).hostname)))
       )
         trustedLink = link.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
     } catch (_) {
@@ -5928,7 +5927,7 @@ async function approveAccountRequest(id, delivery = "email") {
   } else {
     modal(
       "Account approved",
-      `<p><b>The account has been approved.</b> An invitation was sent to the applicant's email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+      `<p><b>The account has been approved.</b> ${result.message === "Account approved. The SMS provider accepted the invitation for delivery." ? "The SMS provider accepted the invitation for delivery." : "An invitation email has been sent."}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
     );
   }
   loadAccountRequests();
