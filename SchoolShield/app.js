@@ -1128,7 +1128,7 @@ function parentDashboard() {
   const alerts = notificationsForRole();
   const published = publishedReportsForClass(child.class, child.id);
   return shell(
-    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>Good morning, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.title}</b><small>${notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
+    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>Good morning, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b><small>${notice.announcementId ? announcementText(notice.description) : notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
     "Dashboard",
   );
 }
@@ -2489,11 +2489,11 @@ function parentChat() {
 /* ------------------------------ announcements ---------------------------- */
 function announcements() {
   const r = role();
-  const recent = getState().announcements;
+  const recent = getState().announcements.filter(announcementIsVisible);
   if (r === "sgb") {
     const rows = recent.map(
       (a) =>
-        `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
+        `<tr><td><b>${a.title}</b><small>${announcementText(a.author)} · ${a.date}</small></td><td>${announcementText(a.audience)}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
     );
     return generic(
       "Announcements",
@@ -3424,7 +3424,7 @@ function notifications() {
   const s = getState();
   const visible = notificationsForRole();
   return shell(
-    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.title}</b>${badge(n.priority)}</div><p>${n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.announcementId ? announcementText(n.title) : n.title}</b>${badge(n.priority)}</div><p>${n.announcementId ? announcementText(n.description) : n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
@@ -4362,6 +4362,7 @@ function incidentsForRole() {
 function notificationsForRole() {
   const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
   return getState().notifications.filter((notice) => {
+    if (notice.announcementId) return announcementIsVisible(notice);
     if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
     if (notice.recipient) return notice.recipient === userName();
     const targeted = Boolean(notice.learnerId || notice.class);
@@ -4958,8 +4959,8 @@ function viewNotification(id) {
   const drawer = $("#notificationCenter");
   if (drawer) drawer.style.display = "none";
   modal(
-    notice.title,
-    `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`,
+    notice.announcementId ? announcementText(notice.title) : notice.title,
+    `<p>${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`,
   );
 }
 function commentNotification(id) {
@@ -5099,32 +5100,25 @@ function manageAnnouncement(id) {
   if (!announcement || announcement.author !== userName()) return;
   modal(
     "Manage announcement",
-    `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcement.title}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcement.body || ""}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`,
+    `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcementText(announcement.title)}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcementText(announcement.body || "")}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`,
   );
 }
-function saveAnnouncement(id) {
-  const title = inputValue("editAnnouncementTitle");
-  if (!title) return;
-  persist((state) => {
-    const item = state.announcements.find(
-      (announcement) =>
-        announcement.id === id && announcement.author === userName(),
-    );
-    if (item) {
-      item.title = title;
-      item.body = inputValue("editAnnouncementBody");
-    }
-  });
-  finishForm();
+async function saveAnnouncement(id) {
+  const title = inputValue('editAnnouncementTitle'), body = inputValue('editAnnouncementBody');
+  if (!title || !body) { modal('Missing information', '<p>Enter both a title and a message.</p>'); return; }
+  return changeAnnouncement(id, 'update', title, body);
 }
-function deleteAnnouncement(id) {
-  persist((state) => {
-    state.announcements = state.announcements.filter(
-      (item) => !(item.id === id && item.author === userName()),
-    );
-  });
-  finishForm();
+async function deleteAnnouncement(id) { return changeAnnouncement(id, 'delete'); }
+async function changeAnnouncement(id, action, title = '', body = '') {
+  if (window.schoolshieldAnnouncementSending) return;
+  window.schoolshieldAnnouncementSending = true;
+  try {
+    await writeAnnouncement({ p_id: id, p_title: title, p_body: body, p_audience_id: '', p_audience: '', p_delivery: '', p_action: action });
+    finishForm();
+  } catch (error) { modal('Announcement not saved', '<p>' + announcementText(error.message) + '</p>'); }
+  finally { window.schoolshieldAnnouncementSending = false; }
 }
+
 function manageAppointment(id) {
   const appointment = getState().appointments.find((item) => item.id === id);
   if (!appointment) return;
@@ -5377,7 +5371,7 @@ function showClerkAssessmentPopup() {
   const key = `schoolshield:assessment-popup:${SCHOOL.code}:${notice.id}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "shown");
-  modal("New scores ready for review", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${notice.class}&assessment=${notice.assessmentId}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
+  modal("New scores ready for review", `<p><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b></p><p class="muted">${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${notice.class}&assessment=${notice.assessmentId}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
 }
 
 function notifyParentCriticalSubject(assessmentId, learnerId) {
@@ -5422,7 +5416,7 @@ function showTeacherCriticalMarkPopup() {
   const key = `schoolshield:critical-popup:${SCHOOL.code}:${notice.assessmentId}:${notice.learnerId}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "shown");
-  modal("Critical mark requires attention", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><button class="btn primary" data-action="notify-parent-critical-subject" data-assessment="${notice.assessmentId}" data-learner="${notice.learnerId}">Contact parent</button><button class="btn ghost" data-action="close-modal">Review later</button></div>`);
+  modal("Critical mark requires attention", `<p><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b></p><p class="muted">${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="modal-foot"><button class="btn primary" data-action="notify-parent-critical-subject" data-assessment="${notice.assessmentId}" data-learner="${notice.learnerId}">Contact parent</button><button class="btn ghost" data-action="close-modal">Review later</button></div>`);
 }
 
 function assignTeacher() {
@@ -5608,33 +5602,73 @@ function releaseLearnerReport(classId, learnerId) {
   render();
 }
 
-function sendAnnouncement() {
-  const select = $("#audienceSelect");
-  const title = $("#annTitle");
-  const body = $("#annBody");
-  if (!select || !title || !title.value.trim()) {
-    modal(
-      "Missing title",
-      '<p class="muted">Add a title before sending the announcement.</p>',
-    );
-    return;
+function announcementText(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function announcementIsVisible(item) {
+  const session = JSON.parse(sessionStorage.getItem('schoolshieldSession') || '{}');
+  if ((item.authorId && item.authorId === session.userId) || (!item.authorId && item.author === userName())) return true;
+  const audience = item.audienceId;
+  if (!audience) return true; // Preserve legacy notices without audience IDs.
+  const r = role();
+  if (audience === 'whole-school') return true;
+  if (audience === 'all-parents') return r === 'parent';
+  if (audience === 'all-learners') return false;
+  if (audience === 'all-staff') return ['principal','deputy','clerk','teacher','security'].includes(r);
+  if (audience === 'teachers') return r === 'teacher';
+  if (audience === 'leadership') return ['principal','deputy'].includes(r);
+  if (audience === 'administration') return r === 'clerk';
+  if (audience === 'sgb' || audience === 'security') return r === audience;
+  if (r !== 'parent') return false;
+  const children = learners();
+  if (audience === 'my-classes-parents') return children.some(child => (item.classIds || []).includes(child.class));
+  if (audience.startsWith('class-')) return children.some(child => child.class === audience.slice(6));
+  if (audience.startsWith('grade-')) return children.some(child => String(child.grade).replace(/\s+/g,'-') === audience.slice(6));
+  return false;
+}
+async function writeAnnouncement(params) {
+  if (!['principal','deputy','clerk','teacher'].includes(role())) throw new Error('You are not permitted to publish announcements.');
+  const client = window.schoolshieldSupabase;
+  if (!client || !window.schoolshieldCloudWorkspaceReady) throw new Error('The school workspace is unavailable. Refresh and try again.');
+  if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue.catch(() => undefined);
+  const pending = Promise.resolve(client.rpc('publish_school_announcement', params));
+  window.schoolshieldWorkspaceSaveQueue = pending;
+  const { data, error } = await pending;
+  if (error || !data) throw new Error(error?.message || 'The announcement could not be saved.');
+  // Update only the announcement cache after the server confirms persistence.
+  const state = getState();
+  state.announcements = state.announcements.filter(item => item.id !== data.id);
+  if (params.p_action !== 'delete') state.announcements.unshift(data);
+  const oldNotice = state.notifications.find(item => item.announcementId === data.id);
+  state.notifications = state.notifications.filter(item => item.announcementId !== data.id);
+  if (params.p_action !== 'delete') state.notifications.unshift({ ...oldNotice, ...data, id: 'NOTICE-' + data.id, announcementId: data.id, description: data.body, reporter: data.author, category: 'Announcement', priority: 'Medium', read: oldNotice?.read || false });
+  sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(state));
+  return data;
+}
+async function sendAnnouncement() {
+  if (window.schoolshieldAnnouncementSending) return;
+  const title = inputValue('annTitle'), body = inputValue('annBody');
+  const audience = audienceOptions().find(option => option.id === inputValue('audienceSelect'));
+  if (!title || !body || !audience) { modal('Missing information','<p>Enter a title, message and valid audience before publishing.</p>'); return; }
+  const delivery = inputValue('deliverySelect');
+  const signature = JSON.stringify([title,body,audience.id,delivery]);
+  // Keep the same ID after uncertain network errors so retries cannot duplicate a saved notice.
+  if (window.schoolshieldAnnouncementDraft?.signature !== signature) window.schoolshieldAnnouncementDraft = { signature, id: 'ANN-' + crypto.randomUUID() };
+  const button = $("[data-action='send-announcement']");
+  window.schoolshieldAnnouncementSending = true;
+  if (button) button.disabled = true;
+  try {
+    await writeAnnouncement({ p_id: window.schoolshieldAnnouncementDraft.id, p_title: title, p_body: body, p_audience_id: audience.id, p_audience: audience.label, p_delivery: delivery, p_recipients: audience.count, p_action: 'create' });
+    window.schoolshieldAnnouncementDraft = null;
+    $('#annTitle').value = ''; $('#annBody').value = '';
+    render();
+  } catch (error) { modal('Announcement not saved', '<p>' + announcementText(error.message) + '</p>'); }
+  finally {
+    window.schoolshieldAnnouncementSending = false;
+    if (button) button.disabled = false;
+    const current = $("[data-action='send-announcement']");
+    if (current) current.disabled = false;
   }
-  const chosen = select.options[select.selectedIndex];
-  persist((state) => {
-    state.announcements.unshift({
-      id: "ANN-" + Date.now().toString().slice(-4),
-      title: title.value.trim(),
-      body: body ? body.value.trim() : "",
-      audience: chosen.textContent,
-      recipients: Number(chosen.dataset.count || 0),
-      delivery: $("#deliverySelect")
-        ? $("#deliverySelect").value
-        : "In-app notification",
-      author: userName(),
-      date: todayLabel(),
-    });
-  });
-  render();
 }
 
 async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
@@ -5749,6 +5783,9 @@ function filterTable(query, selector) {
 
 /* --------------------------------- render -------------------------------- */
 function render() {
+  const announcementDraft = page() === "announcements" ? Object.fromEntries(
+    ["annTitle", "annBody", "audienceSelect", "deliverySelect"].map(id => [id, $("#" + id)?.value]),
+  ) : {};
   const chatInput = $("#chatInput");
   const oldMessages = $(".messages");
   const oldScrollTop = oldMessages?.scrollTop;
@@ -5795,6 +5832,14 @@ function render() {
   else html = dashboard();
   $("#app").innerHTML = html;
   bind();
+  Object.entries(announcementDraft).forEach(([id, value]) => {
+    const field = $("#" + id);
+    if (field && value !== undefined) field.value = value;
+  });
+  if (page() === "announcements") {
+    const button = $("[data-action='send-announcement']");
+    if (button) button.disabled = Boolean(window.schoolshieldAnnouncementSending);
+  }
   const nextChatInput = $("#chatInput");
   if (nextChatInput && chatDraft !== undefined) {
     nextChatInput.value = chatDraft;
@@ -6074,7 +6119,7 @@ function initWorkspaceChrome() {
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.announcementId ? announcementText(notice.description) : notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
