@@ -1,28 +1,27 @@
-# Notification centre visual QA
+# Login and mobile verification
 
-- Source visual truth: user-supplied dashboard screenshot in this conversation.
-- Implementation screenshot: unavailable; this environment has no cloud browser available for a rendered capture.
-- Intended viewport/state: desktop dashboard, notification drawer open, then an alert detail opened.
-- Evidence checked: source screenshot and the implemented interaction/state changes could not be compared side-by-side in a browser.
+Reference: user-provided image_de64e5c3.jpg and phone screenshots in the conversation.
 
-## Findings
+Implemented the reference's campus-photo / white-form split layout, existing blue
+SchoolShield branding and green sign-in/create-account tabs. The monitor frame
+is not part of the website. The administrator credentials block was deliberately
+omitted as requested. Mobile uses a short image header and stacked form.
 
-- [P1] Notification detail previously sat behind the notification drawer.
-  - Fix applied: opening a notification closes the drawer, and modal overlays now use a higher stacking layer than the drawer.
-- [P1] Header notification control used a diamond glyph instead of a bell.
-  - Fix applied: replaced with an accessible bell control and label.
-- [P1] Newly created notifications stored the literal value `Now`.
-  - Fix applied: new notifications now store ISO creation timestamps and render as relative time; existing `Now` entries are migrated on load.
+Browser verification: agent-browser with headless Microsoft Edge, local port 4173.
+Desktop login: 1280 x 900. Phone: 390 x 844. Small phone: 320 x 740.
 
-## Implementation checklist
+- Sign-in/create-account tabs and register.html redirect worked.
+- Existing demo parent signed in successfully; dashboard, notifications and chat loaded.
+- Notification and account pages passed horizontal-overflow checks.
+- 320-pixel chat and create-account views passed horizontal-overflow checks.
+- Drawer fills the phone viewport, with the sign-out control accessible.
+- Removed duplicate mobile chat contact list after the first capture; chat-small.png shows the revision.
+- Browser error list was empty.
+- No messages, account requests, or school records were submitted during browser checks.
+- 19 automated tests passed, including clock-skew message ordering and role visibility.
 
-- [x] Correct notification trigger icon.
-- [x] Prevent drawer/detail overlap.
-- [x] Render dynamic notification times in the centre, list, and detail view.
-- [x] Pass JavaScript syntax and whitespace checks.
+Limit: viewport emulation in Edge; physical iOS keyboard behavior was not tested.
 
-## Follow-up polish
+final result: passed
 
-- Open the dashboard in a browser, trigger a new notification, then verify the drawer and detail modal at the screenshot viewport.
-
-final result: blocked
+Full-size revision: removed outer margins, card width cap, radius and shadow. Desktop uses a 60/40 image/form split with minimum viewport height. Inspected login-fullscreen.png at 1440 x 900 and captured create-fullscreen.png. Mobile retains stacked layout.

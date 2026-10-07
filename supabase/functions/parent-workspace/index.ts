@@ -21,6 +21,15 @@ function parentPayload(raw: Record<string, any>, learnerIds: Set<string>) {
   const learners = (raw.learners || []).filter((learner: any) => learnerIds.has(learner.id));
   const classIds = new Set(learners.map((learner: any) => learner.class));
   const learnerNames = new Set(learners.map((learner: any) => learner.name));
+  const familyAnnouncement = (announcement: any) => {
+    const audience = announcement.audienceId;
+    if (!audience) return /parent|family|whole.school/i.test(String(announcement.audience || ""));
+    if (["whole-school", "all-parents"].includes(audience)) return true;
+    if (audience === "my-classes-parents") return (announcement.classIds || []).some((id: string) => classIds.has(id));
+    if (audience.startsWith("class-")) return classIds.has(audience.slice(6));
+    if (audience.startsWith("grade-")) return learners.some((learner: any) => String(learner.grade).replace(/\s+/g, "-") === audience.slice(6));
+    return false;
+  };
   const onlyLearnerScores = (scores: Record<string, unknown> = {}) => Object.fromEntries(
     Object.entries(scores).filter(([id]) => learnerIds.has(id)),
   );
@@ -35,9 +44,9 @@ function parentPayload(raw: Record<string, any>, learnerIds: Set<string>) {
     learners,
     assessments: (raw.assessments || []).filter((assessment: any) => classIds.has(assessment.class)).map((assessment: any) => ({ ...assessment, scores: onlyLearnerScores(assessment.scores) })),
     reports,
-    announcements: (raw.announcements || []).filter((announcement: any) => /parent|family|whole.school/i.test(String(announcement.audience || ""))),
+    announcements: (raw.announcements || []).filter(familyAnnouncement),
     visitors: [], incidents: [], staff: [], staffChangeRequests: [], security: [], appointments: [], teacherChat: [],
-    notifications: (raw.notifications || []).filter((notice: any) => notice.scope === "whole-school" || notice.scope === "parents" || learnerIds.has(notice.learnerId)),
+    notifications: (raw.notifications || []).filter((notice: any) => notice.announcementId ? familyAnnouncement(notice) : notice.scope === "whole-school" || notice.scope === "parents" || learnerIds.has(notice.learnerId)),
     sickNotices: (raw.sickNotices || []).filter((notice: any) => learnerNames.has(notice.person)),
     parentChat: (raw.parentChat || []).filter((conversation: any) => learnerIds.has(conversation.learnerId)),
     attendanceRegisters: (raw.attendanceRegisters || []).filter((register: any) => classIds.has(register.class)).map((register: any) => ({ ...register, entries: onlyLearnerScores(register.entries) })),

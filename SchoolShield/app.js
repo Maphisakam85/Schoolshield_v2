@@ -179,7 +179,6 @@ const NAV = [
 
 const NAV_GROUPS = [
   { label: "Overview", ids: ["leadership", "notifications"] },
-  
   {
     label: "People",
     ids: [
@@ -193,6 +192,10 @@ const NAV_GROUPS = [
     ],
   },
 
+  {
+    label: "Learning",
+    ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"],
+  },
   {
     label: "Safety & wellbeing",
     ids: [
@@ -292,11 +295,16 @@ function emptyWorkspace() {
 }
 
 /* ------------------------------ state layer ------------------------------ */
+function workspaceCacheKey() {
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  return `schoolshield:${session.schoolCode || SCHOOL.code}:${session.userId || "signed-out"}`;
+}
+
 function getState() {
   let stored = null;
   try {
     stored = JSON.parse(
-      localStorage.getItem(`schoolshield:${SCHOOL.code}`) || "null",
+      sessionStorage.getItem(workspaceCacheKey()) || "null",
     );
   } catch (err) {
     stored = null;
@@ -322,8 +330,8 @@ function getState() {
 }
 
 function save(state) {
-  localStorage.setItem(`schoolshield:${SCHOOL.code}`, JSON.stringify(state));
-  if (window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
+  sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(state));
+  if (role() !== "parent" && window.schoolshieldCloudWorkspaceReady && window.schoolshieldSupabase) {
     const session = JSON.parse(
       sessionStorage.getItem("schoolshieldSession") || "{}",
     );
@@ -367,38 +375,30 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   );
   if (!client || !session.schoolId) return false;
   if (session.role === "parent") {
-    const {
-      data: { session: authSession },
-    } = await client.auth.getSession();
-    if (!authSession?.access_token) return false;
-    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await fetch(
-      `${config.url}/functions/v1/parent-workspace`,
-      {
-        method: "POST",
-        headers: {
-          apikey: config.publishableKey,
-          Authorization: `Bearer ${authSession.access_token}`,
-        },
-      },
-    );
+    const previousError = window.schoolshieldParentWorkspaceError;
+    const previousLinked = window.schoolshieldParentLearnerLinked;
+    const fail = (message) => {
+      window.schoolshieldParentWorkspaceError = message;
+      if (renderAfterRefresh && previousError !== message) render();
+      return false;
+    };
+    let response;
+    try {
+      response = await window.schoolshieldFunctionRequest("parent-workspace");
+    } catch (error) {
+      return fail(error.message || "Check your connection and try again.");
+    }
     const data = await response.json().catch(() => ({}));
     if (!response.ok || !data?.payload) {
-      window.schoolshieldParentWorkspaceError =
-        data?.error || `Request failed (${response.status})`;
-      console.warn(
-        "Parent workspace could not be refreshed",
-        window.schoolshieldParentWorkspaceError,
-      );
-      return false;
+      return fail(data?.error || `Request failed (${response.status})`);
     }
     window.schoolshieldParentWorkspaceError = "";
-    const key = `schoolshield:${session.schoolCode}`;
+    const key = workspaceCacheKey();
     const incoming = JSON.stringify(data.payload);
-    const changed = localStorage.getItem(key) !== incoming;
-    localStorage.setItem(key, incoming);
+    const changed = sessionStorage.getItem(key) !== incoming;
+    sessionStorage.setItem(key, incoming);
     window.schoolshieldParentLearnerLinked = Boolean(data.linked);
-    if (changed && renderAfterRefresh) render();
+    if (renderAfterRefresh && (changed || previousError || previousLinked !== Boolean(data.linked))) render();
     return changed;
   }
   const { data, error } = await client
@@ -408,13 +408,41 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     .maybeSingle();
   if (error || !data?.payload || !Object.keys(data.payload).length)
     return false;
-  const key = `schoolshield:${session.schoolCode}`;
+  const key = workspaceCacheKey();
   const incoming = JSON.stringify(data.payload);
-  const changed = localStorage.getItem(key) !== incoming;
-  localStorage.setItem(key, incoming);
+  const changed = sessionStorage.getItem(key) !== incoming;
+  sessionStorage.setItem(key, incoming);
   window.schoolshieldCloudWorkspaceReady = true;
   if (changed && renderAfterRefresh) render();
   return changed;
+}
+
+// Keep receiving even when Realtime is unavailable (parents use a restricted
+// endpoint). Schedule after completion so slow requests never overlap.
+function startWorkspaceAutoRefresh() {
+  if (window.schoolshieldAutoRefreshStarted) return;
+  window.schoolshieldAutoRefreshStarted = true;
+  let pending = null;
+  const refresh = () => {
+    if (document.visibilityState === "hidden") return Promise.resolve();
+    if (!pending) {
+      pending = refreshCloudWorkspace(true)
+        .catch((error) => console.warn("Automatic workspace refresh failed", error.message))
+        .finally(() => { pending = null; });
+    }
+    return pending;
+  };
+  const schedule = () => {
+    const chatPage = ["parent-chat", "teacher-chat", "sgb-chat"].includes(page());
+    window.schoolshieldWorkspaceRefreshTimer = setTimeout(async () => {
+      await refresh();
+      schedule();
+    }, chatPage ? 3000 : 15000);
+  };
+  window.addEventListener("focus", refresh);
+  window.addEventListener("online", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  schedule();
 }
 
 async function refreshWorkspaceManually() {
@@ -455,10 +483,10 @@ function startWorkspaceRealtime() {
       (change) => {
         const payload = change.new?.payload;
         if (!payload || typeof payload !== "object") return;
-        const key = `schoolshield:${session.schoolCode}`;
+        const key = workspaceCacheKey();
         const incoming = JSON.stringify(payload);
-        if (localStorage.getItem(key) === incoming) return;
-        localStorage.setItem(key, incoming);
+        if (sessionStorage.getItem(key) === incoming) return;
+        sessionStorage.setItem(key, incoming);
         render();
       },
     )
@@ -748,6 +776,22 @@ function parentLearner() {
   );
 }
 function parentLinkRequired(title = "Your learner") {
+  const error = window.schoolshieldParentWorkspaceError;
+  const linked = window.schoolshieldParentLearnerLinked;
+  // Only the authenticated endpoint can confirm that there is no learner link.
+  // An empty cache after a deployment or failed request is not evidence of that.
+  if (error || linked !== false) {
+    const detail = String(error || (linked
+      ? "Your account is linked, but the learner record could not be loaded. Please retry."
+      : "Your learner information has not loaded yet. Please retry."))
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return generic(
+      title,
+      "Parent / guardian",
+      "We could not load your learner information.",
+      `<section class="panel"><h3>Learner information unavailable</h3><p class="muted" role="status">${detail}</p><div class="panel-foot"><button class="btn primary" data-action="refresh-parent-workspace">Retry loading</button> <a class="btn" href="login.html">Sign in again</a></div></section>`,
+    );
+  }
   return generic(
     title,
     "Parent / guardian",
@@ -917,7 +961,7 @@ function nav() {
       : "";
   return (
     dashboard +
-    NAV_GROUPS.map((group) => {
+    NAV_GROUPS.filter((group) => role() !== "security" || group.label !== "Learning").map((group) => {
       const links = group.ids
         .map((id) => NAV.find((item) => item[0] === id))
         .filter((item) => item && allowed(item[0]));
@@ -975,7 +1019,7 @@ function initials(name) {
     .join("");
 }
 function openIncidents() {
-  return getState().incidents.filter((i) => i.status !== "Resolved").length;
+  return incidentsForRole().filter((i) => i.status !== "Resolved").length;
 }
 function classesForScope() {
   const r = role();
@@ -1001,13 +1045,18 @@ function scopeStats() {
 }
 
 /* ------------------------------- dashboard ------------------------------- */
+function localTimeGreeting(now = new Date()) {
+  const hour = now.getHours();
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+}
+
 function dashboard() {
   const s = getState();
   const r = role();
   if (r === "parent") return parentDashboard();
   if (r === "sgb") {
     return shell(
-      `<div class="hero"><div><span class="pill">SGB oversight</span><h1>Good morning, SGB Member</h1><p>Your workspace is limited to school safety reports, announcements and direct governance communication.</p></div></div><div class="stats-grid">${stat("Visitors today", s.visitors.length, "Visitor report")}${stat("Open incidents", openIncidents(), "Incident report")}${stat("Announcements", s.announcements.length, "Published notices")}${stat("Principal chat", (s.sgbPrincipalChat || []).filter((chat) => chat.sgbMember === userName()).length, "Private channel")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Only SGB-authorised tools are available.</p></div></div><div class="quick-grid">${quickForRole("sgb")}</div></section>`,
+      `<div class="hero"><div><span class="pill">SGB oversight</span><h1>${localTimeGreeting()}, SGB Member</h1><p>Your workspace is limited to school safety reports, announcements and direct governance communication.</p></div></div><div class="stats-grid">${stat("Visitors today", s.visitors.length, "Visitor report")}${stat("Open incidents", openIncidents(), "Incident report")}${stat("Announcements", s.announcements.length, "Published notices")}${stat("Principal chat", (s.sgbPrincipalChat || []).filter((chat) => chat.sgbMember === userName()).length, "Private channel")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Only SGB-authorised tools are available.</p></div></div><div class="quick-grid">${quickForRole("sgb")}</div></section>`,
       "Dashboard",
     );
   }
@@ -1058,14 +1107,16 @@ function dashboard() {
     .slice(0, 5)
     .map((c) => {
       const st = classStats(c.id);
-      return `<div class="report-row" style="display:grid;grid-template-columns:minmax(220px,1fr) 110px 100px;gap:18px;align-items:center;padding:15px 4px"><span><b style="font-size:12px">${c.grade} · ${c.id}</b><small style="display:block;margin-top:4px">${c.teacher} · ${st.learners} learners</small></span><span class="row-metrics"><b>${st.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${st.passRate}%</b><small>pass rate</small></span></div>`;
+      return `<div class="report-row class-performance-row"><span><b>${c.grade} · ${c.id}</b><small>${c.teacher} · ${st.learners} learners</small></span><span class="row-metrics"><b>${st.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${st.passRate}%</b><small>pass rate</small></span></div>`;
     })
     .join("");
 
+  const classPerformancePanel = r === "security" ? "" : `<section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section>`;
+
   return shell(
-    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid">${kpis.join("")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>${localTimeGreeting()}, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div><div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
-      s.incidents
+      incidentsForRole()
         .slice(0, 4)
         .map(
           (i) =>
@@ -1082,7 +1133,7 @@ function parentDashboard() {
   const alerts = notificationsForRole();
   const published = publishedReportsForClass(child.class, child.id);
   return shell(
-    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>Good morning, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", "${child.class} only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.title}</b><small>${notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
+    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>${localTimeGreeting()}, Parent / Guardian</h1><p>Everything here relates to ${child.name} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${initials(child.name)}</div><div><h2>${child.name}</h2><p>${child.grade} · ${child.class} · Class teacher: ${teacherForClass(child.class)}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${child.name}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${teacherForClass(child.class)}</small></span><span class="row-metrics"><b>${child.attendance}%</b><small>attendance</small></span><span class="row-metrics"><b>${child.average}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${TERM} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${child.class}" data-learner="${child.id}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b><small>${notice.announcementId ? announcementText(notice.description) : notice.description}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
     "Dashboard",
   );
 }
@@ -2136,15 +2187,9 @@ function chatLayout(
         `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${page()}.html?chat=${index}"><div class="avatar">${contact.initials}</div><div><b>${contact.id}</b><small>${contact.role}</small></div><span class="chat-contact-action">Chat -></span></button>`,
     )
     .join("");
-  const ordered = (active.messages || [])
-    .map((message, index) => ({ message, index }))
-    .sort((a, b) => {
-      const first = Date.parse(a.message.sentAt || a.message.date || "");
-      const second = Date.parse(b.message.sentAt || b.message.date || "");
-      return Number.isNaN(first) || Number.isNaN(second) || first === second
-        ? a.index - b.index
-        : first - second;
-    });
+  // The persisted conversation is append-only. Device clocks and legacy date
+  // strings can disagree; sorting those timestamps moved replies above receipts.
+  const ordered = (active.messages || []).map((message) => ({ message }));
   let previousSender = "";
   const messages =
     ordered
@@ -2161,7 +2206,7 @@ function chatLayout(
     title,
     eyebrow,
     desc,
-    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`,
+    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${encodeURIComponent(storeKey + ":" + active.id)}"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="me">Send</button></div></section></div>`,
   );
 }
 
@@ -2210,7 +2255,7 @@ function legacyChatLayout(
     title,
     eyebrow,
     desc,
-    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="${ownStoredSide}">Send</button></div></section></div>`,
+    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${encodeURIComponent(storeKey + ":" + active.id)}"><div class="chat-head"><b>${active.id}</b><small>${active.role}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${storeKey}" data-chat="${storageIndex}" data-sender="${ownStoredSide}">Send</button></div></section></div>`,
   );
 }
 
@@ -2449,11 +2494,11 @@ function parentChat() {
 /* ------------------------------ announcements ---------------------------- */
 function announcements() {
   const r = role();
-  const recent = getState().announcements;
+  const recent = getState().announcements.filter(announcementIsVisible);
   if (r === "sgb") {
     const rows = recent.map(
       (a) =>
-        `<tr><td><b>${a.title}</b><small>${a.author} · ${a.date}</small></td><td>${a.audience}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
+        `<tr><td><b>${a.title}</b><small>${announcementText(a.author)} · ${a.date}</small></td><td>${announcementText(a.audience)}</td><td>${a.delivery}</td><td>${a.body || "—"}</td></tr>`,
     );
     return generic(
       "Announcements",
@@ -2578,14 +2623,14 @@ function securityOfficers() {
       let attendanceStatus = "Not Clocked In";
 
       if (record) {
-        clockIn = record.clockIn || "—";
-        clockOut = record.clockOut || "—";
+        clockIn = shiftAuditTime(record.actualCheckInAt, record.clockIn);
+        clockOut = shiftAuditTime(record.actualCheckOutAt, record.clockOut);
         attendanceStatus = record.status || "Clocked In";
       }
 
       let attendanceAction = "";
 
-      if (!record) {
+      if (!record || record.status === "Completed") {
         attendanceAction = `
           <button
             class="btn small primary"
@@ -2639,9 +2684,9 @@ function securityOfficers() {
 
           <td>${officer.employee}</td>
 
-          <td>${officer.shift}</td>
+          <td>${announcementText(record?.shift || officer.shift || "—")}</td>
 
-          <td>${officer.site}</td>
+        
 
           <td>
             ${badge(officer.status)}
@@ -3049,21 +3094,21 @@ function securityAttendanceHistory(id) {
             <b>${record.date}</b>
           </td>
 
-          <td>
-            ${record.shift || officer.shift || "—"}
-          </td>
+        <td>
+          ${record.shift || officer.shift || "—"}
+        </td>
 
           <td>
             ${record.site || officer.site || "—"}
           </td>
 
-          <td>
-            <b>${record.clockIn || "—"}</b>
-          </td>
+        <td>
+          <b>${record.clockIn || "—"}</b>
+        </td>
 
-          <td>
-            <b>${record.clockOut || "—"}</b>
-          </td>
+        <td>
+          <b>${record.clockOut || "—"}</b>
+        </td>
 
           <td>
             ${badge(record.status)}
@@ -3439,7 +3484,7 @@ function incidents() {
         "Officer",
         "",
       ],
-      s.incidents.map(
+      incidentsForRole().map(
         (i) =>
           `<tr class="incident-row"><td><b>${i.id}</b></td><td>${i.date}<small>${i.time}</small></td><td>${i.category}</td><td>${i.location}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td><td>${i.officer}</td><td><button class="table-action" data-action="view-incident" data-incident="${i.id}">Open</button></td></tr>`,
       ),
@@ -3451,17 +3496,77 @@ function notifications() {
   const s = getState();
   const visible = notificationsForRole();
   return shell(
-    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.title}</b>${badge(n.priority)}</div><p>${n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.announcementId ? announcementText(n.title) : n.title}</b>${badge(n.priority)}</div><p>${n.announcementId ? announcementText(n.description) : n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
 /* ------------------------------- interactions ---------------------------- */
+function photoCaptureField(prefix) {
+  return `${role() === "security" ? `<label>Take photo<input class="input" id="${prefix}Camera" type="file" accept="image/jpeg,image/png" capture="environment" data-photo-input></label>` : ""}`;
+}
+function affectedItemStatus(category) {
+  return ({ "Theft / Stolen Items": "Stolen", "Missing Property": "Missing", "Property Damage / Broken Items": "Damaged-Broken" })[category];
+}
+function bindIncidentEvidenceForm(root) {
+  const urls = [];
+  $$("[data-photo-input]", root).forEach(input => {
+    const preview = document.createElement("div");
+    input.parentElement.appendChild(preview);
+    input.addEventListener("change", () => {
+      preview.replaceChildren();
+      for (const file of input.files || []) {
+        if (!/\.(jpe?g|png)$/i.test(file.name) || !["image/jpeg", "image/png"].includes(file.type) || !file.size || file.size > 10485760) {
+          preview.textContent = "Choose a JPEG or PNG photo up to 10 MB."; input.value = ""; return;
+        }
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file); urls.push(img.src);
+        img.alt = "Selected photo preview"; img.style.cssText = "max-width:100%;max-height:180px;object-fit:contain;margin-top:8px";
+        preview.appendChild(img);
+      }
+    });
+  });
+  if (root.querySelector("[data-photo-input]")) {
+    const observer = new MutationObserver(() => { if (!root.isConnected) { urls.forEach(url => URL.revokeObjectURL(url)); observer.disconnect(); } });
+    observer.observe(document.body, {childList:true});
+  }
+  const category = root.querySelector("#incidentCategory");
+  if (!category) return;
+  const section = document.createElement("section"); section.className = "full panel"; section.id = "affectedItemsSection";
+  section.innerHTML = '<h3>Affected Items</h3><div id="affectedItemRows"></div><button class="btn" type="button" id="addAffectedItem">Add another item</button>';
+  category.closest(".form-grid").appendChild(section);
+  const rows = section.querySelector("#affectedItemRows");
+  const add = () => {
+    const row = document.createElement("div"); row.className = "form-grid affected-item";
+    row.innerHTML = `<label>Item description<input class="input" data-item="description"></label><label>Quantity<input class="input" type="number" min="1" step="1" value="1" data-item="quantity"></label><label>Status<select class="select" data-item="status">${["Stolen","Missing","Damaged-Broken"].map(status => `<option${status === affectedItemStatus(category.value) ? " selected" : ""}>${status}</option>`).join("")}</select></label><label>Estimated value (R, optional)<input class="input" type="number" min="0" step="0.01" data-item="estimatedValue"></label><label>Owner (optional)<input class="input" data-item="owner"></label><label>Notes (optional)<textarea class="textarea" data-item="notes"></textarea></label><button type="button" class="btn">Remove item</button>`;
+    row.querySelector("button").onclick = () => row.remove(); rows.appendChild(row);
+  };
+  section.querySelector("#addAffectedItem").onclick = add;
+  const update = () => { section.hidden = !affectedItemStatus(category.value); if (!section.hidden && !rows.children.length) add(); };
+  category.addEventListener("change", update); update();
+}
+function readAffectedItems() {
+  if (!affectedItemStatus(inputValue("incidentCategory"))) return [];
+  const rows = $$("#affectedItemRows .affected-item");
+  if (!rows.length) throw new Error("Add at least one affected item for this category.");
+  return rows.map(row => {
+    const value = key => row.querySelector(`[data-item="${key}"]`).value.trim();
+    const quantity = Number(value("quantity")), amount = value("estimatedValue");
+    if (!value("description") || !Number.isSafeInteger(quantity) || quantity < 1 || !["Stolen","Missing","Damaged-Broken"].includes(value("status"))) throw new Error("Each affected item needs a description, a positive whole-number quantity and a valid status.");
+    if (amount && (!Number.isFinite(Number(amount)) || Number(amount) < 0)) throw new Error("Estimated value must be zero or a positive amount.");
+    return { description:value("description"), quantity, status:value("status"), estimatedValue:amount ? Number(amount) : null, owner:value("owner"), notes:value("notes") };
+  });
+}
+function affectedItemsDetails(items) {
+  if (!Array.isArray(items) || !items.length) return "";
+  return `<section class="panel"><h3>Affected Items</h3>${items.map(item => `<div class="report-row"><span><b>${announcementText(item.description)}</b><small>Quantity: ${announcementText(item.quantity)} · ${announcementText(item.status)}</small></span><span>${item.estimatedValue != null ? `R ${announcementText(item.estimatedValue)}` : ""}<small>${announcementText(item.owner || "")}</small><small>${announcementText(item.notes || "")}</small></span></div>`).join("")}</section>`;
+}
 function modal(title, body) {
   const el = document.createElement("div");
   el.className = "modal-backdrop";
   el.innerHTML = `<div class="modal" style="max-height:90vh;display:flex;flex-direction:column"><div class="modal-head"><h3>${title}</h3><button class="close">×</button></div><div class="modal-body" style="overflow-y:auto;max-height:calc(90vh - 70px)">${body}</div></div>`;
   document.body.appendChild(el);
   markRequiredFields(el);
+  bindIncidentEvidenceForm(el);
   $$("[data-action]", el).forEach(
     (button) => (button.onclick = () => action(button.dataset.action, button)),
   );
@@ -3477,6 +3582,7 @@ function visitorModal(id) {
     v.name,
     `<p class="muted">${isLeadership() ? "Read-only visitor record for school leadership." : "Visitor registration record."}</p><div class="detail-grid"><div><small>Visitor ID</small><b>${v.id}</b></div><div><small>Visitor type</small><b>${v.type}</b></div><div><small>Identification</small><b>${v.identificationType || "Not captured"} · ${v.identity || "—"}</b></div><div><small>Person being visited</small><b>${v.host}</b></div><div><small>Department</small><b>${v.department || "—"}</b></div><div><small>Purpose</small><b>${v.purpose}</b></div><div><small>Date</small><b>${v.date || "—"}</b></div><div><small>Check-in / check-out</small><b>${v.in} · ${v.out}</b></div><div><small>Expected check-out</small><b>${v.expectedOut || "—"}</b></div><div><small>Vehicle</small><b>${v.vehicle || "—"}</b></div><div><small>Registered by</small><b>${v.registeredBy || "—"}</b></div><div><small>Processed by</small><b>${v.processedBy || "—"}</b></div></div>`,
   );
+  showRecordDocuments("visitor", id);
 }
 function todayLabel() {
   const months = [
@@ -3825,14 +3931,16 @@ function loadPdfLibrary() {
   if (pdfLibraryPromise) return pdfLibraryPromise;
   pdfLibraryPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src =
-      "https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js";
+    script.src = "vendor/jspdf.umd.min.js";
     script.onload = () =>
       window.jspdf?.jsPDF
         ? resolve(window.jspdf.jsPDF)
         : reject(new Error("PDF library unavailable"));
-    script.onerror = () => reject(new Error("Could not load PDF library"));
+    script.onerror = () => { script.remove(); reject(new Error("Could not load PDF library")); };
     document.head.appendChild(script);
+  }).catch((error) => {
+    pdfLibraryPromise = null;
+    throw error;
   });
   return pdfLibraryPromise;
 }
@@ -3868,8 +3976,9 @@ async function downloadPdf(filename, title, lines) {
     });
     documentPdf.save(filename);
   } catch (error) {
+    console.error("Report PDF generation failed", error);
     alert(
-      "The PDF could not be created. Please check your internet connection and try again.",
+      "The PDF could not be created. Reload this page and try again. If it still fails, contact your school administrator.",
     );
   }
 }
@@ -4073,7 +4182,7 @@ function visitorReportLines() {
   ];
 }
 function incidentReportLines() {
-  const incidents = getState().incidents;
+  const incidents = incidentsForRole();
   return [
     `${SCHOOL.name} — Incident report`,
     `Generated ${todayLabel()} · ${incidents.length} incident(s)`,
@@ -4138,12 +4247,12 @@ function action(type, el) {
   if (type === "register")
     modal(
       "Register visitor",
-      `<p class="muted">Captured ${todayLabel()} by ${userName()}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label><label>Visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/*"></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
+      `<p class="muted">Captured ${todayLabel()} by ${userName()}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option><option>Government Official</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label>${photoCaptureField("visitor")}<label>Select existing visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/jpeg,image/png" data-photo-input></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
     );
   else if (type === "incident") {
     modal(
       "Report incident",
-      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
+      `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option><option>Theft / Stolen Items</option><option>Missing Property</option><option>Property Damage / Broken Items</option></select></label><label>Share with<select class="select" id="incidentScope"><option value="related">Related staff and safety team</option><option value="teachers">All teachers</option><option value="whole-school">Whole school</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
         .security.map((officer) => `<option>${officer.name}</option>`)
         .join(
           "",
@@ -4153,7 +4262,7 @@ function action(type, el) {
         )
         .join(
           "",
-        )}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${learners()
+        )}</select></label><label>Learner (optional)<select class="select" id="incidentLearner"><option value="">None</option>${(role() === "teacher" ? learnersForScope() : learners())
         .map(
           (learner) => `<option value="${learner.id}">${learner.name}</option>`,
         )
@@ -4163,7 +4272,7 @@ function action(type, el) {
         .staff.map((staff) => `<option>${staff.name}</option>`)
         .join(
           "",
-        )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label><label class="full">Photos & documents<input class="input" id="incidentFiles" type="file" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
+        )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label>${photoCaptureField("incident")}<label>Select existing incident photos<input class="input" id="incidentPhotos" type="file" accept="image/jpeg,image/png" multiple data-photo-input></label><label class="full">Supporting documents<input class="input" id="incidentFiles" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
     );
     const incidentDate = $("#incidentDate");
     if (incidentDate) incidentDate.max = todayIso();
@@ -4206,9 +4315,8 @@ function action(type, el) {
   else if (type === "preview-incidents") previewIncidentReport();
   else if (type === "download-incidents") downloadIncidentReport();
   else if (type === "go-test-scores") go("test-scores.html?class=" + classId);
-  else if (type === "submit-marks") saveTestScores(classId, "teacher", el.dataset.assessment);
+  else if (type === "submit-marks") saveTestScores(classId, "teacher");
   else if (type === "update-scores") saveTestScores(classId, "clerk", el.dataset.assessment);
-  else if (type === "notify-parent-critical-subject") notifyParentCriticalSubject(el.dataset.assessment, learnerId);
   else if (type === "save-attendance") saveAttendance(classId);
   else if (type === "open-attendance-day")
     go(
@@ -4225,7 +4333,7 @@ function action(type, el) {
   else if (type === "approve-teacher-assignment")
     approveTeacherAssignment(el.dataset.assignment);
   else if (type === "approve-account-request")
-    approveAccountRequest(el.dataset.request, el.dataset.delivery || "email");
+    approveAccountRequest(el.dataset.request, el.dataset.delivery || "preferred");
   else if (type === "reject-account-request")
     rejectAccountRequest(el.dataset.request);
   else if (type === "refresh-account-requests") loadAccountRequests();
@@ -4280,8 +4388,8 @@ function action(type, el) {
       "New appointment",
       `<div class="form-grid"><label>Appointment title<input class="input" id="appointmentTitle" placeholder="Parent meeting"></label><label>With<select class="select" id="appointmentWith"><option value="${SCHOOL.principal}">Principal — ${SCHOOL.principal}</option><option value="Deputy Principal — Mr Naidoo">Deputy Principal — Mr Naidoo</option><option value="Parent / guardian">Parent / guardian</option><option value="Staff member">Staff member</option></select></label><label>Date<input class="input" id="appointmentDate" type="date"></label><label>Time<input class="input" id="appointmentTime" type="time"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-appointment">Save appointment</button></div>`,
     );
-  else if (type === "save-visitor") saveVisitor();
-  else if (type === "save-incident") saveIncident();
+  else if (type === "save-visitor") saveRecordDocuments("visitor");
+  else if (type === "save-incident") saveRecordDocuments("incident");
   else if (type === "save-learner") saveLearner();
   else if (type === "save-staff") saveStaff();
   else if (type === "approve-staff-change")
@@ -4298,7 +4406,7 @@ function action(type, el) {
   else if (type === "save-staff-changes")
     saveStaffChanges(el.dataset.staff, el.dataset.staffIndex);
   else if (type === "save-appointment") saveAppointment();
-  else if (type === "submit-sick-notice") saveSickNotice();
+  else if (type === "submit-sick-notice") saveRecordDocuments("sick-notice");
   else if (type === "checkout-visitor") checkoutVisitor(el.dataset.visitor);
   else if (type === "view-notification")
     viewNotification(el.dataset.notification);
@@ -4314,6 +4422,7 @@ function action(type, el) {
   else if (type === "save-officer") saveOfficer(el.dataset.officer);
   else if (type === "clock-in-security")
     clockInSecurityOfficer(el.dataset.officer);
+  else if (type === "confirm-security-shift") recordSecurityShift(el.dataset.officer,"check-in");
   else if (type === "clock-out-security")
     clockOutSecurityOfficer(el.dataset.officer);
   else if (type === "security-attendance-history")
@@ -4354,29 +4463,159 @@ function alertToast() {
   if (!latest) return "";
   return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${latest.id}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${latest.title}</b><small style="display:block;margin-top:2px">${latest.description}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
 }
+function relatedLearnerRecord(record) {
+  if (role() === "teacher") {
+    const mine = teacherClasses(userName()).map((item) => item.id);
+    const learner = record.learnerId && learnerById(record.learnerId);
+    return learner ? mine.includes(learner.class) : Boolean(record.class && mine.includes(record.class));
+  }
+  if (role() === "parent") {
+    const child = parentLearner();
+    return Boolean(child && (record.learnerId ? record.learnerId === child.id : record.class === child.class));
+  }
+  return false;
+}
+
+function roleAudienceMatches(record) {
+  const audience = record.scope || record.audience;
+  const aliases = { teachers: "teacher", parents: "parent", "all-teachers": "teacher", "all-parents": "parent" };
+  if (audience === "whole-school") return true;
+  if (audience === "staff") return role() !== "parent";
+  if (audience === "leadership") return isLeadership();
+  return (aliases[audience] || audience) === role();
+}
+
+function incidentsForRole() {
+  return getState().incidents.filter((incident) => {
+    if (["principal", "deputy", "security", "sgb"].includes(role())) return true;
+    return roleAudienceMatches(incident) || incident.reporter === userName() ||
+      incident.staff === userName() || relatedLearnerRecord(incident);
+  });
+}
+
 function notificationsForRole() {
-  const notices = getState().notifications;
-  if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
-  const child = parentLearner();
-  return notices.filter(
-    (notice) =>
-      (notice.scope === "parents" &&
-        (!notice.class || (child && notice.class === child.class))) ||
-      notice.scope === "whole-school" ||
-      (child && notice.learnerId === child.id),
-  );
+  const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
+  return getState().notifications.filter((notice) => {
+    if (notice.announcementId) return announcementIsVisible(notice);
+    if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
+    if (notice.recipient) return notice.recipient === userName();
+    const targeted = Boolean(notice.learnerId || notice.class);
+    if (notice.scope === "whole-school") return true;
+    if (roleAudienceMatches(notice)) return !targeted || relatedLearnerRecord(notice) || !["parent", "teacher"].includes(role());
+    // A learner's own teacher may see learner alerts, but not private alerts
+    // addressed to a different staff role or a named recipient.
+    if (targeted && ["teacher", "parent"].includes(role()) && relatedLearnerRecord(notice)) {
+      return !notice.scope || ["system", "parents", "parent", "learner"].includes(notice.scope);
+    }
+    if (!notice.scope || notice.scope === "system") return ["principal", "deputy", "security", "clerk"].includes(role());
+    return false;
+  });
 }
 
 function inputValue(id) {
   return ($("#" + id)?.value || "").trim();
 }
+async function documentService() {
+  if (window.SchoolShieldDocuments) return window.SchoolShieldDocuments;
+  if (!window.schoolshieldDocumentsLoading) window.schoolshieldDocumentsLoading = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "documents.js";
+    script.onload = () => resolve(window.SchoolShieldDocuments);
+    script.onerror = () => { window.schoolshieldDocumentsLoading = null; reject(new Error("Document upload service could not be loaded. Refresh and try again.")); };
+    document.head.appendChild(script);
+  });
+  return window.schoolshieldDocumentsLoading;
+}
+async function saveRecordDocuments(entity) {
+  const settings = {
+    visitor: { fields: ["visitorCamera", "visitorPhoto", "visitorDocument"], store: "visitors", save: saveVisitor, prefix: "VIS-" },
+    incident: { fields: ["incidentCamera", "incidentPhotos", "incidentFiles"], store: "incidents", save: saveIncident, prefix: "INC-" },
+    "sick-notice": { fields: ["sickLetter"], store: "sickNotices", save: saveSickNotice, prefix: "SN-" },
+  }[entity];
+  if (window.schoolshieldDocumentSaving) return;
+  const files = settings.fields.flatMap(id => [...($("#" + id)?.files || [])]);
+  if (!files.length && !window.schoolshieldPendingDocumentRecord) return settings.save();
+  window.schoolshieldDocumentSaving = true;
+  try {
+    const service = await documentService();
+    files.forEach(file => service.validate(file));
+    if (!window.schoolshieldSupabase) throw new Error("Sign in before uploading documents.");
+    let pending = window.schoolshieldPendingDocumentRecord;
+    if (pending && pending.entity !== entity) throw new Error("Retry the unfinished document upload before submitting another record.");
+    if (!pending) {
+      const capture = { recordId: settings.prefix + crypto.randomUUID() };
+      window.schoolshieldDocumentCapture = capture;
+      try { settings.save(); } finally { window.schoolshieldDocumentCapture = null; }
+      const record = getState()[settings.store].find(item => item.id === capture.recordId);
+      if (!record) return; // Existing field/ID/duplicate validation rejected the form.
+      pending = { entity, record, finish: capture.finish, form: settings.fields.map(id => $("#" + id)), files: files.map(file => ({file,retry:{}})), persisted: false };
+      window.schoolshieldPendingDocumentRecord = pending;
+    }
+    if (pending.form.some((field,index) => field !== $("#" + settings.fields[index]))) throw new Error("An earlier record has an unfinished upload. Return to that form or refresh before creating another record.");
+    if (!pending.persisted) {
+      if (role() === "parent") {
+        const current = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+        const learner = getState().learners.find(item => item.name === pending.record.person);
+        if (!learner) throw new Error("This sick notice is not linked to your learner.");
+        pending.record.learnerId = learner.id;
+        pending.record.submittedById = current.userId;
+        const { data, error } = await window.schoolshieldSupabase.rpc("persist_parent_document_notice", { p_record: pending.record });
+        if (error || !data) throw new Error(error?.message || "The notice could not be saved to the school.");
+        pending.record = data;
+      } else {
+        let saved = window.schoolshieldWorkspaceSaveQueue && await window.schoolshieldWorkspaceSaveQueue.catch(() => false);
+        if (saved !== true && window.schoolshieldCloudWorkspaceReady) {
+          const state = getState();
+          if (!state[settings.store].some(item => item.id === pending.record.id)) state[settings.store].unshift(pending.record);
+          saved = await save(state);
+        }
+        if (saved !== true) throw new Error(window.schoolshieldLastSyncError || "The school record could not be saved. Refresh and retry the upload.");
+      }
+      pending.persisted = true;
+    }
+    for (const entry of pending.files) {
+      if (!entry.done) { await service.upload(entity,pending.record.id,entry.file,entry.retry); entry.done = true; }
+    }
+    window.schoolshieldPendingDocumentRecord = null;
+    try { await refreshCloudWorkspace(false); } catch (_) { /* Files are already persistent. */ }
+    finishForm(pending.finish?.title, pending.finish?.message);
+  } catch (error) {
+    // Keep the record ID and each uploaded file's progress for a safe retry.
+    modal("Document upload incomplete", `<p>${announcementText(error.message)}</p><p>The form and selected files are retained. Retry the original Save/Submit button to complete the upload; do not create another record.</p>`);
+  } finally { window.schoolshieldDocumentSaving = false; }
+}
+async function showRecordDocuments(entity, recordId) {
+  if (!window.schoolshieldSupabase) return;
+  const body = $(".modal-backdrop:last-child .modal-body");
+  if (!body) return;
+  const section = document.createElement("section");
+  section.className = "panel";
+  section.textContent = "Loading supporting documents…";
+  body.appendChild(section);
+  try {
+    const service = await documentService(), rows = await service.list(entity,recordId);
+    if (!section.isConnected) return;
+    section.innerHTML = '<h3>Supporting documents</h3>' + (rows.length ? rows.map(row => `<button class="btn small ghost" data-document-id="${row.id}">${announcementText(row.filename)}</button>`).join(" ") : '<p class="muted">No stored documents. A legacy filename alone does not contain an uploaded file.</p>');
+    $$('[data-document-id]', section).forEach(button => button.onclick = async () => {
+      button.disabled = true;
+      try {
+        const url = await service.download(button.dataset.documentId);
+        const link = document.createElement("a");
+        link.href = url; link.download = ""; link.referrerPolicy = "no-referrer";
+        document.body.appendChild(link); link.click(); link.remove();
+      } catch (error) { modal("Document unavailable", `<p>${announcementText(error.message)}</p>`); }
+      finally { button.disabled = false; }
+    });
+  } catch (error) { section.textContent = error.message; }
+}
 function finishForm(
   title = "Saved successfully",
   message = "Your update has been saved and shared with the school workspace.",
 ) {
+  if (window.schoolshieldDocumentCapture) {
+    window.schoolshieldDocumentCapture.finish = { title, message };
+    return;
+  }
   $$(".modal-backdrop").forEach((el) => el.remove());
   render();
   if (title)
@@ -4424,7 +4663,7 @@ function saveVisitor() {
   }
   persist((state) => {
     const visitor = {
-      id: "VIS-" + Date.now().toString().slice(-4),
+      id: window.schoolshieldDocumentCapture?.recordId || "VIS-" + Date.now().toString().slice(-4),
       name,
       host,
       purpose,
@@ -4469,13 +4708,17 @@ function saveIncident() {
   const location = inputValue("incidentLocation");
   const description = inputValue("incidentDescription");
   if (!requireValues([location, description])) return;
+  let affectedItems;
+  try { affectedItems = readAffectedItems(); }
+  catch (error) { return modal("Affected items required", `<p>${announcementText(error.message)}</p>`); }
+  if (role() === "teacher" && inputValue("incidentLearner") && !learnersForScope().some((item) => item.id === inputValue("incidentLearner"))) return;
   if (inputValue("incidentDate") > todayIso())
     return modal(
       "Future date not allowed",
       '<p class="muted">An incident can only be reported for today or an earlier date.</p>',
     );
   persist((state) => {
-    const id = "INC-" + Date.now().toString().slice(-6);
+    const id = window.schoolshieldDocumentCapture?.recordId || "INC-" + Date.now().toString().slice(-6);
     state.incidents.unshift({
       id,
       date: inputValue("incidentDate") || todayLabel(),
@@ -4494,6 +4737,8 @@ function saveIncident() {
         (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
       description,
+      affectedItems,
+      scope: ["teachers", "whole-school"].includes(inputValue("incidentScope")) ? inputValue("incidentScope") : "related",
       people: inputValue("incidentPeople"),
       visitorId: inputValue("incidentVisitor"),
       learnerId: inputValue("incidentLearner"),
@@ -4716,7 +4961,7 @@ function saveSickNotice() {
     );
   persist((state) =>
     state.sickNotices.unshift({
-      id: "SN-" + Date.now().toString().slice(-5),
+      id: window.schoolshieldDocumentCapture?.recordId || "SN-" + Date.now().toString().slice(-5),
       submittedBy: userName(),
       person: learner.split(" — ")[0],
       date,
@@ -4863,7 +5108,7 @@ function checkoutVisitor(id) {
   render();
 }
 function viewIncident(id) {
-  const incident = getState().incidents.find((item) => item.id === id);
+  const incident = incidentsForRole().find((item) => item.id === id);
   if (!incident) return;
   const comments =
     (incident.comments || [])
@@ -4885,10 +5130,12 @@ function viewIncident(id) {
       : "";
   modal(
     incident.id,
-    `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section><section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
+    `<p class="muted">${isLeadership() ? "Leadership view — read-only operational fields. Follow-up communication is available below." : "Incident record."}</p><div class="detail-grid"><div><small>Category</small><b>${incident.category}</b></div><div><small>Location</small><b>${incident.location}</b></div><div><small>Reported by</small><b>${incident.reporter || incident.officer}</b></div><div><small>Officer</small><b>${incident.officer}</b></div><div><small>Date & time</small><b>${incident.date} · ${incident.time}</b></div><div><small>Persons involved</small><b>${incident.people || "—"}</b></div><div><small>CCTV reference</small><b>${incident.cctv || "—"}</b></div><div><small>Priority / status</small>${badge(incident.priority)} ${badge(incident.status)}</div></div><section class="panel"><h3>Description</h3><p>${incident.description}</p><h3>Immediate action taken</h3><p>${incident.immediateAction || "—"}</p></section>${affectedItemsDetails(incident.affectedItems)}<section class="panel"><h3>Communication & follow-up</h3>${comments}${response}</section><section class="panel"><h3>Audit trail</h3><ul>${audit}</ul></section>`,
   );
+  showRecordDocuments("incident", id);
 }
 function addIncidentResponse(id) {
+  if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
   const text = inputValue("incidentResponse");
   if (!text) return;
   persist((state) => {
@@ -4907,6 +5154,7 @@ function addIncidentResponse(id) {
   finishForm();
 }
 function resolveIncident(id) {
+  if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
   persist((state) => {
     const incident = state.incidents.find((item) => item.id === id);
     if (!incident) return;
@@ -4926,7 +5174,7 @@ function resolveIncident(id) {
   finishForm();
 }
 function viewNotification(id) {
-  const notice = getState().notifications.find((item) => item.id === id);
+  const notice = notificationsForRole().find((item) => item.id === id);
   if (!notice) return;
   persist((state) => {
     const item = state.notifications.find((entry) => entry.id === id);
@@ -4947,11 +5195,12 @@ function viewNotification(id) {
   const drawer = $("#notificationCenter");
   if (drawer) drawer.style.display = "none";
   modal(
-    notice.title,
-    `<p>${notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`,
+    notice.announcementId ? announcementText(notice.title) : notice.title,
+    `<p>${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="detail-grid"><div><small>Category</small><b>${notice.category}</b></div><div><small>Reported by</small><b>${notice.reporter || "SchoolShield user"}</b></div><div><small>Priority</small>${badge(notice.priority)}</div><div><small>Time</small><b>${notificationTime(notice)}</b></div></div><section class="panel"><h3>Follow-up</h3>${comments}</section>${principalControls}`,
   );
 }
 function commentNotification(id) {
+  if (role() !== "principal" || !notificationsForRole().some((item) => item.id === id)) return;
   const text = inputValue("notificationComment");
   if (!text) return;
   persist((state) => {
@@ -5002,6 +5251,7 @@ function saveNewOfficer() {
   );
 }
 function manageOfficer(id) {
+  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
   const officer = getState().security.find((item) => item.id === id);
   if (!officer) return;
   modal(
@@ -5010,6 +5260,7 @@ function manageOfficer(id) {
   );
 }
 function saveOfficer(id) {
+  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
   persist((state) => {
     const officer = state.security.find((item) => item.id === id);
     if (!officer) return;
@@ -5028,6 +5279,7 @@ function viewParentSickNotice(id) {
     "Submitted sick notice",
     `<div class="detail-grid"><div><small>Learner</small><b>${notice.person}</b></div><div><small>Absence date</small><b>${notice.date}</b></div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Teacher review</small>${badge(notice.status)}</div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div><p class="muted" style="margin-top:16px">The learner has been marked sick for this date. The assigned teacher will review the notice.</p>`,
   );
+  showRecordDocuments("sick-notice", id);
 }
 function viewSickNotice(id) {
   const notice = getState().sickNotices.find((item) => item.id === id);
@@ -5036,6 +5288,7 @@ function viewSickNotice(id) {
     "Sick notice",
     `<div class="detail-grid"><div><small>Submitted by</small><b>${notice.submittedBy}</b></div><div><small>Learner / staff</small><b>${notice.person}</b></div><div><small>Date</small><b>${notice.date}</b></div><div><small>Status</small>${badge(notice.status)}</div><div><small>Reason</small><b>${notice.reason}</b></div><div><small>Supporting sick letter</small><b>${notice.letter || "No attachment"}</b></div></div>${notice.status !== "Reviewed" ? `<div class="modal-foot"><button class="btn primary" data-action="review-sick-notice" data-sick="${id}">Review & acknowledge</button></div>` : ""}`,
   );
+  showRecordDocuments("sick-notice", id);
 }
 function reviewSickNotice(id) {
   persist((state) => {
@@ -5087,32 +5340,25 @@ function manageAnnouncement(id) {
   if (!announcement || announcement.author !== userName()) return;
   modal(
     "Manage announcement",
-    `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcement.title}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcement.body || ""}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`,
+    `<div class="form-grid"><label class="full">Title<input class="input" id="editAnnouncementTitle" value="${announcementText(announcement.title)}"></label><label class="full">Message<textarea class="textarea" id="editAnnouncementBody">${announcementText(announcement.body || "")}</textarea></label></div><div class="modal-foot"><button class="btn" data-action="delete-announcement" data-announcement="${id}">Delete</button><button class="btn primary" data-action="save-announcement" data-announcement="${id}">Save changes</button></div>`,
   );
 }
-function saveAnnouncement(id) {
-  const title = inputValue("editAnnouncementTitle");
-  if (!title) return;
-  persist((state) => {
-    const item = state.announcements.find(
-      (announcement) =>
-        announcement.id === id && announcement.author === userName(),
-    );
-    if (item) {
-      item.title = title;
-      item.body = inputValue("editAnnouncementBody");
-    }
-  });
-  finishForm();
+async function saveAnnouncement(id) {
+  const title = inputValue('editAnnouncementTitle'), body = inputValue('editAnnouncementBody');
+  if (!title || !body) { modal('Missing information', '<p>Enter both a title and a message.</p>'); return; }
+  return changeAnnouncement(id, 'update', title, body);
 }
-function deleteAnnouncement(id) {
-  persist((state) => {
-    state.announcements = state.announcements.filter(
-      (item) => !(item.id === id && item.author === userName()),
-    );
-  });
-  finishForm();
+async function deleteAnnouncement(id) { return changeAnnouncement(id, 'delete'); }
+async function changeAnnouncement(id, action, title = '', body = '') {
+  if (window.schoolshieldAnnouncementSending) return;
+  window.schoolshieldAnnouncementSending = true;
+  try {
+    await writeAnnouncement({ p_id: id, p_title: title, p_body: body, p_audience_id: '', p_audience: '', p_delivery: '', p_action: action });
+    finishForm();
+  } catch (error) { modal('Announcement not saved', '<p>' + announcementText(error.message) + '</p>'); }
+  finally { window.schoolshieldAnnouncementSending = false; }
 }
+
 function manageAppointment(id) {
   const appointment = getState().appointments.find((item) => item.id === id);
   if (!appointment) return;
@@ -5365,7 +5611,7 @@ function showClerkAssessmentPopup() {
   const key = `schoolshield:assessment-popup:${SCHOOL.code}:${notice.id}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "shown");
-  modal("New scores ready for review", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${notice.class}&assessment=${notice.assessmentId}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
+  modal("New scores ready for review", `<p><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b></p><p class="muted">${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${notice.class}&assessment=${notice.assessmentId}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
 }
 
 function notifyParentCriticalSubject(assessmentId, learnerId) {
@@ -5410,7 +5656,7 @@ function showTeacherCriticalMarkPopup() {
   const key = `schoolshield:critical-popup:${SCHOOL.code}:${notice.assessmentId}:${notice.learnerId}`;
   if (sessionStorage.getItem(key)) return;
   sessionStorage.setItem(key, "shown");
-  modal("Critical mark requires attention", `<p><b>${notice.title}</b></p><p class="muted">${notice.description}</p><div class="modal-foot"><button class="btn primary" data-action="notify-parent-critical-subject" data-assessment="${notice.assessmentId}" data-learner="${notice.learnerId}">Contact parent</button><button class="btn ghost" data-action="close-modal">Review later</button></div>`);
+  modal("Critical mark requires attention", `<p><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b></p><p class="muted">${notice.announcementId ? announcementText(notice.description) : notice.description}</p><div class="modal-foot"><button class="btn primary" data-action="notify-parent-critical-subject" data-assessment="${notice.assessmentId}" data-learner="${notice.learnerId}">Contact parent</button><button class="btn ghost" data-action="close-modal">Review later</button></div>`);
 }
 
 function assignTeacher() {
@@ -5596,38 +5842,78 @@ function releaseLearnerReport(classId, learnerId) {
   render();
 }
 
-function sendAnnouncement() {
-  const select = $("#audienceSelect");
-  const title = $("#annTitle");
-  const body = $("#annBody");
-  if (!select || !title || !title.value.trim()) {
-    modal(
-      "Missing title",
-      '<p class="muted">Add a title before sending the announcement.</p>',
-    );
-    return;
+function announcementText(value) {
+  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function announcementIsVisible(item) {
+  const session = JSON.parse(sessionStorage.getItem('schoolshieldSession') || '{}');
+  if ((item.authorId && item.authorId === session.userId) || (!item.authorId && item.author === userName())) return true;
+  const audience = item.audienceId;
+  if (!audience) return true; // Preserve legacy notices without audience IDs.
+  const r = role();
+  if (audience === 'whole-school') return true;
+  if (audience === 'all-parents') return r === 'parent';
+  if (audience === 'all-learners') return false;
+  if (audience === 'all-staff') return ['principal','deputy','clerk','teacher','security'].includes(r);
+  if (audience === 'teachers') return r === 'teacher';
+  if (audience === 'leadership') return ['principal','deputy'].includes(r);
+  if (audience === 'administration') return r === 'clerk';
+  if (audience === 'sgb' || audience === 'security') return r === audience;
+  if (r !== 'parent') return false;
+  const children = learners();
+  if (audience === 'my-classes-parents') return children.some(child => (item.classIds || []).includes(child.class));
+  if (audience.startsWith('class-')) return children.some(child => child.class === audience.slice(6));
+  if (audience.startsWith('grade-')) return children.some(child => String(child.grade).replace(/\s+/g,'-') === audience.slice(6));
+  return false;
+}
+async function writeAnnouncement(params) {
+  if (!['principal','deputy','clerk','teacher'].includes(role())) throw new Error('You are not permitted to publish announcements.');
+  const client = window.schoolshieldSupabase;
+  if (!client || !window.schoolshieldCloudWorkspaceReady) throw new Error('The school workspace is unavailable. Refresh and try again.');
+  if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue.catch(() => undefined);
+  const pending = Promise.resolve(client.rpc('publish_school_announcement', params));
+  window.schoolshieldWorkspaceSaveQueue = pending;
+  const { data, error } = await pending;
+  if (error || !data) throw new Error(error?.message || 'The announcement could not be saved.');
+  // Update only the announcement cache after the server confirms persistence.
+  const state = getState();
+  state.announcements = state.announcements.filter(item => item.id !== data.id);
+  if (params.p_action !== 'delete') state.announcements.unshift(data);
+  const oldNotice = state.notifications.find(item => item.announcementId === data.id);
+  state.notifications = state.notifications.filter(item => item.announcementId !== data.id);
+  if (params.p_action !== 'delete') state.notifications.unshift({ ...oldNotice, ...data, id: 'NOTICE-' + data.id, announcementId: data.id, description: data.body, reporter: data.author, category: 'Announcement', priority: 'Medium', read: oldNotice?.read || false });
+  sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(state));
+  return data;
+}
+async function sendAnnouncement() {
+  if (window.schoolshieldAnnouncementSending) return;
+  const title = inputValue('annTitle'), body = inputValue('annBody');
+  const audience = audienceOptions().find(option => option.id === inputValue('audienceSelect'));
+  if (!title || !body || !audience) { modal('Missing information','<p>Enter a title, message and valid audience before publishing.</p>'); return; }
+  const delivery = inputValue('deliverySelect');
+  const signature = JSON.stringify([title,body,audience.id,delivery]);
+  // Keep the same ID after uncertain network errors so retries cannot duplicate a saved notice.
+  if (window.schoolshieldAnnouncementDraft?.signature !== signature) window.schoolshieldAnnouncementDraft = { signature, id: 'ANN-' + crypto.randomUUID() };
+  const button = $("[data-action='send-announcement']");
+  window.schoolshieldAnnouncementSending = true;
+  if (button) button.disabled = true;
+  try {
+    await writeAnnouncement({ p_id: window.schoolshieldAnnouncementDraft.id, p_title: title, p_body: body, p_audience_id: audience.id, p_audience: audience.label, p_delivery: delivery, p_recipients: audience.count, p_action: 'create' });
+    window.schoolshieldAnnouncementDraft = null;
+    $('#annTitle').value = ''; $('#annBody').value = '';
+    render();
+  } catch (error) { modal('Announcement not saved', '<p>' + announcementText(error.message) + '</p>'); }
+  finally {
+    window.schoolshieldAnnouncementSending = false;
+    if (button) button.disabled = false;
+    const current = $("[data-action='send-announcement']");
+    if (current) current.disabled = false;
   }
-  const chosen = select.options[select.selectedIndex];
-  persist((state) => {
-    state.announcements.unshift({
-      id: "ANN-" + Date.now().toString().slice(-4),
-      title: title.value.trim(),
-      body: body ? body.value.trim() : "",
-      audience: chosen.textContent,
-      recipients: Number(chosen.dataset.count || 0),
-      delivery: $("#deliverySelect")
-        ? $("#deliverySelect").value
-        : "In-app notification",
-      author: userName(),
-      date: todayLabel(),
-    });
-  });
-  render();
 }
 
 async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
   const input = $("#chatInput");
-  if (!input || !input.value.trim()) return;
+  if (!input || !input.value.trim() || window.schoolshieldChatSending) return;
   const text = input.value.trim();
   if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
     const child =
@@ -5635,27 +5921,35 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
         ? parentLearner()
         : getState().parentChat?.[Number(chatIndex) || 0] &&
           learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
-    const {
-      data: { session },
-    } = await window.schoolshieldSupabase.auth.getSession();
-    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await fetch(`${config.url}/functions/v1/parent-chat`, {
-      method: "POST",
-      headers: {
-        apikey: config.publishableKey,
-        Authorization: `Bearer ${session?.access_token || ""}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ learner_id: child?.id, text }),
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok)
-      return modal(
-        "Message not sent",
-        `<p class="muted">${result.error || "Please try again."}</p>`,
-      );
-    await refreshCloudWorkspace(true);
-    if (role() === "teacher") render();
+    const button = $("[data-action='send-message']");
+    window.schoolshieldChatSending = true;
+    if (button) button.disabled = true;
+    try {
+      if (!child?.id) throw new Error("This conversation is not linked to a learner. Refresh the page and select the parent again.");
+      if (text.length > 2000) throw new Error("Keep your message under 2,000 characters.");
+      // Finish queued staff changes before the endpoint appends to the workspace.
+      if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
+      const response = await window.schoolshieldFunctionRequest("parent-chat", { learner_id: child.id, text });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "The message could not be saved. Please try again.");
+      if (input.value.trim() === text) input.value = "";
+      const currentInput = $("#chatInput");
+      if (currentInput?.value.trim() === text) currentInput.value = "";
+      try {
+        await refreshCloudWorkspace(true);
+      } catch (error) {
+        modal("Message sent", '<p class="muted">Your message was saved. Refresh the conversation to load the latest messages.</p>');
+      }
+    } catch (error) {
+      const message = String(error.message || "Check your connection and try again.")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      modal("Message not sent", `<p class="muted">${message}</p>`);
+    } finally {
+      window.schoolshieldChatSending = false;
+      if (button) button.disabled = false;
+      const currentButton = $("[data-action='send-message']");
+      if (currentButton) currentButton.disabled = false;
+    }
     return;
   }
   if (Array.isArray(getState()[storeKey])) {
@@ -5684,6 +5978,7 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
       });
     });
   }
+  input.value = "";
   render();
 }
 
@@ -5727,7 +6022,55 @@ function filterTable(query, selector) {
 }
 
 /* --------------------------------- render -------------------------------- */
+function patchLiveChat(html) {
+  if (!["parent-chat", "teacher-chat", "sgb-chat"].includes(page())) return false;
+  const live = $(".chat-window");
+  if (!live) return false;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const incoming = template.content.querySelector(".chat-window");
+  if (!incoming || live.dataset.conversation !== incoming.dataset.conversation) return false;
+  const messages = live.querySelector(".messages");
+  const nextMessages = incoming.querySelector(".messages");
+  if (messages.innerHTML !== nextMessages.innerHTML) {
+    const scrollTop = messages.scrollTop;
+    const atBottom = messages.scrollHeight - messages.clientHeight - scrollTop <= 60;
+    messages.innerHTML = nextMessages.innerHTML;
+    messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
+  }
+  // Never replace the composer, input or their ancestors. Focus, selection,
+  // IME composition and browser keyboard state therefore remain untouched.
+  const head = live.querySelector(".chat-head");
+  const nextHead = incoming.querySelector(".chat-head");
+  if (head.innerHTML !== nextHead.innerHTML) head.innerHTML = nextHead.innerHTML;
+  const send = live.querySelector("[data-action='send-message']");
+  const nextSend = incoming.querySelector("[data-action='send-message']");
+  if (send && nextSend) Object.assign(send.dataset, nextSend.dataset);
+  for (const selector of [".chat-contact-grid", ".chat-list"]) {
+    const current = $(selector), next = template.content.querySelector(selector);
+    if (current && next && current.innerHTML !== next.innerHTML) {
+      current.innerHTML = next.innerHTML;
+      $$('[data-action]', current).forEach(button => {
+        button.onclick = () => action(button.dataset.action, button);
+      });
+    }
+  }
+  return true;
+}
 function render() {
+  // Keep selected File objects and the original form mounted until its upload
+  // finishes or is retried. Cloud data may refresh without replacing the form.
+  if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return;
+  const announcementDraft = page() === "announcements" ? Object.fromEntries(
+    ["annTitle", "annBody", "audienceSelect", "deliverySelect"].map(id => [id, $("#" + id)?.value]),
+  ) : {};
+  const chatInput = $("#chatInput");
+  const oldMessages = $(".messages");
+  const oldScrollTop = oldMessages?.scrollTop;
+  const readingHistory = oldMessages && oldMessages.scrollHeight - oldMessages.clientHeight - oldMessages.scrollTop > 60;
+  const chatDraft = chatInput?.value;
+  const chatFocused = chatInput && document.activeElement === chatInput;
+  const chatSelection = chatInput ? [chatInput.selectionStart, chatInput.selectionEnd] : null;
   if (!allowed()) {
     const first = ACCESS[role()]?.[0] || "dashboard";
     if (page() !== first) {
@@ -5765,13 +6108,34 @@ function render() {
   else if (p === "parent-chat") html = parentChat();
   else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
+  if (patchLiveChat(html)) return;
   $("#app").innerHTML = html;
   bind();
+  Object.entries(announcementDraft).forEach(([id, value]) => {
+    const field = $("#" + id);
+    if (field && value !== undefined) field.value = value;
+  });
+  if (page() === "announcements") {
+    const button = $("[data-action='send-announcement']");
+    if (button) button.disabled = Boolean(window.schoolshieldAnnouncementSending);
+  }
+  const nextChatInput = $("#chatInput");
+  if (nextChatInput && chatDraft !== undefined) {
+    nextChatInput.value = chatDraft;
+    if (chatFocused) {
+      nextChatInput.focus({ preventScroll: true });
+      nextChatInput.setSelectionRange(...chatSelection);
+    }
+  }
+  if (readingHistory) {
+    const nextMessages = $(".messages");
+    if (nextMessages) requestAnimationFrame(() => { nextMessages.scrollTop = oldScrollTop; });
+  }
 }
 
 function accountRequests() {
   return shell(
-    `<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends an invitation email; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`,
+    `<div class="page-intro"><div><span class="pill">Account approval</span><h1>Account requests</h1><p>Approve new school accounts. Approval sends the preferred Email/SMS invitation; the user chooses their own password.</p></div><button class="btn ghost" data-action="refresh-account-requests">Refresh</button></div><section class="panel"><div class="panel-head"><div><h3>Pending requests</h3><p>Only the principal and school clerk can approve access.</p></div></div><div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Requested role</th><th>Approve as</th><th></th></tr></thead><tbody id="accountRequestRows"><tr><td colspan="5" class="muted">Loading pending requests…</td></tr></tbody></table></div></section>`,
     "Account Requests",
   );
 }
@@ -5799,7 +6163,7 @@ async function loadAccountRequests() {
   if (!client || !rows) return;
   const { data, error } = await client
     .from("account_requests")
-    .select("id, display_name, email, requested_role, created_at")
+    .select("id, display_name, email, requested_role, created_at, invitation_method, phone")
     .eq("status", "pending")
     .order("created_at");
   await client
@@ -5824,7 +6188,7 @@ async function loadAccountRequests() {
     ? data
         .map(
           (request) =>
-            `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}</td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`,
+            `<tr><td><b>${request.display_name}</b><small>${new Date(request.created_at).toLocaleDateString()}</small></td><td>${request.email}<small>${request.invitation_method === "sms" ? "SMS" : "Email"}</small></td><td>${ROLE_NAMES[request.requested_role]}</td><td><select class="select" data-approval-role="${request.id}">${roles.map((value) => `<option value="${value}" ${value === request.requested_role ? "selected" : ""}>${ROLE_NAMES[value]}</option>`).join("")}</select></td><td><span class="action-row"><button class="btn small primary" data-action="approve-account-request" data-request="${request.id}">Approve &amp; invite</button><button class="btn small ghost" data-action="approve-account-request" data-delivery="setup_link" data-request="${request.id}">Approve &amp; setup link</button><button class="btn small ghost" data-action="reject-account-request" data-request="${request.id}">Reject</button></span></td></tr>`,
         )
         .join("")
     : '<tr><td colspan="5" class="muted">No pending account requests.</td></tr>';
@@ -5836,7 +6200,7 @@ async function loadAccountRequests() {
   );
 }
 
-async function approveAccountRequest(id, delivery = "email") {
+async function approveAccountRequest(id, delivery = "preferred") {
   const client = window.schoolshieldSupabase,
     approvedRole = $(`[data-approval-role="${id}"]`)?.value;
   if (!client || !approvedRole) return;
@@ -5869,8 +6233,7 @@ async function approveAccountRequest(id, delivery = "email") {
     let trustedLink = "";
     try {
       if (
-        new URL(link).host ===
-        new URL(window.SCHOOLSHIELD_SUPABASE_CONFIG.url).host
+        new URL(link).pathname.endsWith("/account-setup.html") && (new URL(link).protocol === "https:" || (new URL(link).protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(new URL(link).hostname)))
       )
         trustedLink = link.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
     } catch (_) {
@@ -5888,7 +6251,7 @@ async function approveAccountRequest(id, delivery = "email") {
   } else {
     modal(
       "Account approved",
-      `<p><b>The account has been approved.</b> An invitation was sent to the applicant's email address with their school code and setup link.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+      `<p><b>The account has been approved.</b> ${result.message === "Account approved. The SMS provider accepted the invitation for delivery." ? "The SMS provider accepted the invitation for delivery." : "An invitation email has been sent."}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
     );
   }
   loadAccountRequests();
@@ -5957,12 +6320,21 @@ function initWorkspaceChrome() {
       sidebar.style.transform = compact ? "translateX(-105%)" : "translateX(0)";
       sidebar.style.position = "fixed";
       sidebar.style.zIndex = "40";
-      sidebar.style.width = "280px";
+      sidebar.style.width = "min(280px, 85vw)";
+      sidebar.inert = compact;
+      sidebar.setAttribute("aria-hidden", String(compact));
+      const backdrop = $("#mobileNavBackdrop");
+      if (backdrop) backdrop.hidden = compact;
+      $("#sidebarToggle")?.setAttribute("aria-expanded", String(!compact));
       main.style.marginLeft = "0";
       main.style.width = "100%";
       return;
     }
     const rail = compact || innerWidth <= 980;
+    sidebar.inert = false;
+    sidebar.removeAttribute("aria-hidden");
+    const backdrop = $("#mobileNavBackdrop");
+    if (backdrop) backdrop.hidden = true;
     sidebar.style.transform = "";
     sidebar.style.width = rail ? "70px" : "252px";
     sidebar
@@ -5973,6 +6345,16 @@ function initWorkspaceChrome() {
     main.style.marginLeft = rail ? "70px" : "252px";
     main.style.width = rail ? "calc(100% - 70px)" : "calc(100% - 252px)";
   };
+  if (!$("#mobileNavBackdrop")) {
+    const backdrop = document.createElement("button");
+    backdrop.id = "mobileNavBackdrop";
+    backdrop.className = "mobile-nav-backdrop";
+    backdrop.setAttribute("aria-label", "Close navigation");
+    backdrop.hidden = true;
+    backdrop.onclick = () => setSidebarState(true);
+    main.before(backdrop);
+  }
+  sidebar.onkeydown = (event) => { if (event.key === "Escape") { setSidebarState(true); $("#sidebarToggle")?.focus(); } };
   if (!$("#sidebarToggle")) {
     const toggle = document.createElement("button");
     toggle.id = "sidebarToggle";
@@ -6016,7 +6398,7 @@ function initWorkspaceChrome() {
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.announcementId ? announcementText(notice.description) : notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
@@ -6052,14 +6434,6 @@ function toggleNotificationCenter() {
 function bind() {
   initWorkspaceChrome();
   markRequiredFields(document);
-  if (!window.__schoolshieldCloudRefreshListener) {
-    window.__schoolshieldCloudRefreshListener = true;
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") refreshCloudWorkspace(true);
-    };
-    window.addEventListener("focus", refreshWhenVisible);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-  }
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
   if (page() === "dashboard") {
@@ -6143,13 +6517,13 @@ function bind() {
     if (count) count.textContent = opt.dataset.count || "0";
   });
   $("#chatInput")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       const sendButton = $("[data-action='send-message']");
       if (sendButton) action("send-message", sendButton);
     }
   });
-  const messagePane = $("#messages");
+  const messagePane = $(".messages");
   if (messagePane)
     requestAnimationFrame(() => {
       messagePane.scrollTop = messagePane.scrollHeight;
@@ -6209,15 +6583,7 @@ async function startWorkspace() {
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
     startWorkspaceRealtime();
-    // Parents use the restricted parent-workspace endpoint rather than the
-    // full workspace channel. This lightweight fallback also keeps every open
-    // portal current if a browser or network blocks realtime websockets.
-    if (!window.schoolshieldWorkspaceRefreshTimer) {
-      window.schoolshieldWorkspaceRefreshTimer = setInterval(
-        () => refreshCloudWorkspace(true),
-        15000,
-      );
-    }
+    startWorkspaceAutoRefresh();
     if (["principal", "clerk"].includes(profile.role)) {
       const { count } = await client
         .from("account_request_notifications")
