@@ -29,3 +29,14 @@ test('teacher detail keeps subject and grade/class sections separate without num
  const html=feature.view();for(const text of ['Mathematics','English','Grade 8','Grade 9','8A','9B','Term 1','Completed','In Progress','Not assessed']) assert.ok(html.includes(text));
  assert.match(html,/does not replace the formal DBE\/ELRC QMS appraisal process/);assert.ok(!html.includes('Overall academic score'));assert.ok(!html.includes('Acknowledge review'));
 });
+
+test('dated assignments follow server term eligibility while ended links remain available in their historical term',()=>{
+ const {feature}=harness();feature.state.data=structuredClone(data);
+ feature.state.data.termPeriods=[{term:1},{term:2},{term:3},{term:4}];
+ feature.state.data.contexts=[{...data.contexts[0],status:'Ended',eligibleTerms:[1,2]},
+  {...data.contexts[1],id:'NEW',status:'Active',eligibleTerms:[3,4]}];
+ feature.state.data.reviews=data.reviews.filter(r=>r.teaching_context_id==='C1');
+ feature.state.filters.term='1';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['C1']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1']);
+ feature.state.filters.term='3';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['NEW']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['NEW']);
+ assert.equal(feature.state.data.contexts.length,2);
+});

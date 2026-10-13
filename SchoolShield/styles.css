@@ -1877,6 +1877,13 @@ input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="
 .teacher-view-tabs a:focus-visible { outline: 3px solid #32bfa6; outline-offset: 2px; }
 .teacher-view-tabs a:active { filter: brightness(.9); }
 .teacher-view-hint { color: #66808c; font-size: 12px; margin: 0 0 12px; }
+.notification-toggle { position: relative; }
+.notification-toggle[data-unread]:not([data-unread="0"])::after {
+    content: attr(data-unread); position: absolute; top: -5px; right: -5px;
+    min-width: 17px; height: 17px; padding-inline: 3px; border-radius: 10px;
+    background: #b93242; color: white; font-size: 10px; font-weight: 700;
+    display: grid; place-items: center;
+}
 @media (max-width: 480px) {
     .teacher-view-tabs { display: flex; }
     .teacher-view-tabs a { flex: 1; padding-inline: 16px; }

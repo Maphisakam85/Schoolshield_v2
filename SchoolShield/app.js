@@ -471,6 +471,7 @@ function startWorkspaceAutoRefresh() {
     if (document.visibilityState === "hidden") return Promise.resolve();
     if (!pending) {
       pending = refreshCloudWorkspace(true)
+        .then(async result => { await loadTeachingAssignmentNotifications(true); return result; })
         .catch((error) => console.warn("Automatic workspace refresh failed", error.message))
         .finally(() => { pending = null; });
     }
@@ -534,6 +535,7 @@ function startWorkspaceRealtime() {
         render();
       },
     )
+    .on("postgres_changes", { event: "*", schema: "public", table: "account_request_notifications", filter: `recipient_id=eq.${session.userId}` }, () => loadTeachingAssignmentNotifications(true))
     .subscribe();
   window.schoolshieldWorkspaceChannel = channel;
 }
@@ -3322,8 +3324,9 @@ function incidents() {
 function notifications() {
   const s = getState();
   const visible = notificationsForRole();
+  const deliveryNotice = window.schoolshieldAssignmentNoticeError ? `<p role="alert">${announcementText(window.schoolshieldAssignmentNoticeError)}</p>` : "";
   return shell(
-    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.announcementId ? announcementText(n.title) : n.title}</b>${badge(n.priority)}</div><p>${n.announcementId ? announcementText(n.description) : n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `${deliveryNotice}<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.announcementId ? announcementText(n.title) : n.title}</b>${badge(n.priority)}</div><p>${n.announcementId ? announcementText(n.description) : n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
@@ -4324,7 +4327,7 @@ function incidentsForRole() {
 
 function notificationsForRole() {
   const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
-  return getState().notifications.filter((notice) => {
+  return [...(role() === "teacher" ? window.schoolshieldTeachingAssignmentNotices || [] : []), ...getState().notifications.filter((notice) => {
     if (notice.announcementId) return announcementIsVisible(notice);
     if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
     if (notice.recipient) return notice.recipient === userName();
@@ -4338,7 +4341,83 @@ function notificationsForRole() {
     }
     if (!notice.scope || notice.scope === "system") return ["principal", "deputy", "security", "clerk"].includes(role());
     return false;
-  });
+  })];
+}
+
+async function loadTeachingAssignmentNotifications(renderList = false) {
+  if (role() !== "teacher" || !window.schoolshieldSupabase || window.schoolshieldAssignmentNoticesLoading) return;
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  if (!session.userId || !session.schoolId) return;
+  window.schoolshieldAssignmentNoticesLoading = true;
+  try {
+    const { data, error } = await window.schoolshieldSupabase.from("account_request_notifications")
+      .select("id,school_id,recipient_id,assignment_id,payload,read_at,created_at")
+      .eq("notification_type", "teaching_assignment").eq("recipient_id", session.userId).eq("school_id", session.schoolId)
+      .order("created_at", { ascending: false }).limit(200);
+    if (error) throw new Error(error.message);
+    const notices = data.map(row => ({
+      id: "assignment-notice:" + row.id, assignmentNotificationId: row.id, assignmentId: row.assignment_id,
+      title: announcementText(row.payload.title), description: announcementText(row.payload.description),
+      category: "Teaching assignment", priority: "Medium", read: Boolean(row.read_at), createdAt: row.created_at,
+      reporter: announcementText(row.payload.assignedBy), assignment: row.payload,
+    }));
+    const changed = JSON.stringify(notices) !== JSON.stringify(window.schoolshieldTeachingAssignmentNotices || []);
+    window.schoolshieldTeachingAssignmentNotices = notices;
+    window.schoolshieldAssignmentNoticeError = "";
+    const bell = document.getElementById("globalBell");
+    if (bell) {
+      const unread = notificationsForRole().filter(notice => !notice.read).length;
+      bell.setAttribute("aria-label", `Open notifications (${unread} unread)`);
+      bell.dataset.unread = unread;
+    }
+    if (changed && renderList && page() === "notifications") render();
+    if (changed && page() === "my-performance") {
+      const year = window.SchoolShieldMyPerformance?.state.year;
+      if (year) window.SchoolShieldTeacherAssignments?.loadOwn(year);
+      if (!document.querySelector("[data-teacher-response]")?.value.trim()) window.SchoolShieldMyPerformance?.load();
+    }
+  } catch (error) {
+    window.schoolshieldAssignmentNoticeError = "Teaching assignment notifications could not be loaded: " + error.message;
+  } finally { window.schoolshieldAssignmentNoticesLoading = false; }
+}
+
+function updateTeachingAssignmentBadge() {
+  if (role() !== "teacher") return;
+  const bell = document.getElementById("globalBell");
+  if (!bell) return;
+  const unread = notificationsForRole().filter(notice => !notice.read).length;
+  bell.dataset.unread = unread;
+  bell.setAttribute("aria-label", `Open notifications (${unread} unread)`);
+}
+
+async function markVisibleNotificationsRead() {
+  const visible = notificationsForRole(), ids = new Set(visible.map(notice => notice.id));
+  const recipientIds = visible.filter(notice => notice.assignmentNotificationId && !notice.read).map(notice => notice.assignmentNotificationId);
+  if (recipientIds.length) {
+    const { data, error } = await window.schoolshieldSupabase.from("account_request_notifications")
+      .update({ read_at: new Date().toISOString() }).in("id", recipientIds).select("id");
+    if (error || data.length !== recipientIds.length) {
+      modal("Notifications not updated", `<p role="alert">${announcementText(error?.message || "Not all assignment alerts could be marked read. Please retry.")}</p>`);
+      return false;
+    }
+    (window.schoolshieldTeachingAssignmentNotices || []).forEach(notice => { if (ids.has(notice.id)) notice.read = true; });
+  }
+  const legacyUnread = new Set(visible.filter(notice => !notice.assignmentNotificationId && !notice.read).map(notice => notice.id));
+  if (legacyUnread.size) persist(state => state.notifications.forEach(notice => { if (legacyUnread.has(notice.id)) notice.read = true; }));
+  updateTeachingAssignmentBadge();
+  return true;
+}
+
+async function viewTeachingAssignmentNotification(notice) {
+  const a = notice.assignment;
+  modal(notice.title, `<p>${notice.description}</p><div class="detail-grid"><div><small>Subject</small><b>${announcementText(a.subject)}</b></div><div><small>Grade / class</small><b>${announcementText(a.grade)} / ${announcementText(a.class)}</b></div><div><small>Academic year</small><b>${announcementText(a.academicYear)}</b></div><div><small>Assigned by</small><b>${announcementText(a.assignedBy)}</b></div><div><small>Assignment date</small><b>${announcementText(a.assignmentDate)}</b></div></div><p role="status" id="assignmentNoticeReadState">Marking notification read…</p><a class="btn primary" href="my-performance.html">View My Teaching Assignments</a>`);
+  const status = document.getElementById("assignmentNoticeReadState");
+  const { data, error } = await window.schoolshieldSupabase.from("account_request_notifications")
+    .update({ read_at: new Date().toISOString() }).eq("id", notice.assignmentNotificationId).select("id").single();
+  if (error || !data) { if (status?.isConnected) status.textContent = "Could not mark read: " + (error?.message || "Please retry."); return; }
+  notice.read = true;
+  updateTeachingAssignmentBadge();
+  if (status?.isConnected) status.textContent = "Notification marked read.";
 }
 
 function inputValue(id) {
@@ -5005,6 +5084,7 @@ function resolveIncident(id) {
 function viewNotification(id) {
   const notice = notificationsForRole().find((item) => item.id === id);
   if (!notice) return;
+  if (notice.assignmentNotificationId) return viewTeachingAssignmentNotification(notice);
   persist((state) => {
     const item = state.notifications.find((entry) => entry.id === id);
     if (item) item.read = true;
@@ -6096,6 +6176,7 @@ async function loadAccountRequestDashboardAlert() {
   const { count } = await client
     .from("account_request_notifications")
     .select("id", { count: "exact", head: true })
+    .eq("notification_type", "account_request")
     .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = count || 0;
   if (!count || page() !== "dashboard") return;
@@ -6119,6 +6200,7 @@ async function loadAccountRequests() {
   await client
     .from("account_request_notifications")
     .update({ read_at: new Date().toISOString() })
+    .eq("notification_type", "account_request")
     .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = 0;
   if (error) {
@@ -6348,7 +6430,8 @@ function initWorkspaceChrome() {
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.announcementId ? announcementText(notice.description) : notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  const deliveryNotice = window.schoolshieldAssignmentNoticeError ? `<p role="alert">${announcementText(window.schoolshieldAssignmentNoticeError)}</p>` : "";
+  return `${deliveryNotice}<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.announcementId ? announcementText(notice.description) : notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
@@ -6362,14 +6445,8 @@ function toggleNotificationCenter() {
   );
   $("#closeNotifications", drawer).onclick = () =>
     (drawer.style.display = "none");
-  $("#drawerMarkRead", drawer).onclick = () => {
-    const ids = new Set(notificationsForRole().map((notice) => notice.id));
-    persist((state) =>
-      state.notifications.forEach((notice) => {
-        if (ids.has(notice.id)) notice.read = true;
-      }),
-    );
-    toggleNotificationCenter();
+  $("#drawerMarkRead", drawer).onclick = async () => {
+    if (await markVisibleNotificationsRead()) { drawer.style.display = "none"; toggleNotificationCenter(); }
   };
   $("#notificationSearch", drawer).oninput = (event) =>
     $$(".notification-center-item", drawer).forEach(
@@ -6383,6 +6460,7 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  updateTeachingAssignmentBadge();
   if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
   if (page() === "teacher-targets") window.SchoolShieldTeacherTargets.bindOwn();
   if (page() === "my-performance") window.SchoolShieldMyPerformance.bindOwn();
@@ -6425,17 +6503,7 @@ function bind() {
       });
     };
   });
-  $("#markRead")?.addEventListener("click", () => {
-    const visibleIds = new Set(
-      notificationsForRole().map((notice) => notice.id),
-    );
-    persist((state) =>
-      state.notifications.forEach((n) => {
-        if (visibleIds.has(n.id)) n.read = true;
-      }),
-    );
-    render();
-  });
+  $("#markRead")?.addEventListener("click", async () => { if (await markVisibleNotificationsRead()) render(); });
   $$("[data-visitor]:not([data-action])").forEach(
     (b) => (b.onclick = () => visitorModal(b.dataset.visitor)),
   );
@@ -6536,12 +6604,14 @@ async function startWorkspace() {
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
+    await loadTeachingAssignmentNotifications();
     startWorkspaceRealtime();
     startWorkspaceAutoRefresh();
     if (["principal", "clerk"].includes(profile.role)) {
       const { count } = await client
         .from("account_request_notifications")
         .select("id", { count: "exact", head: true })
+        .eq("notification_type", "account_request")
         .is("read_at", null);
       window.schoolshieldPendingAccountAlerts = count || 0;
     }
