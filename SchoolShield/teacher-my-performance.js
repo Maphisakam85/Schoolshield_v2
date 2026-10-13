@@ -22,10 +22,10 @@
   function view() {
     if(role()!=='teacher') return generic('My Performance','Access restricted','Only teachers can view their own performance.','');
     if(!state.term) state.term=Number((typeof TERM==='string'?TERM:'Term 1').match(/[1-4]/)?.[0])||1;
-    return generic('My Performance','Teacher development','Your subjects, classes, targets and term reviews',`<p>${disclaimer}</p><section class="panel"><div class="form-grid"><label>Academic year<input class="input" type="number" min="1900" max="2200" data-own-performance-year value="${state.year}"></label><label>Term<select class="select" data-own-performance-term>${[1,2,3,4].map(t=>`<option value="${t}"${t===state.term?' selected':''}>Term ${t}</option>`).join('')}</select></label></div><button class="btn" data-own-performance-refresh${state.loading?' disabled':''}>Refresh performance</button><p role="status">${escape(state.loading?'Loading…':state.message)}</p>${state.error?`<p role="alert">${escape(state.error)}</p>`:''}</section>${state.data?state.data.length?state.data.map(context=>{
+    return generic('My Performance','Teacher development','Your subjects, classes, targets and term reviews',`${root.SchoolShieldTeacherViews?.tabs()||''}<p>${disclaimer}</p><section class="panel"><div class="form-grid"><label>Academic year<input class="input" type="number" min="1900" max="2200" data-own-performance-year value="${state.year}"></label><label>Term<select class="select" data-own-performance-term>${[1,2,3,4].map(t=>`<option value="${t}"${t===state.term?' selected':''}>Term ${t}</option>`).join('')}</select></label></div><button class="btn" data-own-performance-refresh${state.loading?' disabled aria-busy="true"':''}>${state.loading?'Loading...':'Refresh performance'}</button><p role="status">${escape(state.loading?'Loading…':state.message)}</p>${state.error?`<p role="alert">${escape(state.error)}</p>`:''}</section>${state.data?state.data.length?state.data.map(context=>{
       const m=context.metrics||{};
       return `<section class="panel"><h3>${escape(context.subject)} → ${escape(context.grade)} / ${escape(context.class)} → Term ${state.term}</h3><h4>Actual subject/class performance</h4><div class="detail-grid">${[['Baseline average',m.baseline_average,'%'],['Current average',m.current_average,'%'],['Improvement from baseline',m.improvement_percentage_points,' percentage points'],['Previous term average',m.previous_term_average,'%'],['Pass rate',m.pass_rate,'%'],['Learners',m.number_of_learners,''],['Learners improving',m.learners_improving,''],['Learners declining',m.learners_declining,''],['Learners at risk',m.learners_at_risk,''],['Curriculum coverage',m.curriculum_coverage,'%'],['Assessments planned',m.assessments_planned,''],['Assessments completed',m.assessments_completed,''],['Marks outstanding',m.marks_outstanding,'']].map(([label,value,suffix])=>`<div><small>${label}</small><b>${escape(number(value,suffix))}</b></div>`).join('')}</div><p>Academic indicators show current performance and improvement separately. They do not automatically determine an internal rating.</p><h4>Targets and target margins</h4>${targets(context.targets)}${reviewView(context.review)}<h4>Development / Support Actions</h4>${supportList(context.supportActions)}</section>`;
-    }).join(''):'<section class="panel"><p>No subjects/classes are linked to your account for this year. Ask school leadership to confirm your teaching assignments.</p></section>':'<section class="panel"><p>Loading your performance…</p></section>'}`);
+    }).join(''):'<section class="panel"><p>No subjects/classes are linked to your account for this year. Ask school leadership to confirm your teaching assignments.</p></section>':(state.error?'':'<section class="panel"><p>Loading your performance...</p></section>')}`);
   }
   async function load() {
     if(role()!=='teacher'||state.loading) return;
@@ -39,6 +39,7 @@
   }
   function bindOwn() {
     if(role()!=='teacher') return;
+    root.SchoolShieldTeacherViews?.bind();
     if(state.data===null&&!state.loading&&!state.error) {load();return;}
     for(const [selector,key] of [['[data-own-performance-year]','year'],['[data-own-performance-term]','term']]) {
       const field=document.querySelector(selector);if(field) field.disabled=state.loading;
@@ -51,6 +52,7 @@
       form.onsubmit=async event=>{
         event.preventDefault();if(busy) return;
         const id=form.dataset.teacherAck,review=state.data.map(c=>c.review).find(r=>r?.id===id),field=form.querySelector('textarea'),button=form.querySelector('button'),feedback=form.querySelector('[role="status"]');
+        const finish=root.schoolshieldButtonBusy?.(button,'Saving...');
         const comment=field.value;responses.set(id,comment);busy=true;field.disabled=true;button.disabled=true;feedback.textContent='Saving acknowledgement…';
         try {
           const response=await root.schoolshieldSupabase.rpc('acknowledge_teacher_review',{p_review:id,p_expected_revision:review.revision,p_comment:comment});
@@ -58,7 +60,7 @@
           // Reflect confirmed receipt before refresh so a failed reload cannot offer a repeat write.
           state.data.find(c=>c.review?.id===id).review=response.data;responses.delete(id);state.message='Acknowledgement saved. Receipt does not mean agreement.';await load();
         } catch(error) {feedback.textContent='Not saved: '+error.message+' Your response is retained. Refresh if the review has changed.';field.disabled=false;button.disabled=false;}
-        finally {busy=false;}
+        finally {busy=false;finish?.();}
       };
     });
   }
@@ -86,13 +88,15 @@
       event.preventDefault();if(busy) return;
       const details=Object.fromEntries(new FormData(form)),feedback=form.querySelector('[role="status"]');
       if(['support_area','intervention','responsible_person'].some(key=>!details[key].trim())) {feedback.textContent='Support area, intervention and responsible person are required.';return;}
+      const finish=root.schoolshieldButtonBusy?.(event.submitter,'Saving...');let confirmed=false;
       busy=true;form.querySelectorAll('input,textarea,select,button').forEach(el=>el.disabled=true);feedback.textContent='Saving…';
       try {
         const response=await root.schoolshieldSupabase.rpc('save_teacher_support_action',{p_id:actionId,p_review:review.id,p_details:details,p_expected_revision:action?.revision??null});
         if(response.error||!response.data) throw new Error(response.error?.message||'Support action was not saved.');
+        confirmed=true;
         root.SchoolShieldTeacherDashboard?.invalidate();await loadSupport(review);root.render();feedback.textContent=supportErrors.has(review.id)?'Saved; reload failed. Retry loading support actions.':'Support action saved.';
       } catch(error) {feedback.textContent='Not saved: '+error.message;form.querySelectorAll('input,textarea,select,button').forEach(el=>el.disabled=false);}
-      finally {busy=false;}
+      finally {busy=false;finish?.(confirmed?'Saved':undefined,confirmed);}
     };
   }
   function bindManagement(contexts,term) {

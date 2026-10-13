@@ -49,6 +49,7 @@
       const value=capture(),reason=form.querySelector('[data-amend-reason]')?.value||'';
       if(action!=='draft'&&value.content.areas.some(a=>!a.comment.trim())) {feedback.textContent='Add a reviewer comment for each of the five areas before completion.';return;}
       if(action==='amend'&&reason.trim().length<5) {feedback.textContent='Enter an amendment reason of at least 5 characters.';return;}
+      const finish=root.schoolshieldButtonBusy?.(event.submitter,'Saving...');
       busy=true;fields.disabled=true;form.querySelectorAll('button').forEach(el=>el.disabled=true);feedback.textContent='Saving…';
       try {
         const response=await root.schoolshieldSupabase.rpc('save_teacher_review',{p_context:context.id,p_term:Number(term),p_content:value.content,p_rating:value.rating,p_action:action,p_expected_revision:review.revision,p_reason:reason});
@@ -59,7 +60,7 @@
         // Keep a confirmed save visible; reopening loads the next server revision.
         form.querySelectorAll('button').forEach(el=>el.disabled=true);
       } catch(error) {feedback.textContent='Not saved: '+error.message+' Your text is retained. Close and reopen to reload the latest revision if there is a conflict.';fields.disabled=false;form.querySelectorAll('button').forEach(el=>el.disabled=false);}
-      finally {busy=false;}
+      finally {busy=false;finish?.(fields.disabled?'Saved':undefined,fields.disabled);}
     };
     const history=document.querySelector('.modal-backdrop:last-child [data-review-history]');
     try {
@@ -68,6 +69,6 @@
       history.innerHTML=response.data.length?response.data.map(entry=>`<details><summary>${escape(entry.action)} · ${escape(new Date(entry.changed_at).toLocaleString())}</summary><p>Changed by: ${escape(entry.changed_by)} · Reason: ${escape(entry.reason)}</p><p>Previous value</p><pre>${escape(JSON.stringify(entry.previous_value,null,2))}</pre><p>Recorded value</p><pre>${escape(JSON.stringify(entry.new_value,null,2))}</pre></details>`).join(''):'No workflow changes recorded yet.';
     } catch(error) {history.textContent='History unavailable: '+error.message;}
   }
-  function bind(contexts,term) {for(const context of contexts) document.querySelector(`[data-workflow-open="${context.id}"]`)?.addEventListener('click',()=>open(context,term));}
+  function bind(contexts,term) {for(const context of contexts) document.querySelector(`[data-workflow-open="${context.id}"]`)?.addEventListener('click',async event=>{const finish=root.schoolshieldButtonBusy?.(event.currentTarget,'Loading...');try{await open(context,term);}finally{finish?.();}});}
   root.SchoolShieldTeacherReviewWorkflow={card,bind,locked,find,areas,factors,ratings,disclaimer,drafts};
 })(window);

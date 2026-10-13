@@ -6,7 +6,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   await page.setContent('<html><body><div id="app"></div></body></html>');
   await page.addScriptTag({content:fs.readFileSync('SchoolShield/app.js','utf8').replace(/startWorkspace\(\);\s*$/,'')});
-  for(const file of ['teacher-targets.js','teacher-performance-metrics.js','teacher-review-workflow.js','teacher-performance.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
+  for(const file of ['button-feedback.js','teacher-targets.js','teacher-performance-metrics.js','teacher-review-workflow.js','teacher-performance.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
   await page.evaluate(currentRole=>{
    window.role=()=>currentRole;window.generic=(a,b,c,body)=>`<h1>${a}</h1>${body}`;
    window.render=()=>{document.querySelector('#app').innerHTML=SchoolShieldTeacherPerformance.view();SchoolShieldTeacherPerformance.bind();};

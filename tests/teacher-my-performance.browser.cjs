@@ -5,7 +5,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  try {
   const page=await browser.newPage({viewport:{width:1280,height:900}}),consoleErrors=[];page.on('pageerror',error=>consoleErrors.push(error.message));page.on('console',message=>{if(message.type()==='error') consoleErrors.push(message.text());});await page.setContent('<html><body><div id="app"></div></body></html>');
   await page.addScriptTag({content:fs.readFileSync('SchoolShield/app.js','utf8').replace(/startWorkspace\(\);\s*$/,'')});
-  for(const file of ['teacher-targets.js','teacher-review-workflow.js','teacher-my-performance.js','teacher-performance-dashboard.js','teacher-performance.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
+  for(const file of ['button-feedback.js','teacher-targets.js','teacher-review-workflow.js','teacher-my-performance.js','teacher-performance-dashboard.js','teacher-performance.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
   await page.evaluate(()=>{
    window.currentRole='teacher';window.role=()=>window.currentRole;window.generic=(a,b,c,body)=>`<h1>${a}</h1><p>${b}</p>${body}`;
    window.render=()=>{if(window.homeMode){document.querySelector('#app').innerHTML=SchoolShieldTeacherDashboard.renderHome();SchoolShieldTeacherDashboard.bindHome();return;}const module=currentRole==='teacher'?SchoolShieldMyPerformance:SchoolShieldTeacherPerformance;document.querySelector('#app').innerHTML=module.view();currentRole==='teacher'?module.bindOwn():module.bind();};

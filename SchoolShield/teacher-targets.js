@@ -66,13 +66,13 @@
       if(isNumeric&&details.measurementSource==='manual') details.actualValue=number(field('actual').value);
       const status=form.querySelector('[data-target-save-state]');
       if(!details.description||!details.dueDate||details.targetValue===null||details.targetValue===''||[details.targetValue,details.baseline,details.actualValue,details.nearTolerance].some(v=>typeof v==='number'&&!Number.isFinite(v))) {status.textContent='Complete the required fields with valid values.';return;}
-      form.dataset.saving='true';status.textContent='Saving…';const controls=[...form.querySelectorAll('input,select,textarea,button')];const previouslyDisabled=controls.map(c=>c.disabled);controls.forEach(c=>c.disabled=true);
+      form.dataset.saving='true';status.textContent='Saving…';const controls=[...form.querySelectorAll('input,select,textarea,button')];const previouslyDisabled=controls.map(c=>c.disabled);const finish=root.schoolshieldButtonBusy?.(event.submitter,'Saving...');controls.forEach(c=>c.disabled=true);
       try {
         const response=await root.schoolshieldSupabase.rpc('save_teacher_target',{p_id:id,p_context:context.id,p_term:Number(term),p_details:details,p_expected_revision:target?.revision??null});
         if(response.error||!response.data?.id) throw new Error(response.error?.message||'Supabase did not confirm the target save.');
         root.SchoolShieldTeacherDashboard?.invalidate();cache.delete(key(context,term));await load(context,term);backdrop.remove();root.render();
       } catch(error) {status.textContent='Not saved: '+error.message;}
-      finally {form.dataset.saving='false';controls.forEach((control,i)=>control.disabled=previouslyDisabled[i]);}
+      finally {finish?.();form.dataset.saving='false';controls.forEach((control,i)=>control.disabled=previouslyDisabled[i]);}
     };
   }
   function bind(contexts,term) {
@@ -82,21 +82,21 @@
     for(const context of contexts) {
       const id=key(context,term);
       document.querySelector(`[data-target-new="${id}"]`)?.addEventListener('click',()=>open(context,term));
-      document.querySelector(`[data-target-refresh="${id}"]`)?.addEventListener('click',async()=>{await load(context,term);root.render();});
+      document.querySelector(`[data-target-refresh="${id}"]`)?.addEventListener('click',async event=>{const done=root.schoolshieldButtonBusy?.(event.currentTarget,'Loading...');try{await load(context,term);root.render();}finally{done?.();}});
       for(const target of cache.get(id)||[]) document.querySelector(`[data-target-edit="${target.id}"]`)?.addEventListener('click',()=>open(context,term,target));
     }
   }
   function viewOwn() {
     if(role()!=='teacher') return generic('My Targets','Access restricted','Only Teacher accounts can open this page.','');
     return generic('My Targets','Teacher workspace','Management-set targets for your own subjects, classes and terms.',
-      `<p class="muted">Targets are read-only. Numeric margins show Actual − Target; qualitative progress has no numeric margin.</p><button class="btn" data-my-targets-refresh>Refresh targets</button>${ownError?`<p role="alert">${escape(ownError)}</p>`:''}${own===null?'<p>Loading targets…</p>':own.length?table(['Subject / class / term','Category / description','Baseline','Target','Actual','Margin','Status','Due date','Priority'],own.map(target=>`<tr><td>${escape(target.subject)}<small>${escape(target.grade+' / '+target.class_ref+' · Term '+target.term+' · '+target.academic_year)}</small></td>`+rows([target])[0].replace(/^<tr>/,''))):'<p>No targets have been set for you.</p>'}`);
+      `${root.SchoolShieldTeacherViews?.tabs()||''}<p class="muted">Targets are read-only. Numeric margins show Actual − Target; qualitative progress has no numeric margin.</p><button class="btn" data-my-targets-refresh${ownLoading?' disabled aria-busy="true"':''}>${ownLoading?'Loading...':'Refresh targets'}</button>${ownError?`<p role="alert">${escape(ownError)}</p>`:''}${own===null?(ownError?'':'<p>Loading targets...</p>'):own.length?table(['Subject / class / term','Category / description','Baseline','Target','Actual','Margin','Status','Due date','Priority'],own.map(target=>`<tr><td>${escape(target.subject)}<small>${escape(target.grade+' / '+target.class_ref+' · Term '+target.term+' · '+target.academic_year)}</small></td>`+rows([target])[0].replace(/^<tr>/,''))):'<p>No targets have been set for you.</p>'}`);
   }
   async function loadOwn() {
-    if(role()!=='teacher'||ownLoading) return;ownLoading=true;ownError='';
+    if(role()!=='teacher'||ownLoading) return;ownLoading=true;ownError='';root.render();
     try {const response=await root.schoolshieldSupabase.rpc('get_teacher_targets',{});if(response.error||!Array.isArray(response.data)) throw new Error(response.error?.message||'Targets could not be loaded.');own=response.data;}
     catch(error){ownError=error.message;}finally{ownLoading=false;root.render();}
   }
-  function bindOwn() {if(role()!=='teacher') return;if(own===null&&!ownLoading&&!ownError) loadOwn();document.querySelector('[data-my-targets-refresh]')?.addEventListener('click',loadOwn);}
+  function bindOwn() {if(role()!=='teacher') return;root.SchoolShieldTeacherViews?.bind();if(own===null&&!ownLoading&&!ownError) loadOwn();document.querySelector('[data-my-targets-refresh]')?.addEventListener('click',loadOwn);}
   root.addEventListener?.('schoolshield:teacher-metrics-saved',event=>{const id=event.detail.contextId+':'+event.detail.term;generations.set(id,(generations.get(id)||0)+1);cache.delete(id);});
   root.SchoolShieldTeacherTargets={render,bind,viewOwn,bindOwn,format,margin,numeric,cache,categories,types};
 })(window);
