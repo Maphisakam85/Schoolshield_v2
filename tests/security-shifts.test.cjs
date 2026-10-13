@@ -6,6 +6,30 @@ function harness() {
   vm.runInContext(source.replace(/startWorkspace\(\);\s*$/,''),ctx);
   Object.assign(ctx,{role:()=> 'security',userName:()=> 'Officer A',getState:()=>state});return {ctx,state};
 }
+test('inline shift saves respect ownership and preserve attendance audit records',()=>{
+  const {ctx,state}=harness();
+  const audit={officerId:'S1',date:'2026-10-07',scheduledStart:'18:00',scheduledEnd:'06:00',scheduledDurationMinutes:720,actualCheckInAt:'2026-10-07T16:00:00Z'};
+  state.securityAttendance=[audit];const before=JSON.stringify(audit);
+  Object.assign(ctx,{inputValue:id=>id.startsWith('shift-start-')?'22:00':'07:00',persist:fn=>fn(state),finishForm(){},modal(){}});
+  ctx.saveSecurityShift('S2');assert.equal(state.security[1].shift,undefined);
+  ctx.saveSecurityShift('S1');assert.equal(state.security[0].shift,'22:00–07:00');assert.equal(JSON.stringify(audit),before);
+  ctx.inputValue=()=> '07:00';ctx.saveSecurityShift('S1');assert.equal(state.security[0].shift,'22:00–07:00');
+  ctx.manageOfficer('S1');ctx.saveOfficer('S1');assert.equal(state.security[0].shift,'22:00–07:00');
+});
+
+test('officer profile displays contacts and canonical attendance timestamps',()=>{
+  const {ctx,state}=harness();Object.assign(state.security[0],{phone:'071 123 4567',email:'officer@example.test'});
+  state.securityAttendance=[{officerId:'S1',date:'2026-10-07',actualCheckInAt:'2026-10-07T16:04:00Z',clockIn:'wrong legacy time',status:'Clocked In'}];
+  let html;ctx.modal=(title,body)=>html=body;ctx.viewSecurityOfficer('S1');
+  assert.match(html,/071 123 4567/);assert.match(html,/officer@example.test/);assert.match(html,/18:04/);assert.doesNotMatch(html,/wrong legacy time/);
+});
+
+test('demo contacts do not overwrite existing contacts or unrelated officers',()=>{
+  const {ctx}=harness();const state={security:[{id:'SEC-001',name:'Different Officer'},{id:'SEC-002',name:'Thato Mokoena',phone:'existing'}]};
+  assert.equal(ctx.ensureDemoSecurityOfficerDetails(state),true);assert.equal(state.security[0].phone,undefined);assert.equal(state.security[1].phone,'existing');assert.match(state.security[1].profilePicture,/thato-mokoena/);
+  assert.equal(ctx.ensureDemoSecurityOfficerDetails(state),false);
+});
+
 test('scheduled duration handles normal and overnight shifts and rejects incomplete/equal times',()=>{
   const {ctx}=harness();assert.equal(ctx.scheduledShiftMinutes('06:00','14:00'),480);assert.equal(ctx.scheduledShiftMinutes('18:00','06:00'),720);
   assert.equal(ctx.scheduledShiftMinutes('23:30','00:15'),45);

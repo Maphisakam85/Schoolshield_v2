@@ -47,6 +47,7 @@ const TERM = "Term 2";
 const ACCESS = {
   principal: [
     "dashboard",
+    "teacher-performance",
     "leadership",
     "visitors",
     "incidents",
@@ -67,6 +68,7 @@ const ACCESS = {
   ],
   deputy: [
     "dashboard",
+    "teacher-performance",
     "leadership",
     "visitors",
     "incidents",
@@ -117,6 +119,8 @@ const ACCESS = {
   ],
   teacher: [
     "dashboard",
+    "teacher-targets",
+    "my-performance",
     "notifications",
     "learners",
     "class-records",
@@ -133,6 +137,9 @@ const ACCESS = {
 
 /* ------------------------------- navigation ------------------------------ */
 const NAV = [
+  ["my-performance", "My Performance", "my-performance.html", "scores"],
+  ["teacher-targets", "My Targets", "teacher-targets.html", "scores"],
+  ["teacher-performance", "Teacher Performance", "teacher-performance.html", "scores"],
   ["dashboard", "Dashboard", "dashboard.html", "grid"],
   ["leadership", "Leadership", "leadership.html", "lead"],
   ["learners", "Learners", "learners.html", "student"],
@@ -194,7 +201,7 @@ const NAV_GROUPS = [
 
   {
     label: "Learning",
-    ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"],
+    ids: ["teacher-performance", "teacher-targets", "my-performance", "attendance-register", "test-scores", "student-reports", "report-compilation", "reports"],
   },
   {
     label: "Safety & wellbeing",
@@ -300,6 +307,42 @@ function workspaceCacheKey() {
   return `schoolshield:${session.schoolCode || SCHOOL.code}:${session.userId || "signed-out"}`;
 }
 
+function ensureDemoSecurityOfficerDetails(state) {
+  const demoDetails = {
+    "SEC-001": {
+      name: "Sello Ndlovu",
+      phone: "071 555 0101",
+      email: "sello.ndlovu@riverside.school",
+      profilePicture: "assets/security-officers/sello-ndlovu.svg",
+    },
+    "SEC-002": {
+      name: "Thato Mokoena",
+      phone: "071 555 0102",
+      email: "thato.mokoena@riverside.school",
+      profilePicture: "assets/security-officers/thato-mokoena.svg",
+    },
+    "SEC-003": {
+      name: "Palesa Dube",
+      phone: "071 555 0103",
+      email: "palesa.dube@riverside.school",
+      profilePicture: "assets/security-officers/palesa-dube.svg",
+    },
+  };
+
+  let changed = false;
+  (state.security || []).forEach((officer) => {
+    const details = demoDetails[officer.id];
+    if (!details || officer.name !== details.name) return;
+    for (const [key, value] of Object.entries(details)) {
+      if (key !== "name" && !officer[key]) {
+        officer[key] = value;
+        changed = true;
+      }
+    }
+  });
+  return changed;
+}
+
 function getState() {
   let stored = null;
   try {
@@ -325,7 +368,8 @@ function getState() {
       migratedLegacyTimes = true;
     }
   });
-  if (migratedLegacyTimes) save(stored);
+  const securityProfilesAdded = ensureDemoSecurityOfficerDetails(stored);
+  if (migratedLegacyTimes || securityProfilesAdded) save(stored);
   return stored;
 }
 
@@ -1114,7 +1158,7 @@ function dashboard() {
   const classPerformancePanel = r === "security" ? "" : `<section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section>`;
 
   return shell(
-    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>${localTimeGreeting()}, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div><div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>${localTimeGreeting()}, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div>${window.SchoolShieldTeacherDashboard?.renderHome()||''}<div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
       incidentsForRole()
         .slice(0, 4)
@@ -2651,16 +2695,33 @@ function securityOfficers() {
       }
 
       if (!canRecordSecurityShift(officer)) attendanceAction = "";
+      const canEditShift = canRecordSecurityShift(officer);
+      const parsedShift = parseOfficerShift(officer.shift || "");
+      const shiftStart = officer.shiftStart || parsedShift.start || "06:00";
+      const shiftEnd = officer.shiftEnd || parsedShift.end || "14:00";
+
+      const shiftEditor = canEditShift
+        ? `
+            <div class="action-row" style="align-items:center; gap:6px; flex-wrap:wrap;">
+              <input class="input" type="time" id="shift-start-${officer.id}" value="${shiftStart}" aria-label="${officer.name} shift start" style="width:125px; min-width:110px;">
+              <span class="muted">to</span>
+              <input class="input" type="time" id="shift-end-${officer.id}" value="${shiftEnd}" aria-label="${officer.name} shift end" style="width:125px; min-width:110px;">
+              <button class="btn small primary" type="button" data-action="save-security-shift" data-officer="${officer.id}">Save Shift</button>
+            </div>
+          `
+        : `<b>${officer.shift || buildOfficerShift(shiftStart, shiftEnd)}</b><small>Scheduled shift</small>`;
+
+
       return `
       <tr>
         <td>
-          <b>${officer.name}</b>
+          <button class="table-action" type="button" data-action="view-security-officer" data-officer="${officer.id}" title="View officer details" style="padding:0;border:0;background:none;font-weight:700;text-align:left;cursor:pointer;">${announcementText(officer.name)}</button>
           <small>Badge ${officer.id}</small>
         </td>
 
         <td>${officer.employee}</td>
 
-        <td>${announcementText(record?.shift || officer.shift || "—")}</td>
+        <td>${shiftEditor}</td>
 
         <td>${officer.site}</td>
 
@@ -2694,7 +2755,7 @@ function securityOfficers() {
               History
             </button>
 
-            ${canRecordSecurityShift(officer) ? `<button
+            ${["principal", "deputy"].includes(role()) ? `<button
               class="table-action"
               data-action="manage-officer"
               data-officer="${officer.id}"
@@ -2809,7 +2870,7 @@ function clockInSecurityOfficer(id) {
   if (!officer || !canRecordSecurityShift(officer)) return;
   if ((getState().securityAttendance || []).some(item => item.officerId === id && item.status === "Clocked In")) return modal("Already clocked in", "<p>Clock out the active shift before starting another shift.</p>");
   const times = String(officer.shift || "").match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/);
-  modal("Select scheduled shift", `<div class="form-grid"><label>Shift date<input class="input" type="date" id="securityShiftDate" value="${todayIso()}"></label><label>Scheduled start<input class="input" type="time" id="securityShiftStart" value="${times?.[1] || ''}"></label><label>Scheduled end<input class="input" type="time" id="securityShiftEnd" value="${times?.[2] || ''}"></label><p class="muted" id="securityShiftDuration"></p></div><p class="muted">Actual check-in and check-out are recorded by the server when you clock in or out. An earlier end time means the following day.</p><div class="modal-foot"><button class="btn primary" data-action="confirm-security-shift" data-officer="${announcementText(id)}">Clock in now</button></div>`);
+  modal("Select scheduled shift", `<div class="form-grid"><label>Shift date<input class="input" type="date" id="securityShiftDate" value="${todayIso()}"></label><label>Scheduled start<input class="input" type="time" id="securityShiftStart" value="${officer.shiftStart || times?.[1] || ''}"></label><label>Scheduled end<input class="input" type="time" id="securityShiftEnd" value="${officer.shiftEnd || times?.[2] || ''}"></label><p class="muted" id="securityShiftDuration"></p></div><p class="muted">Actual check-in and check-out are recorded by the server when you clock in or out. An earlier end time means the following day.</p><div class="modal-foot"><button class="btn primary" data-action="confirm-security-shift" data-officer="${announcementText(id)}">Clock in now</button></div>`);
   const update = () => { try { const minutes = scheduledShiftMinutes(inputValue("securityShiftStart"),inputValue("securityShiftEnd")); $("#securityShiftDuration").textContent = `Scheduled duration: ${Math.floor(minutes/60)}h ${minutes%60}m`; } catch(error) { $("#securityShiftDuration").textContent = error.message; } };
   ["securityShiftStart","securityShiftEnd"].forEach(field => $("#"+field).addEventListener("input",update)); update();
 }
@@ -3409,15 +3470,15 @@ const REQUIRED_FIELDS = {
   "save-officer-new": [
     "newOfficerName",
     "newOfficerEmployee",
-    "newOfficerShift",
+    "newOfficerShiftStart",
+    "newOfficerShiftEnd",
     "newOfficerSite",
   ],
   "save-officer": [
-    "editOfficerName",
-    "editOfficerEmployee",
-    "editOfficerShift",
-    "editOfficerSite",
-    "editOfficerStatus",
+    "officerShiftStart",
+    "officerShiftEnd",
+    "officerSite",
+    "officerStatus",
   ],
   "send-announcement": [
     "audienceSelect",
@@ -4182,6 +4243,8 @@ function action(type, el) {
   else if (type === "resolve-incident") resolveIncident(el.dataset.incident);
   else if (type === "comment-notification")
     commentNotification(el.dataset.notification);
+  else if (type === "view-security-officer") viewSecurityOfficer(el.dataset.officer);
+  else if (type === "save-security-shift") saveSecurityShift(el.dataset.officer);
   else if (type === "manage-officer") manageOfficer(el.dataset.officer);
   else if (type === "add-officer") addOfficer();
   else if (type === "save-officer-new") saveNewOfficer();
@@ -4977,36 +5040,61 @@ function commentNotification(id) {
   });
   finishForm();
 }
+function parseOfficerShift(shift = "") {
+  const match = String(shift).match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
+  return match ? { start: match[1], end: match[2] } : { start: "06:00", end: "14:00" };
+}
+
+function normaliseShiftTime(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return `${match[1]}:${match[2]}`;
+}
+
+function buildOfficerShift(start, end) {
+  return `${start}–${end}`;
+}
+
+function validOfficerShift(start, end) {
+  const normalStart = normaliseShiftTime(start);
+  const normalEnd = normaliseShiftTime(end);
+  return Boolean(normalStart && normalEnd && normalStart !== normalEnd);
+}
+
 function addOfficer() {
   modal(
     "Add security officer",
-    `<div class="form-grid"><label>Full name<input class="input" id="newOfficerName"></label><label>Employee ID<input class="input" id="newOfficerEmployee"></label><label>Shift<select class="select" id="newOfficerShift"><option>06:00–14:00</option><option>14:00–22:00</option><option>22:00–06:00</option></select></label><label>Assigned site<select class="select" id="newOfficerSite"><option>Main Gate</option><option>Admin Block</option><option>Sports Field</option><option>Vehicle Gate</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer-new">Save officer</button></div>`,
+    `<div class="form-grid"><label>Full name<input class="input" id="newOfficerName"></label><label>Employee ID<input class="input" id="newOfficerEmployee"></label><label>Shift start<input class="input" id="newOfficerShiftStart" type="time" value="06:00"></label><label>Shift end<input class="input" id="newOfficerShiftEnd" type="time" value="14:00"></label><label>Assigned site<select class="select" id="newOfficerSite"><option>Main Gate</option><option>Admin Block</option><option>Sports Field</option><option>Vehicle Gate</option></select></label></div><p class="muted" style="margin-top:10px">You can set any start and end time. Overnight shifts are supported, for example 22:00–06:00.</p><div class="modal-foot"><button class="btn primary" data-action="save-officer-new">Save officer</button></div>`,
   );
 }
 function saveNewOfficer() {
   const name = inputValue("newOfficerName");
   const employee = inputValue("newOfficerEmployee");
+  const shiftStart = inputValue("newOfficerShiftStart");
+  const shiftEnd = inputValue("newOfficerShiftEnd");
 
-  if (!requireValues([name, employee])) return;
+  if (!requireValues([name, employee, shiftStart, shiftEnd, inputValue("newOfficerSite")])) return;
+  if (!validOfficerShift(shiftStart, shiftEnd)) {
+    modal("Invalid shift", "<p class=\"muted\">Choose valid start and end times. The times cannot be the same.</p>");
+    return;
+  }
 
   persist((state) => {
     state.security = state.security || [];
-
     state.securityAttendance = state.securityAttendance || [];
-
     const officerNumber = state.security.length + 1;
 
     state.security.push({
       id: `SEC-${String(officerNumber).padStart(3, "0")}`,
-
       name,
-
       employee,
-
-      shift: inputValue("newOfficerShift"),
-
+      shiftStart,
+      shiftEnd,
+      shift: buildOfficerShift(shiftStart, shiftEnd),
       site: inputValue("newOfficerSite"),
-
       status: "Scheduled",
     });
   });
@@ -5016,21 +5104,114 @@ function saveNewOfficer() {
     `${name} has been added to the security officer register.`,
   );
 }
+function saveSecurityShift(id) {
+  const state = getState();
+  const officer = state.security.find((item) => item.id === id);
+  if (!officer || !canRecordSecurityShift(officer)) return;
+
+  const shiftStart = inputValue(`shift-start-${id}`);
+  const shiftEnd = inputValue(`shift-end-${id}`);
+
+  if (!validOfficerShift(shiftStart, shiftEnd)) {
+    modal(
+      "Invalid shift",
+      '<p class="muted">Choose valid start and end times. The times cannot be the same.</p>',
+    );
+    return;
+  }
+
+  persist((nextState) => {
+    const currentOfficer = nextState.security.find((item) => item.id === id);
+    if (!currentOfficer) return;
+
+    currentOfficer.shiftStart = shiftStart;
+    currentOfficer.shiftEnd = shiftEnd;
+    currentOfficer.shift = buildOfficerShift(shiftStart, shiftEnd);
+
+  });
+
+  finishForm(
+    "Shift updated",
+    `${officer.name}'s shift has been saved as ${buildOfficerShift(shiftStart, shiftEnd)}.`,
+  );
+}
+
+function viewSecurityOfficer(id) {
+  const state = getState();
+  const officer = state.security.find((item) => item.id === id);
+  if (!officer) return;
+
+  const attendance = (state.securityAttendance || [])
+    .filter((record) => record.officerId === id)
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+    .slice(0, 5);
+
+  const parsedShift = parseOfficerShift(officer.shift || "");
+  const shiftStart = officer.shiftStart || parsedShift.start;
+  const shiftEnd = officer.shiftEnd || parsedShift.end;
+  const profilePicture = officer.profilePicture || "";
+
+  const profileImage = profilePicture
+    ? `<img src="${profilePicture}" alt="${officer.name} profile picture" style="width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--border,#e5e7eb);background:#f3f4f6;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">`
+    : "";
+  const fallbackAvatar = `<div style="display:${profilePicture ? "none" : "flex"};width:104px;height:104px;border-radius:50%;align-items:center;justify-content:center;background:#e8eef8;color:#183b66;font-size:32px;font-weight:800;border:3px solid var(--border,#e5e7eb);">${initials(officer.name)}</div>`;
+
+  modal(
+    officer.name,
+    `<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px;">
+      <div style="flex:0 0 auto;">${profileImage}${fallbackAvatar}</div>
+      <div style="min-width:0;">
+        <h2 style="margin:0 0 5px;">${officer.name}</h2>
+        <p class="muted" style="margin:0;">Security Officer · Badge ${officer.id || "—"}</p>
+        <div style="margin-top:8px;">${badge(officer.status || "Off Duty")}</div>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div><small>Phone number</small><b>${officer.phone || "Not provided"}</b></div>
+      <div><small>Email address</small><b style="overflow-wrap:anywhere;">${officer.email || "Not provided"}</b></div>
+      <div><small>Employee ID</small><b>${officer.employee || "—"}</b></div>
+      <div><small>Assigned site</small><b>${officer.site || "—"}</b></div>
+      <div><small>Shift</small><b>${buildOfficerShift(shiftStart, shiftEnd)}</b></div>
+      <div><small>Duty status</small>${badge(officer.status || "Off Duty")}</div>
+    </div>
+
+    <section class="panel" style="margin-top:14px">
+      <div class="panel-head"><div><h3>Recent attendance</h3><p>Latest clock-in and clock-out records.</p></div></div>
+      ${attendance.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead><tbody>${attendance.map((record) => `<tr><td>${record.date || "—"}</td><td>${shiftAuditTime(record.actualCheckInAt, record.clockIn)}</td><td>${shiftAuditTime(record.actualCheckOutAt, record.clockOut)}</td><td>${badge(record.status || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">No attendance records found for this officer.</p>`}
+    </section>
+    <div class="modal-foot"><button class="btn" data-action="security-attendance-history" data-officer="${officer.id}">View full attendance history</button></div>`,
+  );
+}
+
 function manageOfficer(id) {
-  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
+  if (!["principal", "deputy"].includes(role())) return;
   const officer = getState().security.find((item) => item.id === id);
   if (!officer) return;
+  const shift = parseOfficerShift(officer.shift);
+  const shiftStart = officer.shiftStart || shift.start;
+  const shiftEnd = officer.shiftEnd || shift.end;
+
   modal(
     "Manage " + officer.name,
-    `<div class="form-grid"><label>Shift<input class="input" id="officerShift" value="${officer.shift}"></label><label>Assigned site<input class="input" id="officerSite" value="${officer.site}"></label><label>Status<select class="select" id="officerStatus"><option ${officer.status === "On Duty" ? "selected" : ""}>On Duty</option><option ${officer.status === "Scheduled" ? "selected" : ""}>Scheduled</option><option ${officer.status === "Off Duty" ? "selected" : ""}>Off Duty</option></select></label></div><div class="modal-foot"><button class="btn primary" data-action="save-officer" data-officer="${id}">Save changes</button></div>`,
+    `<div class="form-grid"><label>Shift start<input class="input" id="officerShiftStart" type="time" value="${shiftStart}"></label><label>Shift end<input class="input" id="officerShiftEnd" type="time" value="${shiftEnd}"></label><label>Assigned site<input class="input" id="officerSite" value="${officer.site || ""}"></label><label>Status<select class="select" id="officerStatus"><option ${officer.status === "On Duty" ? "selected" : ""}>On Duty</option><option ${officer.status === "Scheduled" ? "selected" : ""}>Scheduled</option><option ${officer.status === "Off Duty" ? "selected" : ""}>Off Duty</option></select></label></div><p class="muted" style="margin-top:10px">Edit the shift times directly. Overnight shifts such as 22:00–06:00 are supported.</p><div class="modal-foot"><button class="btn primary" data-action="save-officer" data-officer="${id}">Save changes</button></div>`,
   );
 }
 function saveOfficer(id) {
-  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
+  if (!["principal", "deputy"].includes(role())) return;
+  const shiftStart = inputValue("officerShiftStart");
+  const shiftEnd = inputValue("officerShiftEnd");
+  if (!validOfficerShift(shiftStart, shiftEnd)) {
+    modal("Invalid shift", "<p class=\"muted\">Choose valid start and end times. The times cannot be the same.</p>");
+    return;
+  }
+
   persist((state) => {
     const officer = state.security.find((item) => item.id === id);
     if (!officer) return;
-    officer.shift = inputValue("officerShift");
+    officer.shiftStart = shiftStart;
+    officer.shiftEnd = shiftEnd;
+    officer.shift = buildOfficerShift(shiftStart, shiftEnd);
     officer.site = inputValue("officerSite");
     officer.status = inputValue("officerStatus");
   });
@@ -5855,6 +6036,9 @@ function render() {
   else if (p === "class-records") html = classRecords();
   else if (p === "parents") html = parents();
   else if (p === "staff") html = staff();
+  else if (p === "teacher-performance") html = window.SchoolShieldTeacherPerformance.view();
+  else if (p === "teacher-targets") html = window.SchoolShieldTeacherTargets.viewOwn();
+  else if (p === "my-performance") html = window.SchoolShieldMyPerformance.view();
   else if (p === "security") html = security();
   else if (p === "security-officers") html = securityOfficers();
   else if (p === "reports") html = reports();
@@ -6199,9 +6383,13 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
+  if (page() === "teacher-targets") window.SchoolShieldTeacherTargets.bindOwn();
+  if (page() === "my-performance") window.SchoolShieldMyPerformance.bindOwn();
   markRequiredFields(document);
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
+  if (page() === "dashboard") window.SchoolShieldTeacherDashboard?.bindHome();
   if (page() === "dashboard") {
     const quickHeading = $$("h3").find(
       (heading) => heading.textContent === "Quick access",
