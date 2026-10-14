@@ -47,6 +47,7 @@ const TERM = "Term 2";
 const ACCESS = {
   principal: [
     "dashboard",
+    "teacher-performance",
     "leadership",
     "visitors",
     "incidents",
@@ -67,6 +68,7 @@ const ACCESS = {
   ],
   deputy: [
     "dashboard",
+    "teacher-performance",
     "leadership",
     "visitors",
     "incidents",
@@ -117,6 +119,8 @@ const ACCESS = {
   ],
   teacher: [
     "dashboard",
+    "teacher-targets",
+    "my-performance",
     "notifications",
     "learners",
     "class-records",
@@ -133,6 +137,9 @@ const ACCESS = {
 
 /* ------------------------------- navigation ------------------------------ */
 const NAV = [
+  ["my-performance", "My Performance", "my-performance.html", "scores"],
+  ["teacher-targets", "My Targets", "teacher-targets.html", "scores"],
+  ["teacher-performance", "Teacher Performance", "teacher-performance.html", "scores"],
   ["dashboard", "Dashboard", "dashboard.html", "grid"],
   ["leadership", "Leadership", "leadership.html", "lead"],
   ["learners", "Learners", "learners.html", "student"],
@@ -193,6 +200,10 @@ const NAV_GROUPS = [
     ],
   },
 
+  {
+    label: "Learning",
+    ids: ["attendance-register", "test-scores", "student-reports", "report-compilation", "reports"],
+  },
   {
     label: "Safety & wellbeing",
     ids: [
@@ -317,6 +328,42 @@ function ensureDemoSecurityOfficerDetails(state) {
     if (!details) return;
     for (const [key, value] of Object.entries(details)) {
       if (!officer[key]) {
+        officer[key] = value;
+        changed = true;
+      }
+    }
+  });
+  return changed;
+}
+
+function ensureDemoSecurityOfficerDetails(state) {
+  const demoDetails = {
+    "SEC-001": {
+      name: "Sello Ndlovu",
+      phone: "071 555 0101",
+      email: "sello.ndlovu@riverside.school",
+      profilePicture: "assets/security-officers/sello-ndlovu.svg",
+    },
+    "SEC-002": {
+      name: "Thato Mokoena",
+      phone: "071 555 0102",
+      email: "thato.mokoena@riverside.school",
+      profilePicture: "assets/security-officers/thato-mokoena.svg",
+    },
+    "SEC-003": {
+      name: "Palesa Dube",
+      phone: "071 555 0103",
+      email: "palesa.dube@riverside.school",
+      profilePicture: "assets/security-officers/palesa-dube.svg",
+    },
+  };
+
+  let changed = false;
+  (state.security || []).forEach((officer) => {
+    const details = demoDetails[officer.id];
+    if (!details || officer.name !== details.name) return;
+    for (const [key, value] of Object.entries(details)) {
+      if (key !== "name" && !officer[key]) {
         officer[key] = value;
         changed = true;
       }
@@ -451,6 +498,34 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   return changed;
 }
 
+// Keep receiving even when Realtime is unavailable (parents use a restricted
+// endpoint). Schedule after completion so slow requests never overlap.
+function startWorkspaceAutoRefresh() {
+  if (window.schoolshieldAutoRefreshStarted) return;
+  window.schoolshieldAutoRefreshStarted = true;
+  let pending = null;
+  const refresh = () => {
+    if (document.visibilityState === "hidden") return Promise.resolve();
+    if (!pending) {
+      pending = refreshCloudWorkspace(true)
+        .catch((error) => console.warn("Automatic workspace refresh failed", error.message))
+        .finally(() => { pending = null; });
+    }
+    return pending;
+  };
+  const schedule = () => {
+    const chatPage = ["parent-chat", "teacher-chat", "sgb-chat"].includes(page());
+    window.schoolshieldWorkspaceRefreshTimer = setTimeout(async () => {
+      await refresh();
+      schedule();
+    }, chatPage ? 3000 : 15000);
+  };
+  window.addEventListener("focus", refresh);
+  window.addEventListener("online", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  schedule();
+}
+
 async function refreshWorkspaceManually() {
   const changed = await refreshCloudWorkspace(true);
   const message = window.schoolshieldLastSyncError
@@ -496,6 +571,7 @@ function startWorkspaceRealtime() {
         render();
       },
     )
+    .on("postgres_changes", { event: "*", schema: "public", table: "account_request_notifications", filter: `recipient_id=eq.${session.userId}` }, () => loadTeachingAssignmentNotifications(true))
     .subscribe();
   window.schoolshieldWorkspaceChannel = channel;
 }
@@ -1097,7 +1173,7 @@ function dashboard() {
     .join("");
 
   return shell(
-    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>Good morning, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid">${kpis.join("")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${heroLabel}</span><h1>${localTimeGreeting()}, ${ROLE_NAMES[r]}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${r === "security" ? "security-dashboard-stats" : ""}">${kpis.join("")}</div><div class="dashboard-grid ${r === "security" ? "security-dashboard-panels" : ""}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
       s.incidents
         .slice(0, 4)
@@ -2645,63 +2721,17 @@ function securityOfficers() {
         `;
       }
 
-      /*
-       * MANAGE BUTTON
-       * ---------------------------------------------------------
-       * Only the Principal can see the Manage button.
-       * Security officers do NOT get the Manage button.
-       */
-      const canEditShift = ["principal", "deputy", "security"].includes(role());
-      const parsedShift = parseOfficerShift(officer.shift || "");
-      const shiftStart = officer.shiftStart || parsedShift.start || "06:00";
-      const shiftEnd = officer.shiftEnd || parsedShift.end || "14:00";
-
-      const shiftEditor = canEditShift
-        ? `
-            <div class="action-row" style="align-items:center; gap:6px; flex-wrap:wrap;">
-              <input class="input" type="time" id="shift-start-${officer.id}" value="${shiftStart}" aria-label="${officer.name} shift start" style="width:125px; min-width:110px;">
-              <span class="muted">to</span>
-              <input class="input" type="time" id="shift-end-${officer.id}" value="${shiftEnd}" aria-label="${officer.name} shift end" style="width:125px; min-width:110px;">
-              <button class="btn small primary" type="button" data-action="save-security-shift" data-officer="${officer.id}">Save Shift</button>
-            </div>
-          `
-        : `<b>${officer.shift || buildOfficerShift(shiftStart, shiftEnd)}</b><small>Scheduled shift</small>`;
-
-      const manageButton =
-        typeof role === "function" && ["principal", "deputy"].includes(role())
-          ? `
-            <button
-              class="table-action"
-              data-action="manage-officer"
-              data-officer="${officer.id}"
-            >
-              Manage
-            </button>
-          `
-          : "";
-
+      if (!canRecordSecurityShift(officer)) attendanceAction = "";
       return `
-        <tr>
-          <td>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <img src="${officer.profilePicture || ''}" alt="${String(officer.name || 'Security Officer').replace(/[&<>\"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]))} profile photo" style="width:42px;height:42px;border-radius:50%;object-fit:cover;border:1px solid var(--border,#d1d5db);background:#f3f4f6;flex:0 0 auto;" onerror="this.style.display='none';">
-              <div>
-                <button
-                  class="table-action"
-                  type="button"
-                  data-action="view-security-officer"
-                  data-officer="${officer.id}"
-                  style="padding:0;border:0;background:none;font-weight:700;text-align:left;cursor:pointer;"
-                  title="View ${officer.name} details and photo"
-                >${officer.name}</button>
-                <small>Badge ${officer.id}</small>
-              </div>
-            </div>
-          </td>
+      <tr>
+        <td>
+          <b>${officer.name}</b>
+          <small>Badge ${officer.id}</small>
+        </td>
 
           <td>${officer.employee}</td>
 
-          <td>${shiftEditor}</td>
+        <td>${announcementText(record?.shift || officer.shift || "—")}</td>
 
           <td>${officer.site}</td>
 
@@ -2735,11 +2765,17 @@ function securityOfficers() {
                 History
               </button>
 
-              ${manageButton}
-            </div>
-          </td>
-        </tr>
-      `;
+            ${canRecordSecurityShift(officer) ? `<button
+              class="table-action"
+              data-action="manage-officer"
+              data-officer="${officer.id}"
+            >
+              Manage
+            </button>` : ""}
+          </div>
+        </td>
+      </tr>
+    `;
     })
     .join("");
 
@@ -2844,246 +2880,49 @@ function securityOfficers() {
   );
 }
 
-
-function clockInSecurityOfficer(id) {
-  const officer = getState().security.find(
-    (item) => item.id === id
-  );
-
-  if (!officer) return;
-
-  const date = todayIso();
-
-  const existingRecord = (
-    getState().securityAttendance || []
-  ).find(
-    (record) =>
-      record.officerId === id &&
-      record.date === date
-  );
-
-  if (existingRecord) {
-    if (existingRecord.status === "Clocked In") {
-      modal(
-        "Already clocked in",
-        `
-          <p>
-            <b>${officer.name}</b> is already clocked in.
-          </p>
-
-          <p class="muted">
-            Clock-in time: ${existingRecord.clockIn}
-          </p>
-
-          <div class="modal-foot">
-            <button
-              class="btn primary"
-              data-action="close-modal"
-            >
-              Done
-            </button>
-          </div>
-        `
-      );
-    } else {
-      modal(
-        "Attendance already completed",
-        `
-          <p>
-            <b>${officer.name}</b> already has a completed attendance
-            record for today.
-          </p>
-
-          <div class="detail-grid">
-
-            <div>
-              <small>Clock in</small>
-              <b>${existingRecord.clockIn}</b>
-            </div>
-
-            <div>
-              <small>Clock out</small>
-              <b>${existingRecord.clockOut || "—"}</b>
-            </div>
-
-          </div>
-
-          <div class="modal-foot">
-            <button
-              class="btn primary"
-              data-action="close-modal"
-            >
-              Done
-            </button>
-          </div>
-        `
-      );
-    }
-
-    return;
-  }
-
-  const clockInTime = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  persist((state) => {
-    state.securityAttendance =
-      state.securityAttendance || [];
-
-    state.securityAttendance.unshift({
-      id:
-        "SEC-ATT-" +
-        Date.now().toString().slice(-8),
-
-      officerId: officer.id,
-
-      officerName: officer.name,
-
-      employeeId: officer.employee,
-
-      date,
-
-      clockIn: clockInTime,
-
-      clockOut: "",
-
-      status: "Clocked In",
-
-      scheduledStart: officer.shiftStart || parseOfficerShift(officer.shift).start,
-
-      scheduledEnd: officer.shiftEnd || parseOfficerShift(officer.shift).end,
-
-      shift: officer.shift || buildOfficerShift(officer.shiftStart || "06:00", officer.shiftEnd || "14:00"),
-
-      site: officer.site,
-    });
-
-    // Update the officer's current duty status.
-    const currentOfficer = state.security.find(
-      (item) => item.id === id
-    );
-
-    if (currentOfficer) {
-      currentOfficer.status = "On Duty";
-    }
-  });
-
-  finishForm(
-    "Security officer clocked in",
-    `${officer.name} has been clocked in successfully at ${clockInTime}.`
-  );
+function canRecordSecurityShift(officer) {
+  if (["principal","deputy"].includes(role())) return true;
+  if (role() !== "security") return false;
+  const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
+  return officer.userId ? officer.userId === session.userId : officer.name === userName() && getState().security.filter(item => item.name === userName()).length === 1;
 }
-
-
-function clockOutSecurityOfficer(id) {
-  const state = getState();
-
-  const officer = state.security.find(
-    (item) => item.id === id
-  );
-
-  if (!officer) return;
-
-  const date = todayIso();
-
-  const attendanceRecord = (
-    state.securityAttendance || []
-  ).find(
-    (record) =>
-      record.officerId === id &&
-      record.date === date
-  );
-
-  if (!attendanceRecord) {
-    modal(
-      "Cannot clock out",
-      `
-        <p>
-          <b>${officer.name}</b> has not been clocked in today.
-        </p>
-
-        <p class="muted">
-          Clock the officer in before recording a clock-out time.
-        </p>
-
-        <div class="modal-foot">
-
-          <button
-            class="btn primary"
-            data-action="close-modal"
-          >
-            Done
-          </button>
-
-        </div>
-      `
-    );
-
-    return;
-  }
-
-  if (attendanceRecord.status === "Completed") {
-    modal(
-      "Already clocked out",
-      `
-        <p>
-          <b>${officer.name}</b> has already been clocked out today.
-        </p>
-
-        <p class="muted">
-          Clock-out time: ${attendanceRecord.clockOut}
-        </p>
-
-        <div class="modal-foot">
-
-          <button
-            class="btn primary"
-            data-action="close-modal"
-          >
-            Done
-          </button>
-
-        </div>
-      `
-    );
-
-    return;
-  }
-
-  const clockOutTime = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
-  persist((state) => {
-    const record = (
-      state.securityAttendance || []
-    ).find(
-      (item) =>
-        item.officerId === id &&
-        item.date === date
-    );
-
-    if (!record) return;
-
-    record.clockOut = clockOutTime;
-    record.status = "Completed";
-
-    const currentOfficer = state.security.find(
-      (item) => item.id === id
-    );
-
-    if (currentOfficer) {
-      currentOfficer.status = "Off Duty";
+function scheduledShiftMinutes(start, end) {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(end) || start === end) throw new Error("Select different valid start and end times.");
+  const minutes = value => Number(value.slice(0,2))*60 + Number(value.slice(3));
+  return (minutes(end)-minutes(start)+1440)%1440;
+}
+function clockInSecurityOfficer(id) {
+  const officer = getState().security.find(item => item.id === id);
+  if (!officer || !canRecordSecurityShift(officer)) return;
+  if ((getState().securityAttendance || []).some(item => item.officerId === id && item.status === "Clocked In")) return modal("Already clocked in", "<p>Clock out the active shift before starting another shift.</p>");
+  const times = String(officer.shift || "").match(/(\d{2}:\d{2}).*?(\d{2}:\d{2})/);
+  modal("Select scheduled shift", `<div class="form-grid"><label>Shift date<input class="input" type="date" id="securityShiftDate" value="${todayIso()}"></label><label>Scheduled start<input class="input" type="time" id="securityShiftStart" value="${times?.[1] || ''}"></label><label>Scheduled end<input class="input" type="time" id="securityShiftEnd" value="${times?.[2] || ''}"></label><p class="muted" id="securityShiftDuration"></p></div><p class="muted">Actual check-in and check-out are recorded by the server when you clock in or out. An earlier end time means the following day.</p><div class="modal-foot"><button class="btn primary" data-action="confirm-security-shift" data-officer="${announcementText(id)}">Clock in now</button></div>`);
+  const update = () => { try { const minutes = scheduledShiftMinutes(inputValue("securityShiftStart"),inputValue("securityShiftEnd")); $("#securityShiftDuration").textContent = `Scheduled duration: ${Math.floor(minutes/60)}h ${minutes%60}m`; } catch(error) { $("#securityShiftDuration").textContent = error.message; } };
+  ["securityShiftStart","securityShiftEnd"].forEach(field => $("#"+field).addEventListener("input",update)); update();
+}
+async function recordSecurityShift(id, action) {
+  const officer = getState().security.find(item => item.id === id);
+  if (!officer || !canRecordSecurityShift(officer) || window.schoolshieldShiftSaving) return;
+  window.schoolshieldShiftSaving = true;
+  try {
+    if (!window.schoolshieldSupabase) throw new Error("Sign in and connect to save shift attendance.");
+    const params = {p_officer_id:id,p_action:action};
+    if (action === "check-in") {
+      scheduledShiftMinutes(inputValue("securityShiftStart"),inputValue("securityShiftEnd"));
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(inputValue("securityShiftDate"))) throw new Error("Select a shift date.");
+      Object.assign(params,{p_date:inputValue("securityShiftDate"),p_start:inputValue("securityShiftStart"),p_end:inputValue("securityShiftEnd")});
     }
-  });
-
-  finishForm(
-    "Security officer clocked out",
-    `${officer.name} has been clocked out successfully at ${clockOutTime}.`
-  );
+    if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
+    const {data,error} = await window.schoolshieldSupabase.rpc("record_security_shift",params);
+    if (error || !data) throw new Error(error?.message || "Shift attendance could not be saved.");
+    await refreshCloudWorkspace(false);
+    finishForm(action === "check-in" ? "Security officer clocked in" : "Security officer clocked out", "Your scheduled shift and actual attendance have been saved.");
+  } catch(error) { modal("Shift not saved", `<p>${announcementText(error.message)}</p>`); }
+  finally { window.schoolshieldShiftSaving = false; }
+}
+function clockOutSecurityOfficer(id) { return recordSecurityShift(id,"check-out"); }
+function shiftAuditTime(timestamp, legacy) {
+  return timestamp ? announcementText(new Date(timestamp).toLocaleString("en-ZA",{timeZone:"Africa/Johannesburg"})) : announcementText(legacy || "—");
 }
 
 
@@ -3516,8 +3355,9 @@ function incidents() {
 function notifications() {
   const s = getState();
   const visible = notificationsForRole();
+  const deliveryNotice = window.schoolshieldAssignmentNoticeError ? `<p role="alert">${announcementText(window.schoolshieldAssignmentNoticeError)}</p>` : "";
   return shell(
-    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.title}</b>${badge(n.priority)}</div><p>${n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${visible.filter((notice) => !notice.read).length} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${n.read ? "read" : ""}" data-action="view-notification" data-notification="${n.id}"><div class="notice-icon">${n.priority === "Critical" ? "!" : "🔔"}</div><div class="grow"><div class="notice-top"><b>${n.announcementId ? announcementText(n.title) : n.title}</b>${badge(n.priority)}</div><p>${n.announcementId ? announcementText(n.description) : n.description}</p><small>${n.category} · ${notificationTime(n)} · ${n.read ? "Read" : "Unread"}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
@@ -4374,6 +4214,8 @@ function action(type, el) {
   else if (type === "resolve-incident") resolveIncident(el.dataset.incident);
   else if (type === "comment-notification")
     commentNotification(el.dataset.notification);
+  else if (type === "view-security-officer") viewSecurityOfficer(el.dataset.officer);
+  else if (type === "save-security-shift") saveSecurityShift(el.dataset.officer);
   else if (type === "manage-officer") manageOfficer(el.dataset.officer);
   else if (type === "view-security-officer") viewSecurityOfficer(el.dataset.officer);
   else if (type === "save-security-profile") saveSecurityOfficerProfile(el.dataset.officer);
@@ -4423,20 +4265,53 @@ function alertToast() {
   if (!latest) return "";
   return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${latest.id}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${latest.title}</b><small style="display:block;margin-top:2px">${latest.description}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
 }
+function relatedLearnerRecord(record) {
+  if (role() === "teacher") {
+    const mine = teacherClasses(userName()).map((item) => item.id);
+    const learner = record.learnerId && learnerById(record.learnerId);
+    return learner ? mine.includes(learner.class) : Boolean(record.class && mine.includes(record.class));
+  }
+  if (role() === "parent") {
+    const child = parentLearner();
+    return Boolean(child && (record.learnerId ? record.learnerId === child.id : record.class === child.class));
+  }
+  return false;
+}
+
+function roleAudienceMatches(record) {
+  const audience = record.scope || record.audience;
+  const aliases = { teachers: "teacher", parents: "parent", "all-teachers": "teacher", "all-parents": "parent" };
+  if (audience === "whole-school") return true;
+  if (audience === "staff") return role() !== "parent";
+  if (audience === "leadership") return isLeadership();
+  return (aliases[audience] || audience) === role();
+}
+
+function incidentsForRole() {
+  return getState().incidents.filter((incident) => {
+    if (["principal", "deputy", "security", "sgb"].includes(role())) return true;
+    return roleAudienceMatches(incident) || incident.reporter === userName() ||
+      incident.staff === userName() || relatedLearnerRecord(incident);
+  });
+}
+
 function notificationsForRole() {
-  const notices = getState().notifications;
-  if (["principal", "deputy"].includes(role())) return notices.filter((notice) => notice.scope !== "teacher");
-  if (role() === "clerk") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership");
-  if (role() === "teacher") return notices.filter((notice) => notice.scope !== "leadership" && notice.scope !== "clerk" && (notice.scope !== "teacher" || notice.recipient === userName()));
-  if (role() !== "parent") return notices.filter((notice) => notice.scope !== "teacher" && notice.scope !== "leadership" && notice.scope !== "clerk");
-  const child = parentLearner();
-  return notices.filter(
-    (notice) =>
-      (notice.scope === "parents" &&
-        (!notice.class || (child && notice.class === child.class))) ||
-      notice.scope === "whole-school" ||
-      (child && notice.learnerId === child.id),
-  );
+  const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
+  return getState().notifications.filter((notice) => {
+    if (notice.announcementId) return announcementIsVisible(notice);
+    if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
+    if (notice.recipient) return notice.recipient === userName();
+    const targeted = Boolean(notice.learnerId || notice.class);
+    if (notice.scope === "whole-school") return true;
+    if (roleAudienceMatches(notice)) return !targeted || relatedLearnerRecord(notice) || !["parent", "teacher"].includes(role());
+    // A learner's own teacher may see learner alerts, but not private alerts
+    // addressed to a different staff role or a named recipient.
+    if (targeted && ["teacher", "parent"].includes(role()) && relatedLearnerRecord(notice)) {
+      return !notice.scope || ["system", "parents", "parent", "learner"].includes(notice.scope);
+    }
+    if (!notice.scope || notice.scope === "system") return ["principal", "deputy", "security", "clerk"].includes(role());
+    return false;
+  });
 }
 
 function inputValue(id) {
@@ -4997,6 +4872,7 @@ function resolveIncident(id) {
 function viewNotification(id) {
   const notice = getState().notifications.find((item) => item.id === id);
   if (!notice) return;
+  if (notice.assignmentNotificationId) return viewTeachingAssignmentNotification(notice);
   persist((state) => {
     const item = state.notifications.find((entry) => entry.id === id);
     if (item) item.read = true;
@@ -5095,191 +4971,8 @@ function saveNewOfficer() {
     `${name} has been added to the security officer register.`,
   );
 }
-function saveSecurityShift(id) {
-  const state = getState();
-  const officer = state.security.find((item) => item.id === id);
-  if (!officer) return;
-
-  const shiftStart = inputValue(`shift-start-${id}`);
-  const shiftEnd = inputValue(`shift-end-${id}`);
-
-  if (!validOfficerShift(shiftStart, shiftEnd)) {
-    modal(
-      "Invalid shift",
-      '<p class="muted">Choose valid start and end times. The times cannot be the same.</p>',
-    );
-    return;
-  }
-
-  persist((nextState) => {
-    const currentOfficer = nextState.security.find((item) => item.id === id);
-    if (!currentOfficer) return;
-
-    currentOfficer.shiftStart = shiftStart;
-    currentOfficer.shiftEnd = shiftEnd;
-    currentOfficer.shift = buildOfficerShift(shiftStart, shiftEnd);
-
-    // Keep today's attendance record aligned with the officer's scheduled shift.
-    const todayRecord = (nextState.securityAttendance || []).find(
-      (record) => record.officerId === id && record.date === todayIso(),
-    );
-    if (todayRecord) {
-      todayRecord.scheduledStart = shiftStart;
-      todayRecord.scheduledEnd = shiftEnd;
-      todayRecord.shift = currentOfficer.shift;
-    }
-  });
-
-  finishForm(
-    "Shift updated",
-    `${officer.name}'s shift has been saved as ${buildOfficerShift(shiftStart, shiftEnd)}.`,
-  );
-}
-
-function viewSecurityOfficer(id) {
-  const state = getState();
-  const officer = state.security.find((item) => item.id === id);
-  if (!officer) return;
-
-  const attendance = (state.securityAttendance || [])
-    .filter((record) => record.officerId === id)
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
-    .slice(0, 5);
-
-  const parsedShift = parseOfficerShift(officer.shift || "");
-  const shiftStart = officer.shiftStart || parsedShift.start;
-  const shiftEnd = officer.shiftEnd || parsedShift.end;
-  const profilePicture = officer.profilePicture || "";
-  const safeName = String(officer.name || "Security Officer").replace(/[&<>\"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  const safePhone = String(officer.phone || "").replace(/[&<>\"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  const safeEmail = String(officer.email || "").replace(/[&<>\"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  let signedInEmail = "";
-  try {
-    const signedInSession = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "null");
-    // Only use the authenticated email for the security officer's own profile.
-    if (role() === "security" && signedInSession?.email) signedInEmail = String(signedInSession.email).trim();
-  } catch (err) {
-    signedInEmail = "";
-  }
-  const profileEmailValue = signedInEmail || "";
-  const safeProfileEmail = profileEmailValue.replace(/[&<>\"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-  const profileImage = profilePicture
-    ? `<img id="securityProfilePreview" src="${profilePicture}" alt="${safeName} profile picture" style="width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--border,#e5e7eb);background:#f3f4f6;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">`
-    : `<img id="securityProfilePreview" alt="Profile preview" style="display:none;width:104px;height:104px;border-radius:50%;object-fit:cover;border:3px solid var(--border,#e5e7eb);background:#f3f4f6;">`;
-  const fallbackAvatar = `<div id="securityProfileFallback" style="display:${profilePicture ? "none" : "flex"};width:104px;height:104px;border-radius:50%;align-items:center;justify-content:center;background:#e8eef8;color:#183b66;font-size:32px;font-weight:800;border:3px solid var(--border,#e5e7eb);">${initials(officer.name)}</div>`;
-
-  modal(
-    `${safeName} — Security Officer Profile`,
-    `<div style="display:flex;gap:18px;align-items:center;margin-bottom:18px;flex-wrap:wrap;">
-      <div style="flex:0 0 auto;">${profileImage}${fallbackAvatar}</div>
-      <div style="min-width:0;flex:1;"><h2 style="margin:0 0 5px;">${safeName}</h2>
-        <p class="muted" style="margin:0;">Security Officer · Badge ${officer.id || "—"}</p>
-        <div style="margin-top:8px;">${badge(officer.status || "Off Duty")}</div>
-      </div>
-    </div>
-
-    <section class="panel" style="margin-top:10px;">
-      <div class="panel-head"><div><h3>Edit profile details</h3><p>Update your contact details and profile photo, then save your changes.</p></div></div>
-      <div class="form-grid">
-        <label>Phone number<input class="input" id="securityOfficerPhone" type="tel" autocomplete="tel" value="${safePhone}" placeholder="Enter phone number" aria-describedby="securityOfficerPhoneError"><span id="securityOfficerPhoneError" style="display:none;color:#b91c1c;font-size:12px;margin-top:4px;"></span></label>
-        <label>Email address<input class="input" id="securityOfficerEmail" type="email" autocomplete="email" value="${safeProfileEmail}" placeholder="name@example.com" ${signedInEmail ? "readonly" : ""} aria-describedby="securityOfficerEmailError"><span id="securityOfficerEmailError" style="display:none;color:#b91c1c;font-size:12px;margin-top:4px;"></span></label>
-        <div class="full"><label for="securityOfficerPhoto" style="display:block;margin-bottom:6px;">Profile picture</label><label class="full" for="securityOfficerPhoto" style="display:block;"><span style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--border,#d1d5db);border-radius:8px;cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5"/></svg>Upload profile picture</span><input class="input" style="display:none" id="securityOfficerPhoto" type="file" accept="image/*"></label></div>
-        <label class="full" for="securityOfficerCamera" style="display:block;"><span style="display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--border,#d1d5db);border-radius:8px;cursor:pointer;"><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5l1.5 2H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h4.5L8 5z"/><circle cx="12" cy="13" r="3"/></svg>Take a photo with camera</span><input class="input" style="display:none" id="securityOfficerCamera" type="file" accept="image/*" capture="user"></label>
-      </div>
-      <p class="muted" style="margin-top:8px;">Choose a photo from your device or use the camera option on a supported phone/tablet. Image is saved with this profile.</p>
-      <div class="modal-foot"><button class="btn primary" type="button" data-action="save-security-profile" data-officer="${officer.id}">Save profile changes</button></div>
-    </section>
-
-    <div class="detail-grid" style="margin-top:14px;">
-      <div><small>Phone number</small><b>${safePhone || "—"}</b></div>
-      <div><small>Email address</small><b>${safeProfileEmail || safeEmail || "—"}</b></div>
-      <div><small>Employee ID</small><b>${officer.employee || "—"}</b></div>
-      <div><small>Assigned site</small><b>${officer.site || "—"}</b></div>
-      <div><small>Shift</small><b>${buildOfficerShift(shiftStart, shiftEnd)}</b></div>
-      <div><small>Duty status</small>${badge(officer.status || "Off Duty")}</div>
-    </div>
-
-    <section class="panel" style="margin-top:14px">
-      <div class="panel-head"><div><h3>Recent attendance</h3><p>Latest clock-in and clock-out records.</p></div></div>
-      ${attendance.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Clock in</th><th>Clock out</th><th>Status</th></tr></thead><tbody>${attendance.map((record) => `<tr><td>${record.date || "—"}</td><td>${record.clockIn || "—"}</td><td>${record.clockOut || "—"}</td><td>${badge(record.status || "—")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted">No attendance records found for this officer.</p>`}
-    </section>
-    <div class="modal-foot"><button class="btn" data-action="security-attendance-history" data-officer="${officer.id}">View full attendance history</button></div>`,
-  );
-
-  const modalBody = document.querySelector(".modal-backdrop:last-of-type .modal-body");
-  const photoInputs = [modalBody?.querySelector("#securityOfficerPhoto"), modalBody?.querySelector("#securityOfficerCamera")].filter(Boolean);
-  photoInputs.forEach((input) => input.addEventListener("change", () => {
-    const file = input.files && input.files[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { alert("Please choose an image file."); input.value = ""; return; }
-    if (file.size > 5 * 1024 * 1024) { alert("Please choose an image smaller than 5 MB."); input.value = ""; return; }
-    // Resize/compress photos before saving them into the school workspace.
-    // This reduces localStorage/cloud payload size and makes captured photos persist reliably.
-    const reader = new FileReader();
-    reader.onload = () => {
-      const sourceImage = new Image();
-      sourceImage.onload = () => {
-        const maxDimension = 1200;
-        const scale = Math.min(1, maxDimension / Math.max(sourceImage.naturalWidth, sourceImage.naturalHeight));
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(sourceImage.naturalWidth * scale));
-        canvas.height = Math.max(1, Math.round(sourceImage.naturalHeight * scale));
-        const context = canvas.getContext("2d");
-        if (!context) { alert("This photo could not be processed. Please try another image."); return; }
-        context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
-        const compressedPhoto = canvas.toDataURL("image/jpeg", 0.82);
-        const preview = modalBody.querySelector("#securityProfilePreview");
-        const fallback = modalBody.querySelector("#securityProfileFallback");
-        if (preview) { preview.src = compressedPhoto; preview.style.display = "block"; }
-        if (fallback) fallback.style.display = "none";
-        photoInputs.forEach((other) => { if (other !== input) other.value = ""; });
-      };
-      sourceImage.onerror = () => alert("The selected photo could not be opened. Please try another image.");
-      sourceImage.src = String(reader.result || "");
-    };
-    reader.onerror = () => alert("The selected photo could not be read. Please try again.");
-    reader.readAsDataURL(file);
-  }));
-}
-
-function saveSecurityOfficerProfile(id) {
-  const phoneInput = document.querySelector("#securityOfficerPhone");
-  const emailInput = document.querySelector("#securityOfficerEmail");
-  const preview = document.querySelector("#securityProfilePreview");
-  const phone = phoneInput?.value.trim() || "";
-  const email = emailInput?.value.trim() || "";
-  const phoneError = document.querySelector("#securityOfficerPhoneError");
-  const emailError = document.querySelector("#securityOfficerEmailError");
-  if (phoneError) {
-    phoneError.textContent = phone ? "" : "Phone number is required.";
-    phoneError.style.display = phone ? "none" : "block";
-  }
-  if (emailError) {
-    emailError.textContent = email ? "" : "Email address is required.";
-    emailError.style.display = email ? "none" : "block";
-  }
-  if (!phone || !email) return;
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    if (emailError) {
-      emailError.textContent = "Please enter a valid email address.";
-      emailError.style.display = "block";
-    }
-    return;
-  }
-  const profilePicture = preview?.src && preview.style.display !== "none" ? preview.src : "";
-  persist((state) => {
-    const officer = (state.security || []).find((item) => item.id === id);
-    if (!officer) return;
-    officer.phone = phone;
-    officer.email = email;
-    if (profilePicture) officer.profilePicture = profilePicture;
-  });
-  // Close the profile window after a successful save; do not reopen it automatically.
-  document.querySelectorAll(".modal-backdrop").forEach((el) => el.remove());
-
-}
-
 function manageOfficer(id) {
+  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
   const officer = getState().security.find((item) => item.id === id);
   if (!officer) return;
   const shift = parseOfficerShift(officer.shift);
@@ -5292,13 +4985,7 @@ function manageOfficer(id) {
   );
 }
 function saveOfficer(id) {
-  const shiftStart = inputValue("officerShiftStart");
-  const shiftEnd = inputValue("officerShiftEnd");
-  if (!validOfficerShift(shiftStart, shiftEnd)) {
-    modal("Invalid shift", "<p class=\"muted\">Choose valid start and end times. The times cannot be the same.</p>");
-    return;
-  }
-
+  if (!canRecordSecurityShift(getState().security.find(item => item.id === id) || {})) return;
   persist((state) => {
     const officer = state.security.find((item) => item.id === id);
     if (!officer) return;
@@ -6037,6 +5724,9 @@ function render() {
   else if (p === "class-records") html = classRecords();
   else if (p === "parents") html = parents();
   else if (p === "staff") html = staff();
+  else if (p === "teacher-performance") html = window.SchoolShieldTeacherPerformance.view();
+  else if (p === "teacher-targets") html = window.SchoolShieldTeacherTargets.viewOwn();
+  else if (p === "my-performance") html = window.SchoolShieldMyPerformance.view();
   else if (p === "security") html = security();
   else if (p === "security-officers") html = securityOfficers();
   else if (p === "reports") html = reports();
@@ -6073,6 +5763,7 @@ async function loadAccountRequestDashboardAlert() {
   const { count } = await client
     .from("account_request_notifications")
     .select("id", { count: "exact", head: true })
+    .eq("notification_type", "account_request")
     .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = count || 0;
   if (!count || page() !== "dashboard") return;
@@ -6096,6 +5787,7 @@ async function loadAccountRequests() {
   await client
     .from("account_request_notifications")
     .update({ read_at: new Date().toISOString() })
+    .eq("notification_type", "account_request")
     .is("read_at", null);
   window.schoolshieldPendingAccountAlerts = 0;
   if (error) {
@@ -6307,7 +5999,7 @@ function initWorkspaceChrome() {
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${notices.filter((notice) => !notice.read).length} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${notice.id}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${notice.read ? "#fff" : "#f2f8ff"};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${notice.announcementId ? announcementText(notice.title) : notice.title}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${notice.announcementId ? announcementText(notice.description) : notice.description}</small><small>${notice.category} · ${notificationTime(notice)}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
@@ -6321,14 +6013,8 @@ function toggleNotificationCenter() {
   );
   $("#closeNotifications", drawer).onclick = () =>
     (drawer.style.display = "none");
-  $("#drawerMarkRead", drawer).onclick = () => {
-    const ids = new Set(notificationsForRole().map((notice) => notice.id));
-    persist((state) =>
-      state.notifications.forEach((notice) => {
-        if (ids.has(notice.id)) notice.read = true;
-      }),
-    );
-    toggleNotificationCenter();
+  $("#drawerMarkRead", drawer).onclick = async () => {
+    if (await markVisibleNotificationsRead()) { drawer.style.display = "none"; toggleNotificationCenter(); }
   };
   $("#notificationSearch", drawer).oninput = (event) =>
     $$(".notification-center-item", drawer).forEach(
@@ -6342,6 +6028,10 @@ function toggleNotificationCenter() {
 }
 function bind() {
   initWorkspaceChrome();
+  updateTeachingAssignmentBadge();
+  if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
+  if (page() === "teacher-targets") window.SchoolShieldTeacherTargets.bindOwn();
+  if (page() === "my-performance") window.SchoolShieldMyPerformance.bindOwn();
   markRequiredFields(document);
   if (!window.__schoolshieldCloudRefreshListener) {
     window.__schoolshieldCloudRefreshListener = true;
@@ -6353,6 +6043,7 @@ function bind() {
   }
   if (page() === "account-requests") loadAccountRequests();
   if (page() === "dashboard") loadAccountRequestDashboardAlert();
+  if (page() === "dashboard") window.SchoolShieldTeacherDashboard?.bindHome();
   if (page() === "dashboard") {
     const quickHeading = $$("h3").find(
       (heading) => heading.textContent === "Quick access",
@@ -6388,17 +6079,7 @@ function bind() {
       });
     };
   });
-  $("#markRead")?.addEventListener("click", () => {
-    const visibleIds = new Set(
-      notificationsForRole().map((notice) => notice.id),
-    );
-    persist((state) =>
-      state.notifications.forEach((n) => {
-        if (visibleIds.has(n.id)) n.read = true;
-      }),
-    );
-    render();
-  });
+  $("#markRead")?.addEventListener("click", async () => { if (await markVisibleNotificationsRead()) render(); });
   $$("[data-visitor]:not([data-action])").forEach(
     (b) => (b.onclick = () => visitorModal(b.dataset.visitor)),
   );
@@ -6499,6 +6180,7 @@ async function startWorkspace() {
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
+    await loadTeachingAssignmentNotifications();
     startWorkspaceRealtime();
     // Parents use the restricted parent-workspace endpoint rather than the
     // full workspace channel. This lightweight fallback also keeps every open
@@ -6513,6 +6195,7 @@ async function startWorkspace() {
       const { count } = await client
         .from("account_request_notifications")
         .select("id", { count: "exact", head: true })
+        .eq("notification_type", "account_request")
         .is("read_at", null);
       window.schoolshieldPendingAccountAlerts = count || 0;
     }

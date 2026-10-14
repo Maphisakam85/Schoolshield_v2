@@ -1,0 +1,50 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const {PGlite}=require(process.env.PGLITE_MODULE||'@electric-sql/pglite');
+(async()=>{
+ const db=new PGlite();let checks=0;const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
+ const deny=async(promise,pattern=/access denied|row-level security|foreign key|cannot be changed/)=>{await assert.rejects(promise,pattern);checks++;};
+ try {
+  await db.exec(`create role anon;create role authenticated;create schema auth;
+    create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+    create type public.app_role as enum('principal','deputy','clerk','teacher','parent','sgb','security');
+    create table schools(id uuid primary key);
+    create table profiles(id uuid primary key,school_id uuid references schools(id),role app_role,display_name text);
+    create table school_workspaces(school_id uuid primary key,payload jsonb);
+    create function current_school_id() returns uuid language sql stable security definer as $$select school_id from profiles where id=auth.uid()$$;
+    create function current_app_role() returns app_role language sql stable security definer as $$select role from profiles where id=auth.uid()$$;
+    grant usage on schema public,auth to anon,authenticated;`);
+  await db.exec(fs.readFileSync('supabase/migrations/20261013110000_teacher_term_performance.sql','utf8'));
+  const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,school=uid(1),other=uid(2);
+  await db.query('insert into schools values($1),($2)',[school,other]);
+  const users={principal:[3,'principal','Principal'],deputy:[4,'deputy','Deputy'],teacher:[5,'teacher','Teacher A'],teacherB:[6,'teacher','Teacher B'],other:[7,'principal','Other Principal'],parent:[8,'parent','Parent'],sgb:[9,'sgb','SGB'],security:[10,'security','Security'],clerk:[11,'clerk','Clerk']};
+  for(const [key,[n,role,name]] of Object.entries(users)) await db.query('insert into profiles values($1,$2,$3,$4)',[uid(n),key==='other'?other:school,role,name]);
+  const payload={classes:[{id:'8A',grade:'Grade 8'},{id:'8B',grade:'Grade 8'}],assessments:[{subject:'Mathematics'},{subject:'English'}],staff:[{id:'EMP-005',userId:uid(5),name:'Teacher A',department:'Languages',subjects:['English']}]};
+  await db.query('insert into school_workspaces values($1,$2),($3,$2)',[school,JSON.stringify(payload),other]);
+  const login=async user=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[user?uid(users[user][0]):'']);await db.exec(user?'set role authenticated':'set role anon');};
+  const rpc=async(name,args=[])=>(await db.query(`select ${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) as result`,args)).rows[0].result;
+  await login('principal');await rpc('sync_teacher_review_catalogue');
+  let directory=await rpc('get_teacher_performance_directory',[2026]);equal(directory.teachers.length,2);equal(directory.teachers.find(t=>t.id===uid(5)).employeeId,'EMP-005');equal(directory.teachers.find(t=>t.id===uid(5)).department,'Languages');equal(directory.contexts.length,0);
+  const maths=directory.subjects.find(s=>s.name==='Mathematics').id,english=directory.subjects.find(s=>s.name==='English').id,classA=directory.classes.find(c=>c.class_ref==='8A').id,classB=directory.classes.find(c=>c.class_ref==='8B').id;
+  const context=await rpc('link_teacher_review_context',[uid(5),maths,classA,2026]);equal(await rpc('link_teacher_review_context',[uid(5),maths,classA,2026]),context);
+  const contextEnglish=await rpc('link_teacher_review_context',[uid(5),english,classA,2026]),contextOtherClass=await rpc('link_teacher_review_context',[uid(5),maths,classB,2026]),contextTeacherB=await rpc('link_teacher_review_context',[uid(6),english,classB,2026]);
+  const term1=await rpc('set_teacher_term_review_status',[context,1,'In Progress']);
+  for(const term of [2,3,4]) await rpc('set_teacher_term_review_status',[context,term,'Not Started']);
+  await rpc('set_teacher_term_review_status',[contextEnglish,1,'Completed']);await rpc('set_teacher_term_review_status',[contextOtherClass,1,'Awaiting Teacher Acknowledgement']);await rpc('set_teacher_term_review_status',[contextTeacherB,1,'Completed']);
+  directory=await rpc('get_teacher_performance_directory',[2026]);equal(directory.reviews.filter(r=>r.teaching_context_id===context).length,4);equal(directory.reviews.find(r=>r.id===term1).reviewer_id,uid(3));equal(directory.reviews.find(r=>r.id===term1).reviewer_role,'principal');equal(directory.reviews.find(r=>r.teaching_context_id===contextEnglish).completed_at!==null,true);
+  await deny(db.query('update teacher_performance_reviews set term=2 where id=$1',[term1]));
+  await deny(rpc('set_teacher_term_review_status',[context,5,'In Progress']),/check constraint/);
+  await login('deputy');equal((await rpc('get_teacher_performance_directory',[2026])).teachers.length,2);await rpc('set_teacher_term_review_status',[context,1,'Completed']);
+  directory=await rpc('get_teacher_performance_directory',[2026]);equal(directory.reviews.find(r=>r.id===term1).reviewer_role,'deputy');equal(directory.reviews.find(r=>r.id===term1).reviewer_id,uid(4));equal(directory.reviews.find(r=>r.teaching_context_id===context&&r.term===2).status,'Not Started');equal(directory.reviews.find(r=>r.teaching_context_id===contextEnglish).status,'Completed');
+  const year2027=await rpc('link_teacher_review_context',[uid(5),maths,classA,2027]);await rpc('set_teacher_term_review_status',[year2027,1,'Not Started']);equal((await rpc('get_teacher_performance_directory',[2026])).contexts.some(c=>c.id===year2027),false);
+  await login('teacher');equal((await db.query('select teacher_id from teacher_performance_reviews')).rows.every(r=>r.teacher_id===uid(5)),true);equal((await db.query('select * from teacher_performance_reviews where teacher_id=$1',[uid(6)])).rows.length,0);
+  equal((await db.query("update teacher_performance_reviews set status='Completed' returning id")).rows.length,0);
+  await deny(rpc('set_teacher_term_review_status',[context,1,'In Progress']));await deny(rpc('get_teacher_performance_directory',[2026]));
+  await db.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({role:'principal'})]);await deny(rpc('get_teacher_performance_directory',[2026]));
+  for(const role of ['parent','sgb','security','clerk']) {await login(role);equal((await db.query('select * from teacher_performance_reviews')).rows.length,0);equal((await db.query('select * from teacher_teaching_contexts')).rows.length,0);await deny(rpc('get_teacher_performance_directory',[2026]));await deny(rpc('link_teacher_review_context',[uid(5),maths,classA,2026]));}
+  await login('other');equal((await db.query('select * from teacher_performance_reviews')).rows.length,0);await deny(rpc('set_teacher_term_review_status',[context,1,'Completed']),/not in your school/);await rpc('sync_teacher_review_catalogue');
+  const otherDirectory=await rpc('get_teacher_performance_directory',[2026]);await deny(rpc('link_teacher_review_context',[uid(5),otherDirectory.subjects[0].id,otherDirectory.classes[0].id,2026]),/Teacher is not assigned/);
+  await login('principal');await deny(rpc('link_teacher_review_context',[uid(5),otherDirectory.subjects[0].id,classA,2026]),/foreign key/);
+  await login(null);await deny(rpc('get_teacher_performance_directory',[2026]),/permission denied/);
+  console.log(`PASS ${checks} Teacher Performance SQL assertions: leadership access, seven-role RLS, reviewer attribution, subject/class/year/term separation and cross-school denial.`);
+ } finally {await db.close();}
+})().catch(error=>{console.error(error);process.exitCode=1;});
