@@ -48,12 +48,19 @@ if (window.SCHOOLSHIELD_SUPABASE_CONFIG && window.supabase) {
     // which made a parent-labelled tab send another role's token. Keep the
     // Auth session in sessionStorage so every portal tab has its own identity.
     const tabAuthStorage = {
-      getItem: (key) => sessionStorage.getItem(key),
-      setItem: (key, value) => sessionStorage.setItem(key, value),
-      removeItem: (key) => sessionStorage.removeItem(key),
+      getItem: (key) => authStorage(key).getItem(key),
+      setItem: (key, value) => authStorage(key).setItem(key, value),
+      removeItem: (key) => authStorage(key).removeItem(key),
     };
+    function authStorage(key) {
+      // Share only the PKCE verifier with an email-opened tab, never sessions.
+      if (key.endsWith('-code-verifier')) {
+        try { return localStorage; } catch { /* storage blocked */ }
+      }
+      return sessionStorage;
+    }
     window.schoolshieldSupabase = window.supabase.createClient(url, publishableKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: !window.schoolshieldManualInvitationExchange, storage: tabAuthStorage },
+      auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: !window.schoolshieldManualInvitationExchange, storage: tabAuthStorage },
     });
   }
 }

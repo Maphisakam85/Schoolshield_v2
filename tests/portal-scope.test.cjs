@@ -53,13 +53,15 @@ test('teacher incidents, alerts and reports exclude other classes', () => {
   const incidents = [
     { id: 'mine', learnerId: 'L1' }, { id: 'other', learnerId: 'L2' },
     { id: 'school', scope: 'whole-school' }, { id: 'teachers', scope: 'teachers' },
-    { id: 'reported', reporter: 'Teacher A' },
+    { id: 'reported', reporterId: 'PROFILE-A', reporter: 'Old display name' },
+    { id: 'same-name', reporter: 'Teacher A', reporterId: 'PROFILE-B' },
   ];
   const notifications = incidents.map(i => ({ id: i.id, incidentId: i.id }));
   notifications.push({ id: 'private', scope: 'teacher', recipient: 'Teacher B', learnerId: 'L1' });
   notifications.push({ id: 'class', scope: 'teacher', class: '8A' });
   notifications.push({ id: 'other-class', scope: 'teacher', class: '8B' });
   context.userName = () => 'Teacher A';
+  context.currentProfileId = () => 'PROFILE-A';
   context.teacherClasses = () => [{ id: '8A' }];
   context.learnerById = id => ({ class: id === 'L1' ? '8A' : '8B' });
   context.getState = () => ({ incidents, notifications });

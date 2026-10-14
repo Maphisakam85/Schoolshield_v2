@@ -26,7 +26,7 @@ test('invitation exchanges token hash, PKCE code and legacy fragment sessions', 
   }
 });
 test('missing, invalid, expired and reused invitations cannot fall back to another session', async () => {
-  await assert.rejects(exchangeInvitation({}, 'https://school.test/account-setup.html'), /No valid invitation/);
+  await assert.rejects(exchangeInvitation({}, 'https://school.test/account-setup.html'), /invalid, expired or already used/);
   await assert.rejects(exchangeInvitation({}, 'https://school.test/account-setup.html#error=access_denied'), /expired or already used/);
   const client = { auth: { verifyOtp: async () => ({ error: { message: 'otp_expired' } }) } };
   await assert.rejects(exchangeInvitation(client, 'https://school.test/account-setup.html?token_hash=used&type=invite'), /expired or already used/);
@@ -95,4 +95,18 @@ test('first login reads trusted role and school and rejects the wrong school cod
   assert.equal(JSON.parse(stored.schoolshieldSession).role, 'parent');
   assert.equal(JSON.parse(stored.schoolshieldSession).schoolId, 'school-1');
   await assert.rejects(sandbox.createSession({ id: 'new-user' }, 'OTHER'), /not approved/);
+});
+
+test('recovery rejects malformed, mixed-purpose and provider-error links before Auth calls', async () => {
+  const exchange = context.SchoolShieldInvitation.exchangeRecovery;
+  for (const suffix of ['?code=a&code=b','?code=a&token_hash=b&type=recovery','?token_hash=a&type=invite','#access_token=a&type=recovery','?error_code=otp_expired','?error_description=expired']) {
+    await assert.rejects(exchange({}, 'https://school.test/login.html'+suffix), /password-reset link is invalid/);
+  }
+});
+test('recovery supports code, token hash and legacy fragment without using a cached login', async () => {
+  for (const [suffix,method] of [['?code=a','exchangeCodeForSession'],['?token_hash=a&type=recovery','verifyOtp'],['#access_token=a&refresh_token=b&type=recovery','setSession']]) {
+    const session={user:{id:'recovery-user'}};
+    assert.equal(await context.SchoolShieldInvitation.exchangeRecovery({auth:{[method]:async()=>({data:{session}})}}, 'https://school.test/login.html'+suffix),session);
+  }
+  await assert.rejects(context.SchoolShieldInvitation.exchangeRecovery({auth:{exchangeCodeForSession:async()=>{throw Error('missing verifier')}}},'https://school.test/login.html?code=a'),/browser where you requested/);
 });

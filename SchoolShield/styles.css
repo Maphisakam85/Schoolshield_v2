@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
+.workspace-update-notice { position: fixed; z-index: 1200; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); width: fit-content; max-width: calc(100vw - 24px); margin: 0 auto; padding: 12px; box-shadow: 0 4px 24px #12343b26; gap: 12px; }
+.workspace-update-notice span { min-width: 0; }
+.workspace-update-notice button { flex-shrink: 0; }
+body.chat-keyboard-open .workspace-update-notice { top: max(8px, env(safe-area-inset-top)); bottom: auto; }
+
 /* Keep navigation usable without exposing side or horizontal scrollbars. */
 .sidebar {
     overflow: hidden !important;

@@ -9,7 +9,7 @@ const clientSource = fs.readFileSync(path.join(root, 'supabase-client.js'), 'utf
 test('password eye reveals and conceals text without changing its value or submitting', () => {
   const elements = [];
   const input = { type: 'password', id: 'password', value: 'example', before() {} };
-  const context = vm.createContext({ document: {
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false, deferWorkspaceSnapshot: () => false, document: {
     querySelectorAll: () => [input],
     createElement: () => {
       const element = { attributes: {}, append() {}, setAttribute(name, value) { this.attributes[name] = value; }, addEventListener(name, callback) { this[name] = callback; } };
@@ -34,7 +34,7 @@ const storage = () => {
 function clientHarness({ status = 200, refreshError = false, userId = 'parent', fetchError = false } = {}) {
   const calls = [];
   let refreshes = 0;
-  const context = vm.createContext({ window: {}, sessionStorage: storage() });
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false, window: {}, sessionStorage: storage() });
   vm.runInContext(clientSource, context);
   context.sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: 'parent' }));
   context.window.SCHOOLSHIELD_SUPABASE_CONFIG = { url: 'https://example.test', publishableKey: 'public' };
@@ -88,7 +88,7 @@ test('parent and teacher workspace caches are isolated', () => {
   const source = app.slice(app.indexOf('function workspaceCacheKey()'), app.indexOf('function save(state)'));
   const read = (userId, tabStorage) => {
     tabStorage.setItem('schoolshieldSession', JSON.stringify({ userId, schoolCode: 'S1' }));
-    const context = vm.createContext({ sessionStorage: tabStorage, SCHOOL: { code: 'S1' }, WORKSPACE_VERSION: 13,
+    const context = vm.createContext({ deferWorkspaceSnapshot: () => false, sessionStorage: tabStorage, SCHOOL: { code: 'S1' }, WORKSPACE_VERSION: 13,
       emptyWorkspace: () => ({ learners: [], notifications: [] }), save: () => {} });
     vm.runInContext(source, context);
     return context;
@@ -107,7 +107,7 @@ function sendHarness({ reject = false } = {}) {
   const calls = [];
   let refreshed = false;
   let error = '';
-  const context = vm.createContext({
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
     window: { schoolshieldFunctionRequest: async (name, body) => {
       calls.push({ name, body });
       return { ok: !reject, json: async () => reject ? { error: 'Invalid session' } : { ok: true } };
@@ -154,7 +154,7 @@ test('teacher to principal chat clears the composer before the draft-preserving 
 });
 
 test('new replies stay after received messages even when device clocks disagree', () => {
-  const context = vm.createContext({
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
     param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
     chatSender: message => message.sender, chatTimestamp: () => '',
     generic: (title, eyebrow, description, body) => body,
@@ -172,7 +172,7 @@ function pollingHarness() {
   const events = {};
   let payload = { parentChat: [{ learnerId: 'L1', messages: [] }] };
   let renders = 0;
-  const context = vm.createContext({
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
     window: {
       schoolshieldSupabase: {},
       schoolshieldFunctionRequest: async () => ({ ok: true, json: async () => ({ payload, linked: true }) }),
@@ -195,7 +195,7 @@ function pollingHarness() {
 }
 test('idle receiver loads an incoming teacher message without sending anything', async () => {
   const h = pollingHarness();
-  assert.equal(h.timers[0].delay, 3000);
+  assert.equal(h.timers[0].delay, 15000);
   await h.timers.shift().callback();
   h.receive();
   await h.timers.shift().callback();
@@ -235,7 +235,7 @@ test('hidden tabs pause polling and overlapping focus events share a request', a
 });
 
 test('parent link screen distinguishes failed loading from a confirmed missing link', () => {
-  const context = vm.createContext({ window: {}, generic: (...args) => args.join(' ') });
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false, window: {}, generic: (...args) => args.join(' ') });
   vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function parentLinkRequired('), app.indexOf('/* ----------------------------- domain: audience')), context);
   assert.match(context.parentLinkRequired(), /Retry loading/);
   assert.doesNotMatch(context.parentLinkRequired(), /ask the school clerk/);

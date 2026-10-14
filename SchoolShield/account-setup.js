@@ -16,7 +16,7 @@
   } catch (error) { form.hidden = true; fail(error.message); return; }
   form.onsubmit = async event => {
     event.preventDefault();
-    const button = form.querySelector('button[type="submit"]'); button.disabled = true;
+    const button = form.querySelector('button[type="submit"]'); if (button.disabled) return; button.disabled = true;
     errorBox.style.display = 'none';
     try {
       const password = document.getElementById('setupPassword').value;
@@ -27,7 +27,8 @@
       if (passwordError) throw passwordError;
       const { error: profileError } = await client.rpc('complete_my_profile', { p_display_name: document.getElementById('setupName').value.trim(), p_phone: phone, p_address: document.getElementById('setupAddress').value.trim(), p_emergency_contact: document.getElementById('setupEmergency').value.trim() });
       if (profileError) throw profileError;
-      await client.auth.signOut();
+      const signedOut = await client.auth.signOut();
+      if (signedOut?.error) throw signedOut.error;
       sessionStorage.removeItem('schoolshieldSession'); sessionStorage.removeItem('schoolshieldRole');
       location.replace('login.html?setup=complete');
     } catch (error) { fail(error.message); button.disabled = false; }

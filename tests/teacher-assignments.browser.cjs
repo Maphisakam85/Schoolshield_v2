@@ -16,6 +16,8 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    window.schoolshieldSupabase={rpc:async(name,args)=>{
     window.rpcCalls.push({name,args});
     if(name==='sync_teacher_review_catalogue') return {data:null};
+    if(name==='get_notification_reads') return {data:Object.entries(window.testNotificationReads||{}).map(([notification_id,read_at])=>({notification_id,read_at}))};
+    if(name==='mark_notifications_read') {window.testNotificationReads||={};for(const id of args.p_ids)window.testNotificationReads[id]=new Date().toISOString();return {data:{ids:args.p_ids,read_at:new Date().toISOString()}};}
     if(name==='get_teacher_performance_directory') return {data:{...structuredClone(window.catalogue),contexts:structuredClone(window.assignmentRows)}};
     if(name==='assign_teacher_subject_class') {
      window.lastAssignment=args;if(window.assignmentRows.some(a=>a.teacher_id===args.p_teacher&&a.subject_id===args.p_subject&&a.class_id===args.p_class&&a.academic_year===args.p_year)) return {error:{message:'This exact teaching assignment already exists'}};

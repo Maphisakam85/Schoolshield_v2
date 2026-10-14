@@ -30,6 +30,111 @@ function safeImageUrl(value) {
   } catch { return ""; }
 }
 
+function currentProfileId() {
+  try { return JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").userId || ""; }
+  catch { return ""; }
+}
+function localDateIso(value = new Date()) {
+  if (typeof value === "string") {
+    let match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (match) {
+      const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      return date.getFullYear() === Number(match[1]) && date.getMonth() + 1 === Number(match[2]) && date.getDate() === Number(match[3]) ? value : "";
+    }
+    match = /^(\d{1,2}) ([A-Za-z]{3}) (\d{4})$/.exec(value);
+    if (match) {
+      const month = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(match[2].toLowerCase());
+      return month < 0 ? "" : localDateIso(`${match[3]}-${String(month+1).padStart(2,"0")}-${match[1].padStart(2,"0")}`);
+    }
+    if (!/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return "";
+    value = new Date(value);
+  }
+  if (!value || typeof value.getTime !== "function" || Number.isNaN(value.getTime())) return "";
+  return `${value.getFullYear()}-${String(value.getMonth()+1).padStart(2,"0")}-${String(value.getDate()).padStart(2,"0")}`;
+}
+function localDateTime(value = new Date()) {
+  const date = value && typeof value.getTime === "function" ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+function formatLocalDate(value) {
+  if (!value) return "—";
+  const iso = localDateIso(value);
+  if (!iso) return String(value); // readable legacy value; never guess ambiguous numeric dates
+  const [year,month,day] = iso.split("-").map(Number);
+  return new Date(year,month-1,day).toLocaleDateString("en-ZA", {day:"numeric",month:"short",year:"numeric"});
+}
+function formatLocalTime(value) {
+  if (!value) return "—";
+  if (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) return String(value);
+  const date = value && typeof value.getTime === "function" ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleTimeString("en-ZA", {hour:"2-digit",minute:"2-digit",hour12:false});
+}
+function recordReference(prefix, id) { return `${prefix}-${String(id).slice(0,8).toUpperCase()}`; }
+
+/* Live updates preserve mounted editors and their original save baseline. */
+function isWorkspaceEditor(field) {
+  if (!field?.matches?.('input,textarea,select,[contenteditable="true"]') || field.disabled || field.readOnly) return false;
+  if (!field.closest('#app,.modal-backdrop') || field.matches('[type="button"],[type="submit"],[type="search"],[data-notification-filter],[data-performance-filter],[data-performance-year],[data-own-performance-year],[data-own-performance-term]')) return false;
+  return !/search|filter/i.test(field.id || '') && !field.closest('.search,.toolbar,[role="tablist"]');
+}
+function workspaceFieldValue(field) {
+  if (field.type === 'file') return Array.from(field.files || []).map(file=>`${file.name}:${file.size}:${file.lastModified}`).join('|');
+  if (field.type === 'checkbox' || field.type === 'radio') return field.checked;
+  if (field.multiple) return Array.from(field.selectedOptions).map(option=>option.value).join('\u0000');
+  return field.isContentEditable ? field.textContent : field.value;
+}
+function workspaceHasOpenEditor() {
+  if (!document.querySelectorAll) return false;
+  return Array.from(document.querySelectorAll('.modal-backdrop')).some(modal=>modal.querySelector('form,input:not([type="button"]):not([type="submit"]),textarea,select,[contenteditable="true"]'));
+}
+function workspaceHasDraft() {
+  if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return true;
+  if (workspaceHasOpenEditor()) return true;
+  const dirty=window.schoolshieldDirtyFields;
+  if (dirty) for (const field of [...dirty]) {
+    if (!field.isConnected || field.closest('form')?.dataset.complete === 'true' || workspaceFieldValue(field) === window.schoolshieldFieldBaselines?.get(field)) dirty.delete(field);
+    else return true;
+  }
+  return isWorkspaceEditor(document.activeElement);
+}
+function workspaceIsChat() { return ['parent-chat','teacher-chat','sgb-chat'].includes(page()); }
+function showWorkspaceUpdates() {
+  window.schoolshieldUpdatesAvailable=true;
+  if (!document.createElement || !document.body) return;
+  let banner=document.getElementById('workspaceUpdatesAvailable');
+  if (!banner) {
+    banner=document.createElement('aside');banner.id='workspaceUpdatesAvailable';banner.className='notice workspace-update-notice';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');
+    const text=document.createElement('span');text.textContent='Updates available. Your draft is kept. Save or close your form before applying updates.';
+    const button=document.createElement('button');button.className='btn small';button.type='button';button.textContent='Apply updates';
+    button.onclick=async()=>{if(workspaceHasDraft())return;button.disabled=true;try{await refreshCloudWorkspace(false);if(window.schoolshieldLastSyncError)throw Error(window.schoolshieldLastSyncError);window.schoolshieldUpdatesAvailable=false;banner.remove();render({applyUpdates:true});}catch(error){text.textContent='Updates could not be loaded: '+error.message;button.disabled=false;}};
+    banner.append(text,button);document.body.appendChild(banner);
+  }
+  banner.querySelector('button').disabled=workspaceHasDraft();
+}
+function initWorkspaceDraftProtection() {
+  if (window.schoolshieldDraftProtectionStarted || !document.addEventListener) return;
+  window.schoolshieldDraftProtectionStarted=true;
+  window.schoolshieldDirtyFields=new Set();window.schoolshieldFieldBaselines=new WeakMap();
+  const baseline=field=>{if(isWorkspaceEditor(field)&&!window.schoolshieldFieldBaselines.has(field))window.schoolshieldFieldBaselines.set(field,workspaceFieldValue(field));};
+  document.addEventListener('focusin',event=>baseline(event.target),true);
+  const changed=event=>{const field=event.target;if(!isWorkspaceEditor(field))return;if(!window.schoolshieldFieldBaselines.has(field))window.schoolshieldFieldBaselines.set(field,field.type==='checkbox'?field.defaultChecked:field.defaultValue||'');window.schoolshieldDirtyFields.add(field);if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();};
+  document.addEventListener('input',changed,true);document.addEventListener('change',changed,true);
+  document.addEventListener('focusout',()=>setTimeout(()=>{if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();},0),true);
+  window.addEventListener('beforeunload',event=>{if(workspaceHasDraft()){event.preventDefault();event.returnValue='';}});
+  if (typeof MutationObserver !== 'undefined') new MutationObserver(()=>{if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();}).observe(document.body,{childList:true,subtree:true});
+}
+function resetWorkspaceDraftState(root=document) {
+  if (!root.querySelectorAll) return;
+  for (const field of root.querySelectorAll('input,textarea,select,[contenteditable="true"]')) {
+    window.schoolshieldDirtyFields?.delete(field);window.schoolshieldFieldBaselines?.set(field,workspaceFieldValue(field));
+  }
+}
+function deferWorkspaceSnapshot(payload) {
+  if (!document.querySelectorAll || !workspaceHasDraft() || (workspaceIsChat()&&!workspaceHasOpenEditor())) return false;
+  if (JSON.stringify(payload) !== sessionStorage.getItem(workspaceCacheKey())) showWorkspaceUpdates();
+  return true;
+}
+
 /* -------------------------------- roles ---------------------------------- */
 const ROLE_NAMES = {
   principal: "Principal",
@@ -461,6 +566,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
       return fail(data?.error || `Request failed (${response.status})`);
     }
     window.schoolshieldParentWorkspaceError = "";
+    if (deferWorkspaceSnapshot(data.payload)) return false;
     const key = workspaceCacheKey();
     const incoming = JSON.stringify(data.payload);
     const changed = sessionStorage.getItem(key) !== incoming;
@@ -475,6 +581,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     return false;
   }
   window.schoolshieldLastSyncError = '';
+  if (deferWorkspaceSnapshot(data.payload)) return false;
   window.schoolshieldWorkspaceConfirmed = data.payload;
   window.schoolshieldWorkspaceLocalSnapshot = data.payload;
   window.schoolshieldIdentityIssues = data.identityIssues || [];
@@ -504,15 +611,15 @@ function startWorkspaceAutoRefresh() {
     return pending;
   };
   const schedule = () => {
-    const chatPage = ["parent-chat", "teacher-chat", "sgb-chat"].includes(page());
     window.schoolshieldWorkspaceRefreshTimer = setTimeout(async () => {
       await refresh();
       schedule();
-    }, chatPage ? 3000 : 15000);
+    }, window.schoolshieldRealtimeHealthy ? 60000 : 15000);
   };
   window.addEventListener("focus", refresh);
   window.addEventListener("online", refresh);
   document.addEventListener("visibilitychange", refresh);
+  window.schoolshieldRequestWorkspaceRefresh = refresh;
   schedule();
 }
 
@@ -550,10 +657,14 @@ function startWorkspaceRealtime() {
         table: "school_dataset_versions",
         filter: `school_id=eq.${session.schoolId}`,
       },
-      () => { refreshCloudWorkspace(true); },
+      () => { window.schoolshieldRequestWorkspaceRefresh?.(); },
     )
-    .on("postgres_changes", { event: "*", schema: "public", table: "account_request_notifications", filter: `recipient_id=eq.${session.userId}` }, () => loadTeachingAssignmentNotifications(true))
-    .subscribe();
+    .on("postgres_changes", { event: "*", schema: "public", table: "account_request_notifications", filter: `recipient_id=eq.${session.userId}` }, () => { loadTeachingAssignmentNotifications(true);loadPersonalNotificationReads(true); })
+    .on("postgres_changes", { event: "*", schema: "public", table: "notification_reads", filter: `user_id=eq.${session.userId}` }, () => loadPersonalNotificationReads(true))
+    .subscribe(status => {
+      window.schoolshieldRealtimeHealthy = status === 'SUBSCRIBED';
+      if (window.schoolshieldRealtimeHealthy) window.schoolshieldRequestWorkspaceRefresh?.();
+    });
   window.schoolshieldWorkspaceChannel = channel;
 }
 
@@ -1175,7 +1286,7 @@ function dashboard() {
         .slice(0, 4)
         .map(
           (i) =>
-            `<tr><td><b>${escapeHtml(i.id)}</b><small>${escapeHtml(i.time)}</small></td><td>${escapeHtml(i.location)}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td></tr>`,
+            `<tr><td><b>${escapeHtml(i.referenceId || i.id)}</b><small>${escapeHtml(i.time)}</small></td><td>${escapeHtml(i.location)}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td></tr>`,
         ),
     )}</section></div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Only tools available to your role are shown.</p></div></div><div class="quick-grid">${quickForRole(r)}</div></section>`,
     "Dashboard",
@@ -1937,7 +2048,7 @@ function attendanceRegister() {
           .join("")}</tr>`,
     )
     .join("");
-  const todayDate = new Date().toISOString().slice(0, 10);
+  const todayDate = localDateIso();
   const today = new Date(todayDate + "T00:00:00");
   const mondayOffset = (today.getDay() + 6) % 7;
   const todayWeekStart = new Date(today.getTime() - mondayOffset * 86400000)
@@ -1967,12 +2078,13 @@ function attendanceRegister() {
 function weekStartFor(date) {
   const day = new Date(date + "T00:00:00");
   const offset = (day.getDay() + 6) % 7;
-  return new Date(day.getTime() - offset * 86400000).toISOString().slice(0, 10);
+  day.setDate(day.getDate()-offset);
+  return localDateIso(day);
 }
 function schoolDaysForWeek(weekStart) {
   const start = new Date(weekStart + "T00:00:00");
   return Array.from({ length: 5 }, (_, index) =>
-    new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10),
+    localDateIso(new Date(start.getFullYear(),start.getMonth(),start.getDate()+index)),
   );
 }
 function refreshClassAttendance(state, classId) {
@@ -2011,7 +2123,7 @@ function attendanceOverview() {
     );
   const classId = param("class") || mine[0].id;
   const schoolClass = classById(classId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateIso();
   const weekStart = weekStartFor(today);
   const weekDays = schoolDaysForWeek(weekStart);
   const classPicker = mine
@@ -2069,7 +2181,7 @@ function dailyAttendanceRegister() {
       "A class must be assigned before you can capture daily attendance.",
       '<section class="panel"><p class="muted">No class assigned.</p></section>',
     );
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateIso();
   const classId = param("class") || mine[0].id;
   const date = param("date") || today;
   const schoolClass = classById(classId);
@@ -2143,8 +2255,9 @@ function saveDailyAttendance(classId) {
       class: classId,
       date,
       teacher: userName(),
+      teacherId: currentProfileId(),
       entries,
-      capturedOn: todayLabel(),
+      capturedOn: localDateTime(),
     };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
@@ -2175,7 +2288,8 @@ function submitDailyWeek(classId, weekStart) {
       class: classId,
       weekStart,
       teacher: userName(),
-      updatedOn: todayLabel(),
+      teacherId: currentProfileId(),
+      updatedOn: localDateTime(),
       status: "Submitted",
     };
     const index = state.attendanceWeeks.findIndex(
@@ -2507,7 +2621,7 @@ function announcements() {
   const first = options[0] || { count: 0, label: "" };
   const rows = recent.map(
     (a) =>
-      `<tr><td><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.author)} · ${escapeHtml(a.date)}</small></td><td>${escapeHtml(a.audience)}</td><td>${escapeHtml(a.recipients)}</td><td>${escapeHtml(a.delivery)}</td><td>${badge("Active")}</td><td>${a.author === userName() ? `<button class="table-action" data-action="manage-announcement" data-announcement="${escapeHtml(a.id)}">Manage</button>` : "—"}</td></tr>`,
+      `<tr><td><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.author)} · ${escapeHtml(a.date)}</small></td><td>${escapeHtml(a.audience)}</td><td>${escapeHtml(a.recipients)}</td><td>${escapeHtml(a.delivery)}</td><td>${badge("Active")}</td><td>${a.authorId === currentProfileId() ? `<button class="table-action" data-action="manage-announcement" data-announcement="${escapeHtml(a.id)}">Manage</button>` : "—"}</td></tr>`,
   );
   const whoCanSend =
     r === "teacher"
@@ -3141,7 +3255,7 @@ function sickNotices() {
       ["Submitted by", "Learner / staff", "Date", "Reason", "Status", "Action"],
       s.sickNotices.map(
         (n) =>
-          `<tr><td>${escapeHtml(n.submittedBy)}</td><td>${escapeHtml(n.person)}</td><td>${escapeHtml(n.date)}</td><td>${escapeHtml(n.reason)}</td><td>${badge(n.status)}</td><td><button class="table-action" data-action="view-sick-notice" data-sick="${escapeHtml(n.id)}">${escapeHtml(n.status === "Reviewed" ? "View" : "Review")}</button></td></tr>`,
+          `<tr><td>${escapeHtml(n.submittedBy)}</td><td>${escapeHtml(n.person)}</td><td>${escapeHtml(formatLocalDate(n.date))}</td><td>${escapeHtml(n.reason)}</td><td>${badge(n.status)}</td><td><button class="table-action" data-action="view-sick-notice" data-sick="${escapeHtml(n.id)}">${escapeHtml(n.status === "Reviewed" ? "View" : "Review")}</button></td></tr>`,
       ),
     )}</section>`,
   );
@@ -3175,7 +3289,7 @@ function parentSickNoticePage() {
     : "";
   const historyRows = submitted.map(
     (notice) =>
-      `<tr><td><b>${escapeHtml(notice.person)}</b><small>${escapeHtml(notice.id)}</small></td><td>${escapeHtml(notice.date)}</td><td>${escapeHtml(notice.reason)}</td><td>${badge(notice.status)}</td><td><button class="table-action" data-action="view-parent-sick-notice" data-sick="${escapeHtml(notice.id)}">Review</button></td></tr>`,
+      `<tr><td><b>${escapeHtml(notice.person)}</b><small>${escapeHtml(notice.id)}</small></td><td>${escapeHtml(formatLocalDate(notice.date))}</td><td>${escapeHtml(notice.reason)}</td><td>${badge(notice.status)}</td><td><button class="table-action" data-action="view-parent-sick-notice" data-sick="${escapeHtml(notice.id)}">Review</button></td></tr>`,
   );
   const options =
     eligibleLearners
@@ -3196,7 +3310,7 @@ function appointments() {
   const isPrincipal = role() === "principal";
   const items = isPrincipal
     ? s.appointments.filter((appointment) =>
-        appointment.with.includes(SCHOOL.principal),
+        appointment.participantProfileId === currentProfileId(),
       )
     : s.appointments;
   return generic(
@@ -3209,7 +3323,7 @@ function appointments() {
       ["Appointment", "With", "Date", "Time", "Status", ""],
       items.map(
         (a) =>
-          `<tr><td><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.id)}</small></td><td>${escapeHtml(a.with)}</td><td>${escapeHtml(a.date)}</td><td>${escapeHtml(a.time)}</td><td>${badge(a.status)}</td><td><button class="table-action" data-action="manage-appointment" data-appointment="${escapeHtml(a.id)}">${escapeHtml(isPrincipal ? "Review" : "Open")}</button></td></tr>`,
+          `<tr><td><b>${escapeHtml(a.title)}</b><small>${escapeHtml(a.id)}</small></td><td>${escapeHtml(a.with)}</td><td>${escapeHtml(formatLocalDate(a.date))}</td><td>${escapeHtml(a.time)}</td><td>${badge(a.status)}</td><td><button class="table-action" data-action="manage-appointment" data-appointment="${escapeHtml(a.id)}">${escapeHtml(isPrincipal ? "Review" : "Open")}</button></td></tr>`,
       ),
     )}</section>`,
     role() === "clerk"
@@ -3259,7 +3373,7 @@ function incidents() {
       ],
       incidentsForRole().map(
         (i) =>
-          `<tr class="incident-row"><td><b>${escapeHtml(i.id)}</b></td><td>${escapeHtml(i.date)}<small>${escapeHtml(i.time)}</small></td><td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.location)}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td><td>${escapeHtml(i.officer)}</td><td><button class="table-action" data-action="view-incident" data-incident="${escapeHtml(i.id)}">Open</button></td></tr>`,
+          `<tr class="incident-row"><td><b>${escapeHtml(i.referenceId || i.id)}</b></td><td>${escapeHtml(i.date)}<small>${escapeHtml(i.time)}</small></td><td>${escapeHtml(i.category)}</td><td>${escapeHtml(i.location)}</td><td>${badge(i.priority)}</td><td>${badge(i.status)}</td><td>${escapeHtml(i.officer)}</td><td><button class="table-action" data-action="view-incident" data-incident="${escapeHtml(i.id)}">Open</button></td></tr>`,
       ),
     )}</section>`,
     "Incidents",
@@ -3268,9 +3382,9 @@ function incidents() {
 function notifications() {
   const s = getState();
   const visible = notificationsForRole();
-  const deliveryNotice = window.schoolshieldAssignmentNoticeError ? `<p role="alert">${announcementText(window.schoolshieldAssignmentNoticeError)}</p>` : "";
+  const deliveryNotice = (window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError) ? `<p role="alert">${announcementText(window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError)}</p>` : "";
   return shell(
-    `${deliveryNotice}<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${escapeHtml(visible.filter((notice) => !notice.read).length)} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel"><div class="form-grid"><label>Type<select class="select"><option>All types</option><option>System</option><option>Security</option><option>Emergency</option></select></label><label>Priority<select class="select"><option>All priority</option><option>Critical</option><option>High</option><option>Medium</option></select></label><label>Period<select class="select"><option>Any date</option><option>Today</option><option>This week</option></select></label></div></section><div class="notice-stack">${visible.map((n) => `<button class="notice ${escapeHtml(n.read ? "read" : "")}" data-action="view-notification" data-notification="${escapeHtml(n.id)}"><div class="notice-icon">${escapeHtml(n.priority === "Critical" ? "!" : "🔔")}</div><div class="grow"><div class="notice-top"><b>${escapeHtml(n.title)}</b>${badge(n.priority)}</div><p>${escapeHtml(n.description)}</p><small>${escapeHtml(n.category)} · ${escapeHtml(notificationTime(n))} · ${escapeHtml(n.read ? "Read" : "Unread")}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
+    `${deliveryNotice}<div class="page-intro"><div><span class="pill">Alerts & communication</span><h1>Notification centre</h1><p>${escapeHtml(visible.filter((notice) => !notice.read).length)} unread · Open an alert for full details and follow-up.</p></div><button class="btn ghost" id="markRead">Mark all read</button></div><section class="panel">${notificationFiltersMarkup()}</section><div class="notice-stack">${visible.map((n) => `<button class="notice ${escapeHtml(n.read ? "read" : "")}" data-action="view-notification" data-notification="${escapeHtml(n.id)}"><div class="notice-icon">${escapeHtml(n.priority === "Critical" ? "!" : "🔔")}</div><div class="grow"><div class="notice-top"><b>${escapeHtml(n.title)}</b>${badge(n.priority)}</div><p>${escapeHtml(n.description)}</p><small>${escapeHtml(n.category)} · ${escapeHtml(notificationTime(n))} · ${escapeHtml(n.read ? "Read" : "Unread")}</small></div></button>`).join("") || '<p class="empty">No alerts for your learner or the whole school.</p>'}</div>`,
     "Notifications",
   );
 }
@@ -3354,7 +3468,7 @@ function visitorModal(id) {
   if (!v) return;
   modal(
     v.name,
-    `<p class="muted">${escapeHtml(isLeadership() ? "Read-only visitor record for school leadership." : "Visitor registration record.")}</p><div class="detail-grid"><div><small>Visitor ID</small><b>${escapeHtml(v.id)}</b></div><div><small>Visitor type</small><b>${escapeHtml(v.type)}</b></div><div><small>Identification</small><b>${escapeHtml(v.identificationType || "Not captured")} · ${escapeHtml(v.identity || "—")}</b></div><div><small>Person being visited</small><b>${escapeHtml(v.host)}</b></div><div><small>Department</small><b>${escapeHtml(v.department || "—")}</b></div><div><small>Purpose</small><b>${escapeHtml(v.purpose)}</b></div><div><small>Date</small><b>${escapeHtml(v.date || "—")}</b></div><div><small>Check-in / check-out</small><b>${escapeHtml(v.in)} · ${escapeHtml(v.out)}</b></div><div><small>Expected check-out</small><b>${escapeHtml(v.expectedOut || "—")}</b></div><div><small>Vehicle</small><b>${escapeHtml(v.vehicle || "—")}</b></div><div><small>Registered by</small><b>${escapeHtml(v.registeredBy || "—")}</b></div><div><small>Processed by</small><b>${escapeHtml(v.processedBy || "—")}</b></div></div>`,
+    `<p class="muted">${escapeHtml(isLeadership() ? "Read-only visitor record for school leadership." : "Visitor registration record.")}</p><div class="detail-grid"><div><small>Visitor ID</small><b>${escapeHtml(v.referenceId || v.id)}</b></div><div><small>Visitor type</small><b>${escapeHtml(v.type)}</b></div><div><small>Identification</small><b>${escapeHtml(v.identificationType || "Not captured")} · ${escapeHtml(v.identity || "—")}</b></div><div><small>Person being visited</small><b>${escapeHtml(v.host)}</b></div><div><small>Department</small><b>${escapeHtml(v.department || "—")}</b></div><div><small>Purpose</small><b>${escapeHtml(v.purpose)}</b></div><div><small>Date</small><b>${escapeHtml(v.date || "—")}</b></div><div><small>Check-in / check-out</small><b>${escapeHtml(v.in)} · ${escapeHtml(v.out)}</b></div><div><small>Expected check-out</small><b>${escapeHtml(v.expectedOut || "—")}</b></div><div><small>Vehicle</small><b>${escapeHtml(v.vehicle || "—")}</b></div><div><small>Registered by</small><b>${escapeHtml(v.registeredBy || "—")}</b></div><div><small>Processed by</small><b>${escapeHtml(v.processedBy || "—")}</b></div></div>`,
   );
   showRecordDocuments("visitor", id);
 }
@@ -3561,14 +3675,9 @@ function validateFieldFormats(actionName) {
   modal("Check field format", `<p class="muted">${errors.map(escapeHtml).join("<br>")}</p>`);
   return false;
 }
-function todayIso() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset() * 60000;
-  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
-}
-function notificationTimestamp() {
-  return new Date().toISOString();
-}
+function todayIso() { return localDateIso(); }
+function notificationTimestamp() { return localDateTime(); }
+
 function notificationTime(notice) {
   const created = notice?.createdAt ? new Date(notice.createdAt) : null;
   if (!created || Number.isNaN(created.getTime()))
@@ -3611,7 +3720,7 @@ function downloadHtmlFile(filename, html) {
 function downloadAttendanceWeek(classId, weekStart) {
   const start = new Date(weekStart + "T00:00:00");
   const dates = Array.from({ length: 6 }, (_, index) =>
-    new Date(start.getTime() + index * 86400000).toISOString().slice(0, 10),
+    localDateIso(new Date(start.getFullYear(),start.getMonth(),start.getDate()+index)),
   );
   const labels = [
     "Monday",
@@ -3638,7 +3747,7 @@ function downloadAttendanceWeek(classId, weekStart) {
 }
 function learnerSickNotices(learner) {
   return getState().sickNotices.filter(
-    (notice) => notice.person === learner.name,
+    (notice) => notice.learnerId === learner.id,
   );
 }
 function reportTerms() {
@@ -4027,13 +4136,13 @@ function action(type, el) {
   if (type === "register")
     modal(
       "Register visitor",
-      `<p class="muted">Captured ${escapeHtml(todayLabel())} by ${escapeHtml(userName())}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option><option>Government Official</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label>${photoCaptureField("visitor")}<label>Select existing visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/jpeg,image/png" data-photo-input></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
+      `<p class="muted">Captured ${escapeHtml(localDateIso())} by ${escapeHtml(userName())}. ID numbers are validated and duplicate same-day registrations are blocked.</p><div class="form-grid"><label>Full name<input class="input" id="visitorName" placeholder="Full name"></label><label>Identification type<select class="select" id="visitorIdType"><option>South African ID</option><option>Passport</option><option>Driving licence</option></select></label><label>Identification number<input class="input" id="visitorIdentity" placeholder="ID / passport number"></label><label>Cell phone number<input class="input" id="visitorPhone" placeholder="082 000 0000"></label><label>Email address (optional)<input class="input" id="visitorEmail" type="email"></label><label>Company / organisation (optional)<input class="input" id="visitorCompany"></label><label>Visitor type<select class="select" id="visitorType"><option value="">Select type</option><option>Parent</option><option>Visitor</option><option>Service Provider</option><option>Contractor</option><option>Government Official</option></select></label><label>Purpose of visit<input class="input" id="visitorPurpose"></label><label>Person being visited<input class="input" id="visitorHost"></label><label>Department<select class="select" id="visitorDepartment"><option>Administration</option><option>Senior Phase</option><option>Security</option><option>School management</option></select></label><label>Vehicle registration (optional)<input class="input" id="visitorVehicle"></label><label>Expected check-out time<input class="input" id="visitorExpectedOut" type="time"></label>${photoCaptureField("visitor")}<label>Select existing visitor photo<input class="input" id="visitorPhoto" type="file" accept="image/jpeg,image/png" data-photo-input></label><label>Identification document (optional)<input class="input" id="visitorDocument" type="file" accept="image/*,.pdf"></label></div><div class="modal-foot"><button class="btn primary" data-action="save-visitor">Save visitor</button></div>`,
     );
   else if (type === "incident") {
     modal(
       "Report incident",
       `<p class="muted">A new incident ID is issued automatically and the administrator is notified immediately.</p><div class="form-grid"><label>Date<input class="input" id="incidentDate" type="date"></label><label>Time<input class="input" id="incidentTime" type="time"></label><label>Location<input class="input" id="incidentLocation" placeholder="Location"></label><label>Category<select class="select" id="incidentCategory"><option>Suspicious Person</option><option>Suspicious Vehicle</option><option>Safety</option><option>Medical</option><option>Security</option><option>Behaviour</option><option>Theft / Stolen Items</option><option>Missing Property</option><option>Property Damage / Broken Items</option></select></label><label>Share with<select class="select" id="incidentScope"><option value="related">Related staff and safety team</option><option value="teachers">All teachers</option><option value="whole-school">Whole school</option></select></label><label>Priority<select class="select" id="incidentPriority"><option>High</option><option>Low</option><option>Medium</option><option>Critical</option></select></label><label>Security officer<select class="select" id="incidentOfficer">${getState()
-        .security.map((officer) => `<option>${escapeHtml(officer.name)}</option>`)
+        .security.map((officer) => `<option value="${escapeHtml(officer.entityId || officer.id)}">${escapeHtml(officer.name)}</option>`)
         .join(
           "",
         )}</select></label><label>Persons involved<input class="input" id="incidentPeople"></label><label>Linked visitor (optional)<select class="select" id="incidentVisitor"><option value="">None</option>${getState()
@@ -4049,7 +4158,7 @@ function action(type, el) {
         .join(
           "",
         )}</select></label><label>Staff member (optional)<select class="select" id="incidentStaff"><option value="">None</option>${getState()
-        .staff.map((staff) => `<option>${escapeHtml(staff.name)}</option>`)
+        .staff.map((staff) => `<option value="${escapeHtml(staff.entityId || staff.id)}">${escapeHtml(staff.name)}</option>`)
         .join(
           "",
         )}</select></label><label>CCTV reference (optional)<input class="input" id="incidentCctv"></label><label class="full">Full description<textarea class="textarea" id="incidentDescription" placeholder="Describe the incident..."></textarea></label><label class="full">Immediate action taken<textarea class="textarea" id="incidentAction"></textarea></label><label class="full">Additional notes (optional)<textarea class="textarea" id="incidentNotes"></textarea></label>${photoCaptureField("incident")}<label>Select existing incident photos<input class="input" id="incidentPhotos" type="file" accept="image/jpeg,image/png" multiple data-photo-input></label><label class="full">Supporting documents<input class="input" id="incidentFiles" type="file" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx" multiple></label></div><div class="modal-foot"><button class="btn primary" data-action="save-incident">Submit incident</button></div>`,
@@ -4100,7 +4209,7 @@ function action(type, el) {
   else if (type === "save-attendance") saveAttendance(classId);
   else if (type === "open-attendance-day")
     go(
-      `attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || new Date().toISOString().slice(0, 10)}`,
+      `attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || localDateIso()}`,
     );
   else if (type === "save-daily-attendance") saveDailyAttendance(classId);
   else if (type === "delete-daily-attendance") deleteDailyAttendance(classId, el.dataset.date);
@@ -4132,7 +4241,7 @@ function action(type, el) {
           class: classId,
           requestedBy: userName(),
       requestedById: JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").userId,
-          requestedOn: todayLabel(),
+          requestedOn: localDateIso(),
         });
     });
     modal(
@@ -4271,19 +4380,19 @@ function roleAudienceMatches(record) {
 function incidentsForRole() {
   return getState().incidents.filter((incident) => {
     if (["principal", "deputy", "security", "sgb"].includes(role())) return true;
-    return roleAudienceMatches(incident) || incident.reporter === userName() ||
-      incident.staff === userName() || relatedLearnerRecord(incident);
+    return roleAudienceMatches(incident) || incident.reporterId === currentProfileId() ||
+      incident.staffProfileId === currentProfileId() || relatedLearnerRecord(incident);
   });
 }
 
 function notificationsForRole() {
   const visibleIncidents = new Set(incidentsForRole().map((incident) => incident.id));
-  return [...(role() === "teacher" ? window.schoolshieldTeachingAssignmentNotices || [] : []), ...getState().notifications.filter((notice) => {
+  return [...(window.schoolshieldAccountRequestNotices || []), ...(role() === "teacher" ? window.schoolshieldTeachingAssignmentNotices || [] : []), ...getState().notifications.filter((notice) => {
     if (notice.announcementId) return announcementIsVisible(notice);
     if (notice.incidentId) return visibleIncidents.has(notice.incidentId);
     const accountId = JSON.parse(sessionStorage.getItem('schoolshieldSession') || '{}').userId;
     if (notice.recipientId) return notice.recipientId === accountId;
-    if (notice.recipient) return !accountId && notice.recipient === userName();
+    if (notice.recipient) return false; // Unresolved legacy labels never grant identity-based access.
     const targeted = Boolean(notice.learnerId || notice.class);
     if (notice.scope === "whole-school") return true;
     if (roleAudienceMatches(notice)) return !targeted || relatedLearnerRecord(notice) || !["parent", "teacher"].includes(role());
@@ -4294,7 +4403,101 @@ function notificationsForRole() {
     }
     if (!notice.scope || notice.scope === "system") return ["principal", "deputy", "security", "clerk"].includes(role());
     return false;
-  })];
+  })].map(notice => ({...notice, read: notificationIsRead(notice.id)}));
+}
+
+function notificationIsRead(id) {
+  return window.schoolshieldNotificationReader === currentProfileId() && Boolean(window.schoolshieldNotificationReads?.[id]);
+}
+function startNotificationReadSync() {
+  if (window.schoolshieldNotificationSyncStarted) return;
+  window.schoolshieldNotificationSyncStarted=true;
+  const reload=()=>loadPersonalNotificationReads(true);
+  window.addEventListener("focus",reload);
+  window.addEventListener("online",reload);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)reload();});
+}
+async function loadPersonalNotificationReads(updateView = false) {
+  const client = window.schoolshieldSupabase;
+  const readerId=currentProfileId();
+  if (!client || !readerId) return false;
+  try {
+    const {data,error} = await client.rpc("get_notification_reads");
+    if (currentProfileId()!==readerId) return false;
+    if (error || !Array.isArray(data)) throw new Error(error?.message || "Read states could not be loaded.");
+    const before = JSON.stringify(window.schoolshieldNotificationReads || {});
+    window.schoolshieldNotificationReader = readerId;
+    window.schoolshieldNotificationReads = Object.fromEntries(data.map(row => [row.notification_id,row.read_at]));
+    if (["principal","clerk"].includes(role())) {
+      const result = await client.rpc("get_account_request_alerts");
+      if (currentProfileId()!==readerId) return false;
+      if (result.error || !Array.isArray(result.data)) throw new Error(result.error?.message || "Account request alerts could not be loaded.");
+      window.schoolshieldAccountRequestAlerts = result.data;
+      window.schoolshieldAccountRequestNotices = result.data.map(row => ({id:"account-request:"+row.id,accountRequestId:row.request_id,title:"Account request awaiting review",description:"Open Account Requests to review this application.",category:"Account request",priority:"Medium",createdAt:row.created_at}));
+      window.schoolshieldPendingAccountAlerts = result.data.filter(row => !row.read_at).length;
+    } else { window.schoolshieldAccountRequestNotices = []; window.schoolshieldPendingAccountAlerts = 0; }
+    window.schoolshieldNotificationReadError = "";
+    updateTeachingAssignmentBadge();
+    if (updateView && page() === "dashboard") renderAccountRequestDashboardAlert();
+    if (updateView && page() === "notifications" && before !== JSON.stringify(window.schoolshieldNotificationReads)) render();
+    return true;
+  } catch(error) { window.schoolshieldNotificationReadError = error.message; return false; }
+}
+async function markNotificationIdsRead(ids) {
+  if (!ids.length) return true;
+  try {
+    if (!window.schoolshieldSupabase || !currentProfileId()) throw new Error("Sign in to save your notification read state.");
+    for (let offset=0;offset<ids.length;offset+=500) {
+      const batch=ids.slice(offset,offset+500);
+      const {data,error}=await window.schoolshieldSupabase.rpc("mark_notifications_read",{p_ids:batch});
+      if (error || !data?.read_at || data.ids?.length !== batch.length) throw new Error(error?.message || "Read state was not confirmed. Please retry.");
+      if (window.schoolshieldNotificationReader !== currentProfileId()) window.schoolshieldNotificationReads = {};
+      window.schoolshieldNotificationReader = currentProfileId();
+      window.schoolshieldNotificationReads ||= {};
+      for (const id of batch) window.schoolshieldNotificationReads[id]=data.read_at;
+    }
+    window.schoolshieldPendingAccountAlerts=(window.schoolshieldAccountRequestNotices||[]).filter(n=>!notificationIsRead(n.id)).length;
+    window.schoolshieldNotificationReadError="";
+    updateTeachingAssignmentBadge();
+    return true;
+  } catch(error) { window.schoolshieldNotificationReadError=error.message;modal("Notifications not updated",`<p role="alert">${escapeHtml(error.message)}</p>`);return false; }
+}
+function notificationFilterValues() {
+  return window.schoolshieldNotificationFilters ||= {type:"",priority:"",period:"",search:""};
+}
+function notificationMatchesFilters(notice, filters = notificationFilterValues(), now = new Date()) {
+  const type = notice.type || (/incident|visitor|security/i.test(notice.category||"") ? "Security" : notice.priority === "Critical" ? "Emergency" : "System");
+  if (filters.type && ![type,notice.category].includes(filters.type)) return false;
+  if (filters.priority && notice.priority !== filters.priority) return false;
+  if (filters.search && ![notice.title,notice.description,notice.category].join(" ").toLowerCase().includes(filters.search.toLowerCase())) return false;
+  if (filters.period) {
+    const date=localDateIso(notice.createdAt || notice.date || "");
+    const today=localDateIso(now),monday=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    monday.setDate(monday.getDate()-((monday.getDay()+6)%7));
+    if (!date || date>today || filters.period==="today" && date!==today || filters.period==="week" && date<localDateIso(monday)) return false;
+  }
+  return true;
+}
+function notificationFiltersMarkup() {
+  const filters=notificationFilterValues();
+  const types=[...new Set(["System","Security","Emergency",...notificationsForRole().map(n=>n.category).filter(Boolean)])];
+  const select=(key,label,values)=>`<label>${escapeHtml(label)}<select class="select" data-notification-filter="${key}">${values.map(([value,text])=>`<option value="${escapeHtml(value)}"${filters[key]===value?' selected':''}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
+  return `<div class="form-grid">${select("type","Type",[["","All types"],...types.map(type=>[type,type])])}${select("priority","Priority",[["","All priority"],...["Critical","High","Medium","Low"].map(p=>[p,p])])}${select("period","Period",[["","Any date"],["today","Today"],["week","This week"]])}</div>`;
+}
+function bindNotificationFilters(root=document) {
+  const filters=notificationFilterValues();
+  const list=root.querySelector('#notificationItems,.notice-stack');
+  if(list && !root.querySelector('[data-notification-filter-empty]')) {
+    const empty=document.createElement('p');empty.dataset.notificationFilterEmpty='';empty.textContent='No notifications match these filters.';empty.hidden=true;list.after(empty);
+  }
+  const apply=()=>{
+    const byId=new Map(notificationsForRole().map(n=>[n.id,n]));let count=0;
+    $$('[data-notification]',list||root).forEach(item=>{const notice=byId.get(item.dataset.notification);item.hidden=!notice||!notificationMatchesFilters(notice,filters);item.style.display=item.hidden?'none':'';if(!item.hidden)count++;});
+    const empty=root.querySelector('[data-notification-filter-empty]');if(empty)empty.hidden=count>0;
+  };
+  $$('[data-notification-filter]',root).forEach(field=>{field.value=filters[field.dataset.notificationFilter];field.onchange=()=>{filters[field.dataset.notificationFilter]=field.value;apply();};});
+  const search=root.querySelector('#notificationSearch');if(search){search.value=filters.search;search.oninput=()=>{filters.search=search.value;apply();};}
+  apply();
 }
 
 async function loadTeachingAssignmentNotifications(renderList = false) {
@@ -4310,9 +4513,9 @@ async function loadTeachingAssignmentNotifications(renderList = false) {
     if (error) throw new Error(error.message);
     const notices = data.map(row => ({
       id: "assignment-notice:" + row.id, assignmentNotificationId: row.id, assignmentId: row.assignment_id,
-      title: announcementText(row.payload.title), description: announcementText(row.payload.description),
+      title: row.payload.title, description: row.payload.description,
       category: "Teaching assignment", priority: "Medium", read: Boolean(row.read_at), createdAt: row.created_at,
-      reporter: announcementText(row.payload.assignedBy), assignment: row.payload,
+      reporter: row.payload.assignedBy, assignment: row.payload,
     }));
     const changed = JSON.stringify(notices) !== JSON.stringify(window.schoolshieldTeachingAssignmentNotices || []);
     window.schoolshieldTeachingAssignmentNotices = notices;
@@ -4335,41 +4538,32 @@ async function loadTeachingAssignmentNotifications(renderList = false) {
 }
 
 function updateTeachingAssignmentBadge() {
-  if (role() !== "teacher") return;
   const bell = document.getElementById("globalBell");
   if (!bell) return;
   const unread = notificationsForRole().filter(notice => !notice.read).length;
   bell.dataset.unread = unread;
   bell.setAttribute("aria-label", `Open notifications (${unread} unread)`);
+  if (document.querySelectorAll) {
+    const notices=new Map(notificationsForRole().map(n=>[n.id,n]));
+    $$('[data-notification]').forEach(item=>{const notice=notices.get(item.dataset.notification);if(notice){item.classList.toggle('read',notice.read);if(notice.read&&item.classList.contains('incident-toast'))item.remove();}});
+    for (const [href,count] of [['notifications.html',unread],['account-requests.html',window.schoolshieldPendingAccountAlerts||0]]) {
+      const link=document.querySelector(`.nav-item[href="${href}"]`);
+      if (link) {link.classList.toggle('has-updates',count>0);const dot=link.querySelector('.nav-update');if(!count)dot?.remove();else if(!dot){const mark=document.createElement('span');mark.className='nav-update';mark.setAttribute('aria-label','New updates');link.appendChild(mark);}}
+    }
+    const alert=document.querySelector('#accountApprovalDashboardAlert');
+    if(alert){if(!window.schoolshieldPendingAccountAlerts)alert.remove();else alert.querySelector('h3').textContent=`${window.schoolshieldPendingAccountAlerts} new account requests`;}
+  }
 }
 
 async function markVisibleNotificationsRead() {
-  const visible = notificationsForRole(), ids = new Set(visible.map(notice => notice.id));
-  const recipientIds = visible.filter(notice => notice.assignmentNotificationId && !notice.read).map(notice => notice.assignmentNotificationId);
-  if (recipientIds.length) {
-    const { data, error } = await window.schoolshieldSupabase.from("account_request_notifications")
-      .update({ read_at: new Date().toISOString() }).in("id", recipientIds).select("id");
-    if (error || data.length !== recipientIds.length) {
-      modal("Notifications not updated", `<p role="alert">${announcementText(error?.message || "Not all assignment alerts could be marked read. Please retry.")}</p>`);
-      return false;
-    }
-    (window.schoolshieldTeachingAssignmentNotices || []).forEach(notice => { if (ids.has(notice.id)) notice.read = true; });
-  }
-  const legacyUnread = new Set(visible.filter(notice => !notice.assignmentNotificationId && !notice.read).map(notice => notice.id));
-  if (legacyUnread.size) persist(state => state.notifications.forEach(notice => { if (legacyUnread.has(notice.id)) notice.read = true; }));
-  updateTeachingAssignmentBadge();
-  return true;
+  return markNotificationIdsRead(notificationsForRole().filter(notice=>!notice.read).map(notice=>notice.id));
 }
 
 async function viewTeachingAssignmentNotification(notice) {
   const a = notice.assignment;
   modal(notice.title, `<p>${escapeHtml(notice.description)}</p><div class="detail-grid"><div><small>Subject</small><b>${announcementText(a.subject)}</b></div><div><small>Grade / class</small><b>${announcementText(a.grade)} / ${announcementText(a.class)}</b></div><div><small>Academic year</small><b>${announcementText(a.academicYear)}</b></div><div><small>Assigned by</small><b>${announcementText(a.assignedBy)}</b></div><div><small>Assignment date</small><b>${announcementText(a.assignmentDate)}</b></div></div><p role="status" id="assignmentNoticeReadState">Marking notification read…</p><a class="btn primary" href="my-performance.html">View My Teaching Assignments</a>`);
   const status = document.getElementById("assignmentNoticeReadState");
-  const { data, error } = await window.schoolshieldSupabase.from("account_request_notifications")
-    .update({ read_at: new Date().toISOString() }).eq("id", notice.assignmentNotificationId).select("id").single();
-  if (error || !data) { if (status?.isConnected) status.textContent = "Could not mark read: " + (error?.message || "Please retry."); return; }
-  notice.read = true;
-  updateTeachingAssignmentBadge();
+  if (!await markNotificationIdsRead([notice.id])) { if (status?.isConnected) status.textContent = "Could not mark read. Please retry.";return; }
   if (status?.isConnected) status.textContent = "Notification marked read.";
 }
 
@@ -4404,7 +4598,7 @@ async function saveRecordDocuments(entity) {
     let pending = window.schoolshieldPendingDocumentRecord;
     if (pending && pending.entity !== entity) throw new Error("Retry the unfinished document upload before submitting another record.");
     if (!pending) {
-      const capture = { recordId: settings.prefix + crypto.randomUUID() };
+      const capture = { recordId: crypto.randomUUID() };
       window.schoolshieldDocumentCapture = capture;
       try { settings.save(); } finally { window.schoolshieldDocumentCapture = null; }
       const record = getState()[settings.store].find(item => item.id === capture.recordId);
@@ -4416,7 +4610,7 @@ async function saveRecordDocuments(entity) {
     if (!pending.persisted) {
       if (role() === "parent") {
         const current = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
-        const learner = getState().learners.find(item => item.name === pending.record.person);
+        const learner = getState().learners.find(item => item.id === pending.record.learnerId);
         if (!learner) throw new Error("This sick notice is not linked to your learner.");
         pending.record.learnerId = learner.id;
         pending.record.submittedById = current.userId;
@@ -4520,7 +4714,7 @@ function saveVisitor() {
   if (
     getState().visitors.some(
       (visitor) =>
-        visitor.identity === identity && visitor.date === todayLabel(),
+        visitor.identity === identity && localDateIso(visitor.date) === localDateIso(),
     )
   ) {
     modal(
@@ -4535,10 +4729,7 @@ function saveVisitor() {
       name,
       host,
       purpose,
-      in: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      in: formatLocalTime(new Date()),
       out: "—",
       status: "Inside",
       type,
@@ -4550,10 +4741,15 @@ function saveVisitor() {
       department: inputValue("visitorDepartment"),
       vehicle: inputValue("visitorVehicle"),
       expectedOut: inputValue("visitorExpectedOut"),
-      date: todayLabel(),
+      date: localDateIso(),
       registeredBy: userName(),
+      registeredById: currentProfileId(),
+      actualCheckInAt: localDateTime(),
+      referenceId: recordReference("VIS",window.schoolshieldDocumentCapture?.recordId || ""),
       processedBy: userName(),
+      processedById: currentProfileId(),
     };
+    visitor.referenceId=recordReference("VIS",visitor.id);
     state.visitors.unshift(visitor);
     state.notifications.unshift({
       id: crypto.randomUUID(),
@@ -4589,28 +4785,31 @@ function saveIncident() {
     const id = window.schoolshieldDocumentCapture?.recordId || crypto.randomUUID();
     state.incidents.unshift({
       id,
-      date: inputValue("incidentDate") || todayLabel(),
+      date: inputValue("incidentDate") || localDateIso(),
       time:
         inputValue("incidentTime") ||
-        new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        formatLocalTime(new Date()),
       category: inputValue("incidentCategory"),
       location,
       priority: inputValue("incidentPriority"),
       status: "Open",
       officer:
-        inputValue("incidentOfficer") ||
+        getState().security.find(o=>(o.entityId||o.id)===inputValue("incidentOfficer"))?.name ||
         (role() === "security" ? userName() : "Unassigned"),
       reporter: userName(),
+      reporterId: currentProfileId(),
+      createdAt: localDateTime(),
+      referenceId: recordReference("INC",id),
+      officerId: inputValue("incidentOfficer") || (role()==="security" ? getState().security.find(o=>o.userId===currentProfileId())?.entityId : null),
       description,
       affectedItems,
       scope: ["teachers", "whole-school"].includes(inputValue("incidentScope")) ? inputValue("incidentScope") : "related",
       people: inputValue("incidentPeople"),
       visitorId: inputValue("incidentVisitor"),
       learnerId: inputValue("incidentLearner"),
-      staff: inputValue("incidentStaff"),
+      staffId: inputValue("incidentStaff") || null,
+      staff: getState().staff.find(s=>(s.entityId||s.id)===inputValue("incidentStaff"))?.name || "",
+      staffProfileId: getState().staff.find(s=>(s.entityId||s.id)===inputValue("incidentStaff"))?.profileId || null,
       cctv: inputValue("incidentCctv"),
       immediateAction: inputValue("incidentAction"),
       notes: inputValue("incidentNotes"),
@@ -4619,7 +4818,8 @@ function saveIncident() {
         {
           action: "Created",
           author: userName(),
-          date: todayLabel(),
+      authorId: currentProfileId(),
+          date: localDateIso(),
           time: inputValue("incidentTime") || "Now",
         },
       ],
@@ -4778,7 +4978,8 @@ function submitStaffChange(type, proposed, previous = null) {
       proposed,
       previous,
       requestedBy: userName(),
-      requestedOn: todayLabel(),
+      requestedById: currentProfileId(),
+      requestedOn: localDateIso(),
       status: "Pending",
       approvals: { principal: false, deputy: false },
     };
@@ -4817,7 +5018,7 @@ function approveStaffChange(id) {
       if (member) Object.assign(member, request.proposed);
     }
     request.status = "Approved";
-    request.completedOn = todayLabel();
+    request.completedOn = localDateTime();
     completed = true;
   });
   modal(
@@ -4841,6 +5042,9 @@ function saveAppointment() {
       title,
       with: participant?.name || withPerson,
       participantStaffId: participant?.entityId || null,
+      participantProfileId: participant?.profileId || null,
+      createdBy: currentProfileId(),
+      createdAt: localDateTime(),
       date,
       time,
       status: "Scheduled",
@@ -4864,7 +5068,10 @@ function saveSickNotice() {
     state.sickNotices.unshift({
       id: window.schoolshieldDocumentCapture?.recordId || crypto.randomUUID(),
       submittedBy: userName(),
-      person: learner.split(" — ")[0],
+      submittedById: currentProfileId(),
+      learnerId,
+      createdAt: localDateTime(),
+      person: learner,
       date,
       reason: inputValue("sickDetails") || reason,
       letter: $("#sickLetter")?.files?.[0]?.name || "",
@@ -4896,7 +5103,7 @@ function saveSickNotice() {
       date,
       teacher: existing?.teacher || teacherForClass(learnerRecord.class),
       entries,
-      capturedOn: todayLabel(),
+      capturedOn: localDateTime(),
       source: "Parent sick notice",
       pendingSickNoticeIds: [
         ...new Set([...(existing?.pendingSickNoticeIds || []), notice.id]),
@@ -4987,12 +5194,11 @@ function processVisitorScan() {
   persist((state) => {
     const item = state.visitors.find((entry) => entry.id === visitor.id);
     item.status = "Inside";
-    item.in = new Date().toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    item.in = formatLocalTime(new Date());
     item.out = "—";
     item.processedBy = userName();
+    item.processedById = currentProfileId();
+    item.actualCheckInAt = localDateTime();
   });
   finishForm();
 }
@@ -5002,10 +5208,9 @@ function checkoutVisitor(id) {
     const visitor = state.visitors.find((item) => item.id === id);
     if (visitor && visitor.status === "Inside") {
       visitor.status = "Checked Out";
-      visitor.out = new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      visitor.actualCheckOutAt = localDateTime();
+      visitor.processedById = currentProfileId();
+      visitor.out = formatLocalTime(new Date());
     }
   });
   $$(".modal-backdrop").forEach((element) => element.remove());
@@ -5047,17 +5252,17 @@ function addIncidentResponse(id) {
     if (!incident) return;
     incident.comments = incident.comments || [];
     incident.audit = incident.audit || [];
-    incident.comments.push({ author: userName(), text, date: todayLabel() });
+    incident.comments.push({ author: userName(), authorId: currentProfileId(), text, createdAt: localDateTime(), date: localDateIso() });
     incident.audit.push({
       action: "Response added",
       author: userName(),
-      date: todayLabel(),
+      date: localDateIso(),
       time: "Now",
     });
   });
   finishForm();
 }
-function resolveIncident(id) {
+async function resolveIncident(id) {
   if (!incidentsForRole().some((item) => item.id === id) || role() === "sgb") return;
   persist((state) => {
     const incident = state.incidents.find((item) => item.id === id);
@@ -5067,25 +5272,22 @@ function resolveIncident(id) {
     incident.audit.push({
       action: "Status changed — Open → Resolved",
       author: userName(),
-      date: todayLabel(),
+      authorId: currentProfileId(),
+      date: localDateIso(),
       time: "Now",
     });
-    state.notifications.forEach((notice) => {
-      if (notice.incidentId === id) notice.read = true;
-    });
+
   });
   $(".incident-toast")?.remove();
+  if (!await markNotificationIdsRead(notificationsForRole().filter(n=>n.incidentId===id&&!n.read).map(n=>n.id))) return;
   finishForm();
 }
-function viewNotification(id) {
+async function viewNotification(id) {
   const notice = notificationsForRole().find((item) => item.id === id);
   if (!notice) return;
   if (notice.assignmentNotificationId) return viewTeachingAssignmentNotification(notice);
-  persist((state) => {
-    const item = state.notifications.find((entry) => entry.id === id);
-    if (item) item.read = true;
-  });
-  $(".incident-toast")?.remove();
+  if (!await markNotificationIdsRead([id])) return;
+  if (notice.accountRequestId) return go("account-requests.html");
   const comments =
     (notice.comments || [])
       .map(
@@ -5112,7 +5314,8 @@ function commentNotification(id) {
     const notice = state.notifications.find((item) => item.id === id);
     if (!notice) return;
     notice.comments = notice.comments || [];
-    notice.comments.push({ author: userName(), text, date: todayLabel() });
+    notice.comments.push({ author: userName(),
+      authorId: currentProfileId(), text, createdAt: localDateTime(), date: localDateIso() });
   });
   finishForm();
 }
@@ -5295,7 +5498,7 @@ function saveOfficer(id) {
 }
 function viewParentSickNotice(id) {
   const notice = getState().sickNotices.find(
-    (item) => item.id === id && item.submittedBy === userName(),
+    (item) => item.id === id && (item.submittedById === currentProfileId() || relatedLearnerRecord(item)),
   );
   if (!notice) return;
   modal(
@@ -5313,13 +5516,13 @@ function viewSickNotice(id) {
   );
   showRecordDocuments("sick-notice", id);
 }
-function reviewSickNotice(id) {
+async function reviewSickNotice(id) {
   persist((state) => {
     const notice = state.sickNotices.find((item) => item.id === id);
     if (!notice) return;
     notice.status = "Reviewed";
     const learnerRecord = state.learners.find(
-      (item) => item.name === notice.person,
+      (item) => item.id === notice.learnerId,
     );
     const register =
       learnerRecord &&
@@ -5331,10 +5534,9 @@ function reviewSickNotice(id) {
       register.pendingSickNoticeIds = (
         register.pendingSickNoticeIds || []
       ).filter((noticeId) => noticeId !== id);
-    state.notifications.forEach((notification) => {
-      if (notification.sickNoticeId === id) notification.read = true;
-    });
+
   });
+  if (!await markNotificationIdsRead(notificationsForRole().filter(n=>n.sickNoticeId===id&&!n.read).map(n=>n.id))) return;
   finishForm();
 }
 function showPendingSickNoticePopup() {
@@ -5346,7 +5548,7 @@ function showPendingSickNoticePopup() {
     return (
       item.status !== "Reviewed" &&
       learnerRecord &&
-      teacherForClass(learnerRecord.class) === userName()
+      teacherClasses().some(c => c.id === learnerRecord.class)
     );
   });
   if (!notice) return;
@@ -5441,8 +5643,9 @@ function saveAttendance(classId) {
       class: classId,
       date,
       teacher: userName(),
+      teacherId: currentProfileId(),
       entries,
-      capturedOn: todayLabel(),
+      capturedOn: localDateTime(),
     };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
@@ -5492,8 +5695,9 @@ function saveWeeklyAttendance(classId, weekStart) {
         class: classId,
         date,
         teacher: userName(),
+      teacherId: currentProfileId(),
         entries,
-        capturedOn: todayLabel(),
+        capturedOn: localDateTime(),
       };
       if (index >= 0) state.attendanceRegisters[index] = register;
       else state.attendanceRegisters.unshift(register);
@@ -5503,7 +5707,8 @@ function saveWeeklyAttendance(classId, weekStart) {
       class: classId,
       weekStart,
       teacher: userName(),
-      updatedOn: todayLabel(),
+      teacherId: currentProfileId(),
+      updatedOn: localDateTime(),
     };
     const weekIndex = state.attendanceWeeks.findIndex(
       (week) => week.class === classId && week.weekStart === weekStart,
@@ -5587,7 +5792,7 @@ function saveTestScores(classId, mode, assessmentId = "") {
       if (mode === "teacher") {
         assessment.status = "submitted";
         assessment.submittedBy = userName();
-        assessment.date = todayLabel();
+        assessment.date = localDateIso();
         state.notifications.unshift({
           id: crypto.randomUUID(),
           createdAt: notificationTimestamp(),
@@ -5611,7 +5816,7 @@ function saveTestScores(classId, mode, assessmentId = "") {
       const report = state.reports.find((r) => r.class === classId);
       if (report && report.status === "awaiting-marks") {
         report.status = "ready";
-        report.marksSubmittedOn = todayLabel();
+        report.marksSubmittedOn = localDateTime();
       }
     }
   });
@@ -5713,7 +5918,7 @@ function submitTeacherAssignment() {
       class: classId,
       teacher,
       requestedBy: userName(),
-      requestedOn: todayLabel(),
+      requestedOn: localDateIso(),
       status: "Pending",
     });
   });
@@ -5798,9 +6003,9 @@ function setReportStatus(classId, status) {
     const schoolClass = state.classes.find((item) => item.id === classId);
     if (!report) return;
     report.status = status;
-    if (status === "compiled") report.compiledOn = todayLabel();
-    if (status === "finalised") report.finalisedOn = todayLabel();
-    if (status === "published") report.publishedOn = todayLabel();
+    if (status === "compiled") report.compiledOn = localDateTime();
+    if (status === "finalised") report.finalisedOn = localDateTime();
+    if (status === "published") report.publishedOn = localDateTime();
     if (status === "compiled" && schoolClass)
       state.notifications.unshift({
         id: crypto.randomUUID(),
@@ -5835,7 +6040,7 @@ function reviewLearnerReport(classId, learnerId) {
     const report = state.reports.find((item) => item.class === classId);
     if (!report || report.status !== "compiled") return;
     report.learnerReviews = report.learnerReviews || {};
-    report.learnerReviews[learnerId] = { by: userName(), date: todayLabel() };
+    report.learnerReviews[learnerId] = { by: userName(), byId: currentProfileId(), date: localDateIso(), reviewedAt: localDateTime() };
   });
   render();
 }
@@ -5853,7 +6058,7 @@ function releaseLearnerReport(classId, learnerId) {
     )
       return;
     report.releasedLearners = report.releasedLearners || {};
-    report.releasedLearners[learnerId] = todayLabel();
+    report.releasedLearners[learnerId] = localDateTime();
     state.notifications.unshift({
       id: crypto.randomUUID(),
       title: `${TERM} report available for ${learner.name}`,
@@ -5870,7 +6075,7 @@ function releaseLearnerReport(classId, learnerId) {
     ).length;
     if (Object.keys(report.releasedLearners).length >= total) {
       report.status = "published";
-      report.publishedOn = todayLabel();
+      report.publishedOn = localDateTime();
     }
   });
   render();
@@ -5881,7 +6086,7 @@ function announcementText(value) {
 }
 function announcementIsVisible(item) {
   const session = JSON.parse(sessionStorage.getItem('schoolshieldSession') || '{}');
-  if ((item.authorId && item.authorId === session.userId) || (!session.userId && !item.authorId && item.author === userName())) return true;
+  if (item.authorId && item.authorId === session.userId) return true;
   const audience = item.audienceId;
   if (!audience) return true; // Preserve legacy notices without audience IDs.
   const r = role();
@@ -5927,14 +6132,14 @@ async function sendAnnouncement() {
   const delivery = inputValue('deliverySelect');
   const signature = JSON.stringify([title,body,audience.id,delivery]);
   // Keep the same ID after uncertain network errors so retries cannot duplicate a saved notice.
-  if (window.schoolshieldAnnouncementDraft?.signature !== signature) window.schoolshieldAnnouncementDraft = { signature, id: 'ANN-' + crypto.randomUUID() };
+  if (window.schoolshieldAnnouncementDraft?.signature !== signature) window.schoolshieldAnnouncementDraft = { signature, id: crypto.randomUUID() };
   const button = $("[data-action='send-announcement']");
   window.schoolshieldAnnouncementSending = true;
   if (button) button.disabled = true;
   try {
     await writeAnnouncement({ p_id: window.schoolshieldAnnouncementDraft.id, p_title: title, p_body: body, p_audience_id: audience.id, p_audience: audience.label, p_delivery: delivery, p_recipients: audience.count, p_action: 'create' });
     window.schoolshieldAnnouncementDraft = null;
-    $('#annTitle').value = ''; $('#annBody').value = '';
+    $('#annTitle').value = ''; $('#annBody').value = ''; resetWorkspaceDraftState();
     render();
   } catch (error) { modal('Announcement not saved', '<p>' + announcementText(error.message) + '</p>'); }
   finally {
@@ -6074,24 +6279,11 @@ function patchLiveChat(html) {
   }
   // Never replace the composer, input or their ancestors. Focus, selection,
   // IME composition and browser keyboard state therefore remain untouched.
-  const head = live.querySelector(".chat-head");
-  const nextHead = incoming.querySelector(".chat-head");
-  if (head.innerHTML !== nextHead.innerHTML) head.innerHTML = nextHead.innerHTML;
-  const send = live.querySelector("[data-action='send-message']");
-  const nextSend = incoming.querySelector("[data-action='send-message']");
-  if (send && nextSend) Object.assign(send.dataset, nextSend.dataset);
-  for (const selector of [".chat-contact-grid", ".chat-list"]) {
-    const current = $(selector), next = template.content.querySelector(selector);
-    if (current && next && current.innerHTML !== next.innerHTML) {
-      current.innerHTML = next.innerHTML;
-      $$('[data-action]', current).forEach(button => {
-        button.onclick = () => action(button.dataset.action, button);
-      });
-    }
-  }
   return true;
 }
 function render() {
+  initWorkspaceDraftProtection();
+  if (workspaceHasDraft() && (!workspaceIsChat() || workspaceHasOpenEditor())) { showWorkspaceUpdates(); return; }
   // Keep selected File objects and the original form mounted until its upload
   // finishes or is retried. Cloud data may refresh without replacing the form.
   if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return;
@@ -6148,6 +6340,7 @@ function render() {
   else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
   if (patchLiveChat(html)) return;
+  if (workspaceHasDraft()) { showWorkspaceUpdates(); return; }
   $("#app").innerHTML = html;
   bind();
   Object.entries(announcementDraft).forEach(([id, value]) => {
@@ -6180,21 +6373,15 @@ function accountRequests() {
 }
 
 async function loadAccountRequestDashboardAlert() {
-  const client = window.schoolshieldSupabase;
-  if (!client || !["principal", "clerk"].includes(role())) return;
-  const { count } = await client
-    .from("account_request_notifications")
-    .select("id", { count: "exact", head: true })
-    .eq("notification_type", "account_request")
-    .is("read_at", null);
-  window.schoolshieldPendingAccountAlerts = count || 0;
-  if (!count || page() !== "dashboard") return;
-  const content = $(".content");
-  if (!content || $("#accountApprovalDashboardAlert")) return;
-  content.insertAdjacentHTML(
-    "afterbegin",
-    `<section class="panel" id="accountApprovalDashboardAlert" style="border-left:4px solid #e6a400"><div class="panel-head"><div><span class="pill">Action required</span><h3>${escapeHtml(count)} new account request${escapeHtml(count === 1 ? "" : "s")}</h3><p>A parent, teacher or security officer is waiting for approval.</p></div><a class="btn primary" href="account-requests.html">Review requests</a></div></section>`,
-  );
+  if (!window.schoolshieldSupabase || !["principal","clerk"].includes(role())) return;
+  if (!await loadPersonalNotificationReads()) return;
+  renderAccountRequestDashboardAlert();
+}
+function renderAccountRequestDashboardAlert() {
+  const count=window.schoolshieldPendingAccountAlerts||0;
+  if (!count || page()!=="dashboard") { $("#accountApprovalDashboardAlert")?.remove();return; }
+  const content=$(".content");if (!content || $("#accountApprovalDashboardAlert")) return;
+  content.insertAdjacentHTML("afterbegin",`<section class="panel" id="accountApprovalDashboardAlert"><h3>${count} new account request${count===1?'':'s'}</h3><a class="btn primary" href="account-requests.html">Review requests</a></section>`);
 }
 
 async function loadAccountRequests() {
@@ -6206,12 +6393,11 @@ async function loadAccountRequests() {
     .select("id, display_name, email, requested_role, created_at, invitation_method, phone")
     .eq("status", "pending")
     .order("created_at");
-  await client
-    .from("account_request_notifications")
-    .update({ read_at: new Date().toISOString() })
-    .eq("notification_type", "account_request")
-    .is("read_at", null);
-  window.schoolshieldPendingAccountAlerts = 0;
+  if (!error) {
+    await loadPersonalNotificationReads();
+    const requestIds=new Set((data||[]).map(row=>row.id));
+    await markNotificationIdsRead((window.schoolshieldAccountRequestAlerts||[]).filter(row=>requestIds.has(row.request_id)).map(row=>"account-request:"+row.id));
+  }
   if (error) {
     rows.innerHTML = `<tr><td colspan="5" class="muted">${escapeHtml(error.message)}</td></tr>`;
     return;
@@ -6439,8 +6625,8 @@ function initWorkspaceChrome() {
 }
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
-  const deliveryNotice = window.schoolshieldAssignmentNoticeError ? `<p role="alert">${announcementText(window.schoolshieldAssignmentNoticeError)}</p>` : "";
-  return `${deliveryNotice}<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${escapeHtml(notices.filter((notice) => !notice.read).length)} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications..."><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px"><select class="select"><option>All types</option></select><select class="select"><option>All priority</option></select><select class="select"><option>Any date</option></select></div><div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${escapeHtml(notice.id)}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${escapeHtml(notice.read ? "#fff" : "#f2f8ff")};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHtml(notice.title)}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${escapeHtml(notice.description)}</small><small>${escapeHtml(notice.category)} · ${escapeHtml(notificationTime(notice))}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
+  const deliveryNotice = (window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError) ? `<p role="alert">${announcementText(window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError)}</p>` : "";
+  return `${deliveryNotice}<div style="display:flex;justify-content:space-between;align-items:start;border-bottom:1px solid #e3e9eb;padding-bottom:11px"><div><b style="font-size:14px">Notification centre</b><small style="display:block;color:#71838a">${escapeHtml(notices.filter((notice) => !notice.read).length)} unread</small></div><button class="icon-btn" id="closeNotifications" title="Close">×</button></div><input class="input" id="notificationSearch" style="margin:10px 0" placeholder="Search notifications...">${notificationFiltersMarkup()}<div id="notificationItems" style="margin-top:12px">${notices.map((notice) => `<button class="notification-center-item" data-action="view-notification" data-notification="${escapeHtml(notice.id)}" style="width:100%;text-align:left;border:1px solid #dce6e8;border-radius:12px;background:${escapeHtml(notice.read ? "#fff" : "#f2f8ff")};padding:12px;margin-bottom:9px;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px"><b>${escapeHtml(notice.title)}</b>${badge(notice.priority)}</div><small style="display:block;color:#60747a;margin:5px 0">${escapeHtml(notice.description)}</small><small>${escapeHtml(notice.category)} · ${escapeHtml(notificationTime(notice))}</small></button>`).join("") || '<p class="muted">No notifications.</p>'}</div><div style="display:flex;justify-content:space-between;border-top:1px solid #e3e9eb;padding-top:10px"><button class="btn small" id="drawerMarkRead">Mark all read</button><a class="text-link" href="notifications.html">View all →</a></div>`;
 }
 function toggleNotificationCenter() {
   const drawer = $("#notificationCenter");
@@ -6457,17 +6643,10 @@ function toggleNotificationCenter() {
   $("#drawerMarkRead", drawer).onclick = async () => {
     if (await markVisibleNotificationsRead()) { drawer.style.display = "none"; toggleNotificationCenter(); }
   };
-  $("#notificationSearch", drawer).oninput = (event) =>
-    $$(".notification-center-item", drawer).forEach(
-      (item) =>
-        (item.style.display = item.innerText
-          .toLowerCase()
-          .includes(event.target.value.toLowerCase())
-          ? ""
-          : "none"),
-    );
+  bindNotificationFilters(drawer);
 }
 function bind() {
+  if (page()==="notifications") bindNotificationFilters(document);
   initWorkspaceChrome();
   updateTeachingAssignmentBadge();
   if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
@@ -6611,16 +6790,11 @@ async function startWorkspace() {
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
     await loadTeachingAssignmentNotifications();
+    await loadPersonalNotificationReads();
+    startNotificationReadSync();
     startWorkspaceRealtime();
     startWorkspaceAutoRefresh();
-    if (["principal", "clerk"].includes(profile.role)) {
-      const { count } = await client
-        .from("account_request_notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("notification_type", "account_request")
-        .is("read_at", null);
-      window.schoolshieldPendingAccountAlerts = count || 0;
-    }
+
   }
   if (
     !sessionStorage.getItem("schoolshieldSession") &&
