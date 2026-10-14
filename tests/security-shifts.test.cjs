@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('SchoolShield/app.js','utf8');
 function harness() {
-  const state={security:[{id:'S1',name:'Officer A',shift:'18:00–06:00'},{id:'S2',name:'Officer B'}],securityAttendance:[]};
+  const state={security:[{id:'S1',userId:'U1',name:'Officer A',shift:'18:00–06:00'},{id:'S2',userId:'U2',name:'Officer B'}],securityAttendance:[]};
   const ctx=vm.createContext({window:{},document:{},sessionStorage:{getItem:()=>JSON.stringify({userId:'U1'})}});
   vm.runInContext(source.replace(/startWorkspace\(\);\s*$/,''),ctx);
   Object.assign(ctx,{role:()=> 'security',userName:()=> 'Officer A',getState:()=>state});return {ctx,state};
@@ -24,10 +24,10 @@ test('officer profile displays contacts and canonical attendance timestamps',()=
   assert.match(html,/071 123 4567/);assert.match(html,/officer@example.test/);assert.match(html,/18:04/);assert.doesNotMatch(html,/wrong legacy time/);
 });
 
-test('demo contacts do not overwrite existing contacts or unrelated officers',()=>{
-  const {ctx}=harness();const state={security:[{id:'SEC-001',name:'Different Officer'},{id:'SEC-002',name:'Thato Mokoena',phone:'existing'}]};
-  assert.equal(ctx.ensureDemoSecurityOfficerDetails(state),true);assert.equal(state.security[0].phone,undefined);assert.equal(state.security[1].phone,'existing');assert.match(state.security[1].profilePicture,/thato-mokoena/);
-  assert.equal(ctx.ensureDemoSecurityOfficerDetails(state),false);
+test('authenticated officer ownership never falls back to a matching display name',()=>{
+  const {ctx,state}=harness();delete state.security[0].userId;
+  assert.equal(ctx.canRecordSecurityShift(state.security[0]),false);
+  assert.doesNotMatch(source,/ensureDemoSecurityOfficerDetails/);
 });
 
 test('scheduled duration handles normal and overnight shifts and rejects incomplete/equal times',()=>{

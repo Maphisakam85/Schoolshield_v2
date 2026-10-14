@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-function moduleHarness() {const ctx=vm.createContext({window:{}});vm.runInContext(fs.readFileSync('SchoolShield/teacher-performance-metrics.js','utf8'),ctx);return ctx.window.SchoolShieldTeacherMetrics;}
+function moduleHarness() {const ctx=vm.createContext({window:{}});vm.runInContext(require('./helpers/html-safety.cjs')+fs.readFileSync('SchoolShield/teacher-performance-metrics.js','utf8'),ctx);return ctx.window.SchoolShieldTeacherMetrics;}
 test('missing metrics show Not enough data while valid zero remains zero',()=>{
  const module=moduleHarness();assert.equal(module.value(null,'%'),'Not enough data');assert.equal(module.value(undefined),'Not enough data');assert.equal(module.value(0,'%'),'0%');
 });

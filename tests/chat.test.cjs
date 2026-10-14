@@ -119,7 +119,7 @@ function sendHarness({ reject = false } = {}) {
     refreshCloudWorkspace: async () => { refreshed = true; },
     modal: (title, message) => { error = message; },
   });
-  vm.runInContext(app.slice(app.indexOf('async function sendMessage('), app.indexOf('function exportCsv()')), context);
+  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('async function sendMessage('), app.indexOf('function exportCsv()')), context);
   return { context, input, button, calls, refreshed: () => refreshed, error: () => error };
 }
 test('teacher sends to the selected learner, blocks duplicate clicks and clears only after success', async () => {
@@ -159,7 +159,7 @@ test('new replies stay after received messages even when device clocks disagree'
     chatSender: message => message.sender, chatTimestamp: () => '',
     generic: (title, eyebrow, description, body) => body,
   });
-  vm.runInContext(app.slice(app.indexOf('function chatLayout('), app.indexOf('function legacyChatLayout(')), context);
+  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function chatLayout('), app.indexOf('function legacyChatLayout(')), context);
   const html = context.chatLayout('Chat', '', '', [{ id: 'Principal', messages: [
     { sender: 'Principal', text: 'Received first', sentAt: '2026-09-30T12:30:00Z' },
     { sender: 'Teacher', text: 'My new reply', sentAt: '2026-09-30T12:20:00Z' },
@@ -236,7 +236,7 @@ test('hidden tabs pause polling and overlapping focus events share a request', a
 
 test('parent link screen distinguishes failed loading from a confirmed missing link', () => {
   const context = vm.createContext({ window: {}, generic: (...args) => args.join(' ') });
-  vm.runInContext(app.slice(app.indexOf('function parentLinkRequired('), app.indexOf('/* ----------------------------- domain: audience')), context);
+  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function parentLinkRequired('), app.indexOf('/* ----------------------------- domain: audience')), context);
   assert.match(context.parentLinkRequired(), /Retry loading/);
   assert.doesNotMatch(context.parentLinkRequired(), /ask the school clerk/);
   context.window.schoolshieldParentWorkspaceError = 'Session expired';

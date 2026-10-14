@@ -17,7 +17,7 @@ test('South African cellphone formats normalize consistently in browser and back
   }
 });
 test('invitation exchanges token hash, PKCE code and legacy fragment sessions', async () => {
-  for (const [suffix, method] of [['?token_hash=abc&type=invite', 'verifyOtp'], ['?code=abc', 'exchangeCodeForSession'], ['#access_token=a&refresh_token=b&type=invite', 'setSession']]) {
+  for (const [suffix, method] of [['?token_hash=abc&type=invite', 'verifyOtp'], ['?token_hash=abc&type=recovery', 'verifyOtp'], ['?code=abc', 'exchangeCodeForSession'], ['#access_token=a&refresh_token=b&type=invite', 'setSession']]) {
     let called = false;
     const session = { user: { id: 'approved-user' } };
     const client = { auth: { [method]: async () => { called = true; return { data: { session } }; } } };
@@ -67,53 +67,24 @@ test('setup creates a password, completes only personal fields, signs out and re
   assert.equal(calls[2], 'signOut'); assert.equal(redirect, 'login.html?setup=complete');
 });
 
-async function approvalHarness({ role = 'principal', school = 'school-1', delivery = 'email', existing = false } = {}) {
-  const helpers = await backend(); let handler; const calls = [];
-  const pending = { id: 'request-1', school_id: 'school-1', email: 'parent@example.test', display_name: 'Parent', status: 'pending', invitation_method: delivery, phone: '+27821234567' };
-  const admin = {
-    auth: { getUser: async () => ({ data: { user: { id: 'approver' } } }), admin: {
-      inviteUserByEmail: async (email, options) => { calls.push({ email, options }); return { data: { user: { id: 'new-user' } } }; },
-      generateLink: async options => { calls.push(options); return { data: { user: { id: 'new-user' }, properties: { hashed_token: 'secure-hash' } } }; },
-      updateUserById: async (id, body) => { calls.push({ id, body }); return {}; }, deleteUser: async () => ({}) } },
-    from(table) {
-      const filters = {};
-      const builder = { select() { return this; }, eq(key, value) { filters[key] = value; return this; },
-        maybeSingle: async () => table === 'profiles' ? { data: filters.id === 'approver' ? { school_id: school, role } : existing ? { id: 'new-user' } : null } : { data: filters.school_id === pending.school_id ? pending : null },
-        single: async () => ({ data: { code: 'SCHOOL-1', name: 'School One' } }),
-        insert: async body => { calls.push({ table, insert: body }); return {}; },
-        update(body) { calls.push({ table, update: body }); return this; }, then(resolve) { resolve({}); } };
-      return builder;
-    },
-  };
-  const env = { SUPABASE_URL: 'https://auth.test', SCHOOLSHIELD_ACCOUNT_SETUP_URL: 'https://school.test/SchoolShield/account-setup.html', SCHOOLSHIELD_SMS_PROVIDER: 'twilio', TWILIO_ACCOUNT_SID: 'AC' + 'a'.repeat(32), TWILIO_AUTH_TOKEN: 'secret', TWILIO_FROM_NUMBER: '+27820000000' };
-  let source = fs.readFileSync('supabase/functions/approve-account/index.ts', 'utf8').replace(/^import .*;\r?\n/gm, '').replace('body: unknown', 'body').replace(': string | undefined', '').replace('(name: string)', '(name)').replace(/\)!/g, ')');
-  const sandbox = vm.createContext({ ...helpers, createClient: () => admin, Deno: { env: { get: name => env[name] }, serve: fn => handler = fn }, Response, URL });
-  vm.runInContext(source, sandbox);
-  // SMS helper remains real code; replace its transport with a provider response.
-  sandbox.sendSms = async (config, phone, body) => { calls.push({ sms: body, phone }); return 'SM123'; };
-  const response = await handler(new Request('https://auth.test/functions/v1/approve-account', { method: 'POST', headers: { Authorization: 'Bearer approver-token' }, body: JSON.stringify({ request_id: pending.id, role: 'parent', delivery: 'preferred', redirect_to: 'http://localhost/account-setup.html' }) }));
-  return { response, calls };
+async function approvalHarness({ role='principal', school='school-1', existing=false, inactive=false, delivery='email' }={}) {
+ let handler; const calls=[];
+ const pending={id:'00000000-0000-4000-8000-000000000001',school_id:'school-1',email:'parent@example.test',display_name:'Real Parent',phone:'+27821234567',invitation_method:delivery};
+ const admin={auth:{getUser:async()=>({data:{user:{id:'approver'}}})},from(table){const filters={};return {select(){return this},eq(k,v){filters[k]=v;return this},maybeSingle:async()=>({data:table==='profiles'?{id:'approver',school_id:school,role,account_status:inactive?'Inactive':'Active'}:filters.school_id==='school-1'?pending:null}),update(body){calls.push({table,body});return this},then(resolve){resolve({});}}}};
+ const manageUser=async args=>{calls.push(args.body);if(existing)throw Error('Email already exists');return {ok:true,user_id:'new-user',message:'Supabase accepted email',setup_link:delivery==='setup_link'?'https://school.test/account-setup.html?token_hash=hash&type=invite':undefined};};
+ let source=fs.readFileSync('supabase/functions/approve-account/index.ts','utf8').replace(/^import .*;\r?\n/gm,'').replace('body: unknown','body').replace('(name: string)','(name)').replace(/\)!/g,')');
+ vm.runInContext(source,vm.createContext({manageUser,createClient:()=>admin,Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response}));
+ const response=await handler(new Request('https://auth.test/functions/v1/approve-account',{method:'POST',headers:{Authorization:'Bearer token'},body:JSON.stringify({request_id:pending.id,role:'parent',delivery:'preferred'})}));
+ return {response,calls};
 }
-test('email approval uses configured URL and assigns only approved school and role', async () => {
-  const { response, calls } = await approvalHarness();
-  assert.equal(response.status, 200);
-  assert.equal(calls[0].options.redirectTo, 'https://school.test/SchoolShield/account-setup.html');
-  const profile = calls.find(call => call.insert)?.insert;
-  assert.equal(profile.role, 'parent'); assert.equal(profile.school_id, 'school-1');
-  assert.equal(calls.find(call => call.body)?.body.app_metadata.role, 'parent');
+test('approval delegates real account creation to the protected user management service',async()=>{
+ const {response,calls}=await approvalHarness();assert.equal(response.status,200);const created=calls.find(c=>c.action==='create');assert.equal(created.fields.school_id,'school-1');assert.equal(created.fields.role,'parent');assert.equal(created.fields.first_name,'Real');assert.equal(created.fields.last_name,'Parent');assert.equal(created.delivery,'email');assert.equal(calls.find(c=>c.table==='account_requests').body.status,'approved');
 });
-test('approval rejects unauthorized roles, other schools and existing account reassignment', async () => {
-  for (const options of [{ role: 'parent' }, { school: 'school-2' }, { existing: true }]) {
-    const { response, calls } = await approvalHarness(options);
-    assert.ok(response.status >= 400); assert.equal(calls.some(call => call.insert || call.body), false);
-  }
+test('approval rejects unauthorized, inactive, cross-school and duplicate accounts',async()=>{
+ for(const options of [{role:'parent'},{inactive:true},{school:'school-2'},{existing:true}]){const {response,calls}=await approvalHarness(options);assert.ok(response.status>=400);assert.equal(calls.some(c=>c.table==='account_requests'),false);}
 });
-test('SMS approval passes the direct setup token to provider and never returns it to ordinary approval', async () => {
-  const { response, calls } = await approvalHarness({ delivery: 'sms' });
-  assert.equal(response.status, 200);
-  assert.match(calls.find(call => call.sms)?.sms, /account-setup.html\?token_hash=secure-hash&type=invite/);
-  assert.equal((await response.json()).setup_link, undefined);
-});
+test('approval respects SMS preference and does not expose bearer links in SMS responses',async()=>{const {response,calls}=await approvalHarness({delivery:'sms'});assert.equal(response.status,200);assert.equal(calls.find(c=>c.action==='create').delivery,'sms');assert.equal((await response.json()).setup_link,undefined);});
+
 test('first login reads trusted role and school and rejects the wrong school code', async () => {
   const source = fs.readFileSync('SchoolShield/login.html','utf8');
   const fn = source.match(/async function createSession\(user, schoolCode\) \{[^\n]+/)[0];

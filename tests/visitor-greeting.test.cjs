@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync('SchoolShield/app.js','utf8');
 function portal(role = 'principal') {
   const state = { visitors: [], notifications: [], incidents: [], announcements: [], sgbPrincipalChat: [] };
-  const ctx = vm.createContext({ window: {}, document: {}, sessionStorage: { getItem: () => null } });
+  const ctx = vm.createContext({crypto:require("node:crypto").webcrypto, window: {}, document: {}, sessionStorage: { getItem: () => null } });
   vm.runInContext(source.replace(/startWorkspace\(\);\s*$/, ''),ctx);
   Object.assign(ctx, { role: () => role, userName: () => 'Test User', getState: () => state,
     shell: html => html, stat: title => `<article>${title}</article>`, table: (headers,rows) => rows.join(''),

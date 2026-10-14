@@ -1,4 +1,5 @@
 export function setupUrl(value, allowLocal = false) {
+  if (!value) throw new Error('Configure SCHOOLSHIELD_ACCOUNT_SETUP_URL as the deployed HTTPS account-setup.html URL.');
   const url = new URL(value || '');
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
   if ((url.protocol !== 'https:' && !(allowLocal && local && url.protocol === 'http:')) || (local && !allowLocal) || url.username || url.password || !url.pathname.endsWith('/account-setup.html') || url.search || url.hash) throw new Error('Configure SCHOOLSHIELD_ACCOUNT_SETUP_URL as the deployed HTTPS account-setup.html URL.');

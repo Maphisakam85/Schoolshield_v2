@@ -12,11 +12,11 @@
     const url = new URL(href), query = url.searchParams, hash = new URLSearchParams(url.hash.slice(1));
     if (query.has('error') || hash.has('error')) throw new Error('This invitation is invalid, expired or already used. Ask your school administrator for a new invitation.');
     let result;
-    if (query.get('token_hash') && query.get('type') === 'invite') {
-      result = await client.auth.verifyOtp({ token_hash: query.get('token_hash'), type: 'invite' });
+    if (query.get('token_hash') && ['invite','recovery'].includes(query.get('type'))) {
+      result = await client.auth.verifyOtp({ token_hash: query.get('token_hash'), type: query.get('type') });
     } else if (query.get('code')) {
       result = await client.auth.exchangeCodeForSession(query.get('code'));
-    } else if (hash.get('access_token') && hash.get('refresh_token') && hash.get('type') === 'invite') {
+    } else if (hash.get('access_token') && hash.get('refresh_token') && ['invite','recovery'].includes(hash.get('type'))) {
       result = await client.auth.setSession({ access_token: hash.get('access_token'), refresh_token: hash.get('refresh_token') });
     } else throw new Error('No valid invitation was found. Open the invitation sent by your school administrator.');
     if (result.error || !result.data?.session) throw new Error('This invitation is invalid, expired or already used. Ask your school administrator for a new invitation.');

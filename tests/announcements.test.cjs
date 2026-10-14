@@ -70,9 +70,9 @@ test('a fresh login/refresh restores announcements and in-app notices from Supab
   const publisher = portal(); await publisher.ctx.sendAnnouncement();
   const databasePayload = JSON.parse(publisher.stored.cache);
   const reader = portal('teacher');
-  reader.ctx.window.schoolshieldSupabase = { from: table => {
-    assert.equal(table,'school_workspaces');
-    return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { payload: databasePayload, version: 13 } }) }) }) };
+  reader.ctx.window.schoolshieldSupabase = { rpc: async name => {
+    assert.equal(name,'read_school_dataset');
+    return { data: { payload: databasePayload, version: 13 } };
   } };
   assert.equal(await reader.ctx.refreshCloudWorkspace(false),true);
   const refreshed = JSON.parse(reader.stored.cache);

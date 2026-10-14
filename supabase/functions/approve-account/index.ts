@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-import { setupUrl, normalizePhone, smsConfig, sendSms } from "./invitation.mjs";
+import { manageUser } from "../manage-users/service.mjs";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -42,10 +42,10 @@ Deno.serve(async (request) => {
     }
 
     const { data: approver } = await admin.from("profiles")
-      .select("school_id, role")
+      .select("id, school_id, role, account_status, requires_setup, onboarding_completed_at")
       .eq("id", authData.user.id)
       .maybeSingle();
-    if (!approver || !["principal", "clerk"].includes(approver.role)) return json({ error: "Only the principal or clerk can approve accounts" }, 403);
+    if (!approver || approver.account_status !== "Active" || (approver.requires_setup && !approver.onboarding_completed_at) || !["principal", "clerk"].includes(approver.role)) return json({ error: "Only the principal or clerk can approve accounts" }, 403);
 
     const { data: pending, error: pendingError } = await admin.from("account_requests")
       .select("id, school_id, email, display_name, status, invitation_method, phone")
@@ -65,63 +65,14 @@ Deno.serve(async (request) => {
       return json({ ok: true, message: "Account request rejected." });
     }
 
-    const { data: school } = await admin.from("schools").select("code, name").eq("id", pending.school_id).single();
-    if (!school) return json({ error: "School not found" }, 404);
-
     if (delivery === "preferred") delivery = pending.invitation_method || "email";
-    // Never trust a caller-supplied redirect or Origin header for bearer links.
-    const redirectTo = setupUrl(Deno.env.get("SCHOOLSHIELD_ACCOUNT_SETUP_URL"), delivery === "setup_link" && Deno.env.get("SCHOOLSHIELD_ALLOW_LOCAL_SETUP") === "true");
-    const provider = delivery === "sms" ? smsConfig((name: string) => Deno.env.get(name)) : null;
-    const phone = delivery === "sms" ? normalizePhone(pending.phone) : pending.phone;
-    const inviteOptions = {
-      data: { display_name: pending.display_name, school_code: school.code, school_name: school.name },
-      redirectTo,
-    };
-    let invitedUser;
-    let setupLink: string | undefined;
-    if (delivery === "setup_link" || delivery === "sms") {
-      const { data: generated, error: generateError } = await admin.auth.admin.generateLink({
-        type: "invite",
-        email: pending.email,
-        options: inviteOptions,
-      });
-      if (generateError || !generated.user || !generated.properties?.hashed_token) return json({ error: generateError?.message || "Could not create a setup link" }, 400);
-      invitedUser = generated.user;
-      const direct = new URL(redirectTo);
-      direct.searchParams.set("token_hash", generated.properties.hashed_token);
-      direct.searchParams.set("type", "invite");
-      setupLink = direct.toString();
-    } else {
-      const { data: invite, error: inviteError } = await admin.auth.admin.inviteUserByEmail(pending.email, inviteOptions);
-      if (inviteError || !invite.user) return json({ error: inviteError?.message || "Could not send invite" }, 400);
-      invitedUser = invite.user;
-    }
-
-    // Existing profiles must never be reassigned by another request or school.
-    const { data: existing, error: existingError } = await admin.from("profiles").select("id").eq("id", invitedUser.id).maybeSingle();
-    if (existingError || existing) return json({ error: "This email already has an assigned account. Contact the administrator." }, 409);
-    const { error: profileError } = await admin.from("profiles").insert({
-      id: invitedUser.id,
-      school_id: pending.school_id,
-      role: approvedRole,
-      display_name: pending.display_name,
-      phone,
-    });
-    if (profileError) return json({ error: "Invite sent but profile setup failed" }, 500);
-    const { error: metadataError } = await admin.auth.admin.updateUserById(invitedUser.id, {
-      app_metadata: { school_code: school.code, role: approvedRole },
-    });
-    if (metadataError) return json({ error: "Could not assign the approved account" }, 500);
-
-    if (provider) {
-      try {
-        await sendSms(provider, phone, `SchoolShield: approved for ${school.name}. Email: ${pending.email}. School code: ${school.code}. Set your password: ${setupLink}`);
-      } catch (error) {
-      const { error: cleanupError } = await admin.auth.admin.deleteUser(invitedUser.id);
-      if (cleanupError) return json({ error: "SMS failed and account cleanup failed. Contact the administrator before retrying." }, 500);
-      throw error;
-    }
-  }
+    const names = pending.display_name.trim().split(/\s+/);
+    const actorClient = createClient(url, secretKey()!, { global: { headers: { Authorization: "Bearer " + token } }, auth: { autoRefreshToken: false, persistSession: false } });
+    const created = await manageUser({ admin, actorClient, actor: approver,
+      body: { action: "create", operation_id: pending.id, delivery, fields: {
+        first_name: names.shift(), last_name: names.join(" "), email: pending.email, phone: pending.phone,
+        role: approvedRole, account_status: "Active", school_id: pending.school_id
+      } }, env: (name: string) => Deno.env.get(name) });
   const { error: approvalError } = await admin.from("account_requests").update({
     status: "approved",
     approved_role: approvedRole,
@@ -131,6 +82,6 @@ Deno.serve(async (request) => {
   if (approvalError) return json({ error: "Invitation created but approval recording failed. Contact the administrator." }, 500);
   await admin.from("account_request_notifications").update({ read_at: new Date().toISOString() }).eq("request_id", pending.id);
 
-  return json({ ok: true, setup_link: delivery === "setup_link" ? setupLink : undefined, message: delivery === "setup_link" ? "Account approved. Open the setup link to complete onboarding." : delivery === "sms" ? "Account approved. The SMS provider accepted the invitation for delivery." : "Account approved. An invitation email has been sent." });
+  return json({ ...created, message: "Account approved. " + created.message });
   } catch (error) { return json({ error: error instanceof Error ? error.message : "Invitation could not be created" }, 400); }
 });

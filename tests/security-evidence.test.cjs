@@ -7,7 +7,7 @@ function harness(category, items = []) {
   const fields = {incidentCategory:category,incidentLocation:'Gate',incidentDescription:'Reported property incident'};
   const state = {incidents:[],notifications:[]}, errors=[];
   const rows = items.map(item => ({querySelector: selector => ({value:String(item[selector.match(/"(.*?)"/)[1]] ?? '')})}));
-  const ctx = vm.createContext({window:{},document:{querySelectorAll:()=>rows},sessionStorage:{getItem:()=>null}});
+  const ctx = vm.createContext({crypto:require("node:crypto").webcrypto,window:{},document:{querySelectorAll:()=>rows},sessionStorage:{getItem:()=>null}});
   vm.runInContext(source.replace(/startWorkspace\(\);\s*$/,''),ctx);
   Object.assign(ctx,{inputValue:id=>fields[id]||'',role:()=> 'security',requireValues:values=>values.every(Boolean),
     todayIso:()=> '2026-10-07',todayLabel:()=> '07 Oct 2026',userName:()=> 'Security Officer',notificationTimestamp:()=> '2026-10-07T10:00:00Z',

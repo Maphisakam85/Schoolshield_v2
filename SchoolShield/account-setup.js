@@ -6,8 +6,9 @@
     if (!client) throw new Error('Account setup is unavailable. Contact your school administrator.');
     const session = await SchoolShieldInvitation.exchangeInvitation(client, location.href);
     history.replaceState({}, '', location.pathname);
-    const { data: profile, error } = await client.from('profiles').select('display_name,phone,onboarding_completed_at,role,school_id').eq('id', session.user.id).single();
+    const { data: profile, error } = await client.from('profiles').select('display_name,phone,onboarding_completed_at,role,school_id,account_status').eq('id', session.user.id).single();
     if (error || !profile) throw new Error('Your approved school profile is unavailable. Contact your school administrator.');
+    if (profile.account_status === 'Inactive') throw new Error('This account is inactive. Contact your school administrator.');
     if (profile.onboarding_completed_at) throw new Error('This account has already completed setup. Sign in with your password.');
     document.getElementById('setupName').value = profile.display_name || '';
     document.getElementById('setupPhone').value = profile.phone || '';
