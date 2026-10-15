@@ -29,9 +29,9 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    await page.selectOption('[data-performance-filter="department"]','');await page.click('[data-performance-open="A"]');
    await page.evaluate(()=>{window.directory.reviews=[{id:'R1',teaching_context_id:'CTX1',teacher_id:'A',term:1,status:'In Progress',updated_at:'2026-10-13T10:00:00Z'}];});
    await page.evaluate(()=>window.SchoolShieldTeacherPerformance.load(false));
-   await page.selectOption('[data-performance-filter="term"]','1');assert.match(await page.locator('#app').textContent(),/In Progress/);
+   await page.click('[data-performance-subject="S1"]');await page.click('[data-performance-grade]');await page.click('[data-performance-context="CTX1"]');assert.match(await page.locator('#app').textContent(),/In Progress/);
    assert.equal(await page.locator('[data-review-status]').count(),0);assert.equal(await page.locator('[data-review-save]').count(),0);
-   await page.selectOption('[data-performance-filter="term"]','2');assert.match(await page.locator('#app').textContent(),/Not Started/);
+   assert.match(await page.locator('[data-performance-term="2"]').textContent(),/Not Started/);assert.match(await page.locator('#app').textContent(),/Not Started/);
    await page.close();
   }
   console.log('PASS browser: Principal/Deputy page, seven filters, teacher detail, term separation and read-only status display.');

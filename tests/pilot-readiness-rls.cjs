@@ -48,6 +48,11 @@ try {
  await db.query("insert into sick_notices(school_id,learner_ref,submitted_by) values($1,'L1',$2)",[school,id(14)]);
  for(const [n,count]of [[10,1],[11,1],[12,1],[13,1],[14,1],[15,0],[16,0],[30,0]]){await login(n);equal((await db.query('select * from parent_learner_links')).rows.length,count);equal((await db.query('select * from sick_notices')).rows.length,count);}
  await login(10);const audit=(await db.query('select school_integrity_report() as d')).rows[0].d;equal(audit.critical_issue_count,0);equal(audit.data_mode,'live');assert.ok(audit.warnings.unresolved_legacy_identities>0);checks++;
+ await db.exec('reset role');await db.exec(fs.readFileSync('supabase/migrations/20261014260000_learner_subject_teacher_directory.sql','utf8'));
+ await login(10);const reportLearner=(await db.query('select id from school_learners where school_id=$1 limit 1',[school])).rows[0].id;
+ equal(Array.isArray((await db.query('select get_learner_subject_teachers($1) as rows',[reportLearner])).rows[0].rows),true);
+ for(const denied of [15,16,30]){await login(denied);await assert.rejects(db.query('select get_learner_subject_teachers($1)',[reportLearner]),/denied/);checks++;}
+ await login(14);equal(Array.isArray((await db.query('select get_learner_subject_teachers($1) as rows',[reportLearner])).rows[0].rows),true);
  for(const n of [13,14,15,16]){await login(n);await assert.rejects(db.query('select school_integrity_report()'),/access denied/);checks++;}
  await db.exec('reset role');const empty=id(900),fields={code:'REAL-QA',name:'Real blank school',first_name:'Real',last_name:'Principal',email:'principal@real.school',phone:'+27821234567',purpose:'pilot'};
  await db.query('select reserve_pilot_school($1,$2,$3)',[id(10),empty,JSON.stringify(fields)]);equal((await db.query('select data_mode from schools where id=$1',[empty])).rows[0].data_mode,'live');
@@ -61,5 +66,34 @@ try {
  await assert.rejects(db.query('select publish_school_announcement($1,$2,$3,$4,$5,$6,$7,$8)',['ANN-SMS','Title','Body','whole-school','Whole school','In-app + SMS',1,'create']),/not implemented/);checks++;
  await db.exec('reset role');await db.query("update profiles set account_status='Inactive' where id=$1",[id(16)]);await login(16);await assert.rejects(db.query("select record_security_shift($1,'check-in','2026-10-14','18:00','06:00')",[officer.id]),/inactive/);checks++;
  await db.exec('reset role');await db.query("update profiles set account_status='Inactive' where id=$1",[id(10)]);await login(10);await assert.rejects(db.query('select publish_school_announcement($1,$2,$3,$4,$5,$6,$7,$8)',args),/inactive/);checks++;
+ await db.exec('reset role');await db.query("update profiles set account_status='Active' where id=$1",[id(10)]);await db.query("update schools set code='SMM-001' where id=$1",[school]);
+ const archived='4b9d6875-a34c-4f4d-8fda-d29fd3657b39';const archivedClass=(await db.query('select class_id from school_learners where id=$1',[reportLearner])).rows[0].class_id;
+ await db.query("insert into teacher_review_subjects(id,school_id,name) values($1,$2,'Archive fixture subject')",[id(980),school]);
+ await db.query("insert into teacher_class_subjects(school_id,class_id,subject_id,source) values($1,$2,$3,'management')",[school,archivedClass,id(980)]);
+ await db.query("insert into teacher_teaching_contexts(id,school_id,teacher_id,subject_id,class_id,academic_year,start_date) values($1,$2,$3,$4,$5,1998,'1998-01-01')",[archived,school,id(13),id(980),archivedClass]);
+ await db.query("insert into teacher_teaching_contexts(id,school_id,teacher_id,subject_id,class_id,academic_year,start_date) values($1,$2,$3,$4,$5,1997,'1997-01-01')",[id(981),school,id(13),id(980),archivedClass]);
+ await login(10);await db.query("select set_teacher_review_term_dates(1998,1,'1998-01-01','1998-03-31')");await db.query("select set_teacher_term_review_status($1,1,'Not Started')",[archived]);await db.exec('reset role');
+ await db.exec(fs.readFileSync('supabase/migrations/20261014270000_archive_reported_pilot_performance_context.sql','utf8'));
+ await login(10);equal((await db.query('select get_teacher_performance_directory(1998) as d')).rows[0].d.contexts.length,0);
+ const archivedHistory=(await db.query('select get_teacher_performance_history($1,1998) as d',[id(13)])).rows[0].d;
+ equal(archivedHistory.years.includes(1998),false);equal(archivedHistory.years.includes(1997),true);equal(archivedHistory.terms.every(t=>t.contexts.length===0),true);
+ equal((await db.query('select count(*)::int as n from teacher_performance_archives')).rows[0].n,1);
+ equal((await db.query('select count(*)::int as n from teacher_performance_reviews where teaching_context_id=$1',[archived])).rows[0].n,1);
+ await login(14);equal((await db.query('select count(*)::int as n from teacher_performance_archives')).rows[0].n,0);
+ await assert.rejects(db.query('select get_teacher_performance_history($1,1998)',[id(13)]),/access denied/);checks++;
+ await db.exec('reset role');await db.exec(fs.readFileSync('supabase/migrations/20261014280000_canonical_staff_directory_details.sql','utf8'));
+ await login(10);const staffDirectory=(await db.query('select get_teacher_performance_directory(2026) as d')).rows[0].d;
+ const teacherDetails=staffDirectory.teachers.find(t=>t.id===id(13));assert.match(teacherDetails.staffRef,/^STAFF-\d+$/);checks++;
+ const detailArgs=[id(9990),id(13),teacherDetails.staffRevision,'Mathematics','EMP-REAL-1'];
+ const details=(await db.query('select save_teacher_staff_details($1,$2,$3,$4,$5) as d',detailArgs)).rows[0].d;
+ equal((await db.query('select save_teacher_staff_details($1,$2,$3,$4,$5) as d',detailArgs)).rows[0].d,details);
+ const refreshed=(await db.query('select get_teacher_performance_directory(2026) as d')).rows[0].d.teachers.find(t=>t.id===id(13));equal(refreshed.department,'Mathematics');equal(refreshed.employeeId,'EMP-REAL-1');equal(refreshed.staffRef,teacherDetails.staffRef);
+ equal((await db.query('select employee_id from profiles where id=$1',[id(13)])).rows[0].employee_id,'EMP-REAL-1');
+ equal((await db.query("select count(*)::int as n from school_record_audit where kind='teacher-details'")).rows[0].n,1);
+ await assert.rejects(db.query('select save_teacher_staff_details($1,$2,$3,$4,$5)',[id(9991),id(13),teacherDetails.staffRevision,'Changed','EMP-REAL-1']),/changed/);checks++;
+ for(const n of [12,13,14,15,16,30]){await login(n);await assert.rejects(db.query('select save_teacher_staff_details($1,$2,$3,$4,$5)',[id(9992+n),id(13),refreshed.staffRevision,'Denied',null]),/denied|not in your school/);checks++;}
+ await db.exec('reset role');const reference=(await db.query('select staff_ref from school_staff where id=$1',[teacherDetails.staffId])).rows[0].staff_ref;
+ await db.query("update school_staff set record=record||'{\"staffRef\":\"FORGED\"}'::jsonb where id=$1",[teacherDetails.staffId]);equal((await db.query("select record->>'staffRef' as ref from school_staff where id=$1",[teacherDetails.staffId])).rows[0].ref,reference);
+ await assert.rejects(db.query('update school_staff set staff_number=staff_number+1000 where id=$1',[teacherDetails.staffId]),/immutable|identity column|updated to DEFAULT/);checks++;
  console.log(checks+' live/demo isolation, integrity, privacy and operational RPC assertions passed');
 }finally{await db.close();}})().catch(e=>{console.error(e);process.exit(1)});

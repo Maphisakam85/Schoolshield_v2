@@ -62,5 +62,12 @@ if (window.SCHOOLSHIELD_SUPABASE_CONFIG && window.supabase) {
     window.schoolshieldSupabase = window.supabase.createClient(url, publishableKey, {
       auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: !window.schoolshieldManualInvitationExchange, storage: tabAuthStorage },
     });
+    const client = window.schoolshieldSupabase;
+    if (client.rpc && window.schoolshieldTrackPersistence) {
+      const rpc = client.rpc.bind(client);
+      client.rpc = (name, args, options) => /^(save_|record_|publish_|complete_|assign_|end_|mark_|acknowledge_)/.test(name)
+        ? window.schoolshieldTrackPersistence(() => rpc(name,args,options))
+        : rpc(name,args,options);
+    }
   }
 }

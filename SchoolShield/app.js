@@ -74,7 +74,7 @@ function recordReference(prefix, id) { return `${prefix}-${String(id).slice(0,8)
 /* Live updates preserve mounted editors and their original save baseline. */
 function isWorkspaceEditor(field) {
   if (!field?.matches?.('input,textarea,select,[contenteditable="true"]') || field.disabled || field.readOnly) return false;
-  if (!field.closest('#app,.modal-backdrop') || field.matches('[type="button"],[type="submit"],[type="search"],[data-notification-filter],[data-performance-filter],[data-performance-year],[data-own-performance-year],[data-own-performance-term]')) return false;
+  if (!field.closest('#app,.modal-backdrop') || field.matches('#historyGrade,#historyTerm,#performanceYear,[data-history-year],[data-view-control],[type="button"],[type="submit"],[type="search"],[data-notification-filter],[data-performance-filter],[data-performance-year],[data-own-performance-year],[data-own-performance-term]')) return false;
   return !/search|filter/i.test(field.id || '') && !field.closest('.search,.toolbar,[role="tablist"]');
 }
 function workspaceFieldValue(field) {
@@ -85,17 +85,20 @@ function workspaceFieldValue(field) {
 }
 function workspaceHasOpenEditor() {
   if (!document.querySelectorAll) return false;
-  return Array.from(document.querySelectorAll('.modal-backdrop')).some(modal=>modal.querySelector('form,input:not([type="button"]):not([type="submit"]),textarea,select,[contenteditable="true"]'));
+  return Array.from(document.querySelectorAll('.modal-backdrop')).some(modal=>modal.querySelector('form') || Array.from(modal.querySelectorAll('input,textarea,select,[contenteditable="true"]')).some(isWorkspaceEditor));
 }
 function workspaceHasDraft() {
-  if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return true;
   if (workspaceHasOpenEditor()) return true;
+  return workspaceHasUnsavedChanges() || isWorkspaceEditor(document.activeElement);
+}
+function workspaceHasUnsavedChanges() {
+  if (window.schoolshieldPendingDocumentRecord || window.schoolshieldDocumentCapture) return true;
   const dirty=window.schoolshieldDirtyFields;
   if (dirty) for (const field of [...dirty]) {
-    if (!field.isConnected || field.closest('form')?.dataset.complete === 'true' || workspaceFieldValue(field) === window.schoolshieldFieldBaselines?.get(field)) dirty.delete(field);
+    if (!field.isConnected || !isWorkspaceEditor(field) || field.closest('form')?.dataset.complete === 'true' || workspaceFieldValue(field) === window.schoolshieldFieldBaselines?.get(field)) dirty.delete(field);
     else return true;
   }
-  return isWorkspaceEditor(document.activeElement);
+  return false;
 }
 function workspaceIsChat() { return ['parent-chat','teacher-chat','sgb-chat'].includes(page()); }
 function showWorkspaceUpdates() {
@@ -106,10 +109,15 @@ function showWorkspaceUpdates() {
     banner=document.createElement('aside');banner.id='workspaceUpdatesAvailable';banner.className='notice workspace-update-notice';banner.setAttribute('role','status');banner.setAttribute('aria-live','polite');
     const text=document.createElement('span');text.textContent='Updates available. Your draft is kept. Save or close your form before applying updates.';
     const button=document.createElement('button');button.className='btn small';button.type='button';button.textContent='Apply updates';
-    button.onclick=async()=>{if(workspaceHasDraft())return;button.disabled=true;try{await refreshCloudWorkspace(false);if(window.schoolshieldLastSyncError)throw Error(window.schoolshieldLastSyncError);window.schoolshieldUpdatesAvailable=false;banner.remove();render({applyUpdates:true});}catch(error){text.textContent='Updates could not be loaded: '+error.message;button.disabled=false;}};
+    button.onclick=async()=>{if(workspaceHasDraft()||button.getAttribute('aria-busy')==='true')return;button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='Loading updates...';try{await refreshCloudWorkspace(false);if(window.schoolshieldLastSyncError)throw Error(window.schoolshieldLastSyncError);window.schoolshieldUpdatesAvailable=false;banner.remove();render({applyUpdates:true});}catch(error){text.textContent='Updates could not be loaded: '+error.message;}finally{button.removeAttribute('aria-busy');button.disabled=workspaceHasDraft();button.textContent=button.disabled?'Save or close form first':'Apply updates';}};
     banner.append(text,button);document.body.appendChild(banner);
   }
-  banner.querySelector('button').disabled=workspaceHasDraft();
+  const button=banner.querySelector('button');
+  if(button.getAttribute('aria-busy')!=='true'){
+    button.disabled=workspaceHasDraft();
+    const label=button.disabled?'Save or close form first':'Apply updates';
+    if(button.textContent!==label)button.textContent=label;
+  }
 }
 function initWorkspaceDraftProtection() {
   if (window.schoolshieldDraftProtectionStarted || !document.addEventListener) return;
@@ -120,7 +128,7 @@ function initWorkspaceDraftProtection() {
   const changed=event=>{const field=event.target;if(!isWorkspaceEditor(field))return;if(!window.schoolshieldFieldBaselines.has(field))window.schoolshieldFieldBaselines.set(field,field.type==='checkbox'?field.defaultChecked:field.defaultValue||'');window.schoolshieldDirtyFields.add(field);if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();};
   document.addEventListener('input',changed,true);document.addEventListener('change',changed,true);
   document.addEventListener('focusout',()=>setTimeout(()=>{if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();},0),true);
-  window.addEventListener('beforeunload',event=>{if(workspaceHasDraft()){event.preventDefault();event.returnValue='';}});
+  window.addEventListener('beforeunload',event=>{if(!window.schoolshieldLeavingAfterSignOut && workspaceHasUnsavedChanges()){event.preventDefault();event.returnValue='';}});
   if (typeof MutationObserver !== 'undefined') new MutationObserver(()=>{if(window.schoolshieldUpdatesAvailable)showWorkspaceUpdates();}).observe(document.body,{childList:true,subtree:true});
 }
 function resetWorkspaceDraftState(root=document) {
@@ -742,6 +750,40 @@ function learnersInClass(classId) {
 }
 function teacherForClass(classId) {
   return classById(classId)?.teacher || "Unassigned";
+}
+function schoolPhase(grade) {
+  const n = /^Grade\s*R$/i.test(String(grade)) ? 0 : Number(String(grade).match(/\d+/)?.[0]);
+  return n>=0 && n<=3 ? 'Foundation Phase' : n<=6 ? 'Intermediate Phase' : n<=9 ? 'Senior Phase' : n<=12 ? 'FET Phase' : 'School curriculum';
+}
+function schoolCurriculumGuidance(grade) {
+  const phase=schoolPhase(grade);
+  const subjects={
+    'Foundation Phase':'Home Language, First Additional Language where applicable, Mathematics and Life Skills.',
+    'Intermediate Phase':'Home Language, First Additional Language, Mathematics, Natural Sciences and Technology, Social Sciences and Life Skills.',
+    'Senior Phase':'Home Language, First Additional Language, Mathematics, Natural Sciences, Social Sciences, Technology, Economic and Management Sciences, Life Orientation and Creative Arts.',
+    'FET Phase':'Language subjects, Mathematics or Mathematical Literacy and Life Orientation, with the learner’s approved elective subjects (for example Physical Sciences, Life Sciences, Accounting or Computer Applications Technology). Technical pathways have additional requirements.'
+  };
+  return `${phase}: ${subjects[phase]||'Configure the school’s approved subjects.'} Assign teachers by subject and class to match the school timetable. A class teacher remains a separate pastoral/administrative assignment. This guidance does not add or remove school subjects.`;
+}
+async function loadLearnerSubjectTeachers(learner) {
+  if (!learner?.entityId || !window.schoolshieldSupabase?.rpc) return [];
+  window.schoolshieldLearnerTeachers ||= new Map();
+  const key=`${currentProfileId()}:${learner.entityId}`;
+  const cached=window.schoolshieldLearnerTeachers.get(key);
+  if(cached && Date.now()-cached.loaded<60000)return cached.rows;
+  const {data,error}=await window.schoolshieldSupabase.rpc('get_learner_subject_teachers',{p_learner:learner.entityId});
+  if(error)throw new Error('Subject teachers could not be loaded. Please retry.');
+  const rows=Array.isArray(data)?data:[];window.schoolshieldLearnerTeachers.set(key,{rows,loaded:Date.now()});return rows;
+}
+async function bindLearnerSubjectTeachers() {
+  const target=document.getElementById('learnerSubjectTeachers');if(!target)return;
+  const learner=learnerById(target.dataset.learner);if(!learner)return;
+  try {
+    const rows=await loadLearnerSubjectTeachers(learner);if(!target.isConnected)return;
+    const today=localDateIso();const active=rows.filter(r=>Number(r.academicYear)===Number(learner.academicYear||new Date().getFullYear())&&r.status==='Active'&&(!r.startDate||r.startDate<=today)&&(!r.endDate||r.endDate>=today));
+    const multiple=new Set(active.map(r=>r.teacherId)).size>1;
+    target.innerHTML=multiple ? `<h3>Subject teachers</h3>${table(['Subject','Teacher'],active.map(r=>`<tr><td>${escapeHtml(r.subject)}</td><td>${escapeHtml(r.teacherName)}</td></tr>`))}` : `<h3>Teaching arrangement</h3><p>${active.length ? 'Assigned teacher: '+escapeHtml(active[0].teacherName) : 'Class teacher: '+escapeHtml(teacherForClass(learner.class))}</p><p class="muted">${escapeHtml(schoolPhase(learner.grade))} · Subject teachers appear here when the class has multiple assigned teachers.</p>`;
+  } catch(error){target.textContent=error.message;const retry=document.createElement('button');retry.className='btn small';retry.textContent='Retry';retry.onclick=bindLearnerSubjectTeachers;target.appendChild(retry);}
 }
 function teacherClasses(teacherName) {
   const session = JSON.parse(sessionStorage.getItem('schoolshieldSession') || '{}');
@@ -1528,6 +1570,38 @@ function classRecordsLearner(classId, learnerId) {
   );
 }
 
+function learnerHistoryPeriods(learner) {
+  const num = value => Number(String(value ?? '').match(/\d+/)?.[0]);
+  const grade = num(learner.grade), year = Number(learner.academicYear || new Date().getFullYear());
+  const term = num(learner.currentTerm || TERM);
+  const date = learner.registeredAt || learner.registrationDate || learner.enrollmentDate || '';
+  const firstYear = Number(learner.registrationYear || String(date).slice(0,4)) || null;
+  const firstGrade = num(learner.registrationGrade), firstTerm = num(learner.registrationTerm);
+  const periods = new Map();
+  const add = (g,t,y) => {
+    if (!Number.isInteger(g)||!Number.isInteger(t)||!Number.isInteger(y)||t<1||t>4||g>grade||y>year) return;
+    if (y===year && (g!==grade || t>term)) return;
+    if (firstYear && (y<firstYear || y===firstYear && firstTerm && t<firstTerm)) return;
+    if (firstGrade && g<firstGrade) return;
+    if (!periods.has(g)) periods.set(g,new Set()); periods.get(g).add(t);
+  };
+  // Unknown registration history never implies attendance in previous grades.
+  const start = firstYear===year ? firstTerm || term : 1;
+  for (let t=start;t<=term;t++) add(grade,t,year);
+  for (const entry of learner.enrollmentHistory || []) {
+    if (entry.school_id && learner.school_id && entry.school_id!==learner.school_id) continue;
+    for (const t of entry.terms || []) add(num(entry.grade),num(t),Number(entry.academicYear || entry.year));
+  }
+  return [...periods].sort(([a],[b])=>a-b).map(([grade,terms])=>({grade,terms:[...terms].sort((a,b)=>a-b)}));
+}
+function bindLearnerHistory() {
+  const grade=document.getElementById('historyGrade'), term=document.getElementById('historyTerm');
+  if (!grade || !term) return;
+  const learner=learnerById(grade.dataset.learner); if (!learner) return;
+  grade.onchange=()=>{const p=learnerHistoryPeriods(learner).find(p=>p.grade===Number(grade.value));term.innerHTML=(p?.terms||[]).map(t=>`<option value="${t}">Term ${t}</option>`).join('');};
+  grade.onchange();
+}
+
 /* Personal details + academic record, shared by class records and parent view. */
 function learnerProfileBody(learner, opts = {}) {
   const teacher = teacherForClass(learner.class);
@@ -1543,11 +1617,11 @@ function learnerProfileBody(learner, opts = {}) {
   const academic = `<section class="panel"><div class="panel-head"><div><h3>Academic record</h3><p>Captured assessment scores for ${escapeHtml(learner.class)}</p></div></div>${table(["Assessment", "This learner", "Class average", "Standing"], scoreRows, "No assessments captured yet")}</section>`;
   const published = publishedReportsForClass(learner.class, learner.id);
   const reports = `<section class="panel"><div class="panel-head"><div><h3>Published reports</h3><p>Finalised reports released to the parent</p></div></div>${published.length ? published.map((rep) => `<div class="report-row"><span><b>${escapeHtml(rep.term)} learner report</b><small>Published ${escapeHtml(rep.publishedOn)} · ${escapeHtml(learner.class)}</small></span><button class="btn small" data-action="download-report" data-class="${escapeHtml(learner.class)}" data-learner="${escapeHtml(learner.id)}">Download PDF</button></div>`).join("") : '<p class="muted">No report has been published for this class yet. Reports appear here once the teacher finalises and releases them.</p>'}</section>`;
-  const history = `<section class="panel"><div class="panel-head"><div><h3>Report history</h3><p>Select a grade and term to view or download the academic record available up to that term.</p></div></div><div class="form-grid"><label>Grade<select class="select" id="historyGrade">${[8, 9, 10, 11, 12].map((grade) => `<option value="${escapeHtml(grade)}" ${escapeHtml(learner.grade === "Grade " + grade ? "selected" : "")}>Grade ${escapeHtml(grade)}</option>`).join("")}</select></label><label>Term<select class="select" id="historyTerm"><option value="1">Term 1</option><option value="2">Term 2</option><option value="3">Term 3</option><option value="4">Term 4</option></select></label></div><div class="panel-foot"><button class="btn ghost" data-action="view-history" data-learner="${escapeHtml(learner.id)}">View selected report</button><button class="btn primary" data-action="download-history" data-learner="${escapeHtml(learner.id)}">Download PDF</button></div></section>`;
+  const history = `<section class="panel"><div class="panel-head"><div><h3>Report history</h3><p>Select a grade and term to view or download the academic record available up to that term.</p></div></div><div class="form-grid"><label>Grade<select class="select" id="historyGrade" data-learner="${escapeHtml(learner.id)}">${learnerHistoryPeriods(learner).map(({grade}) => `<option value="${escapeHtml(grade)}" ${escapeHtml(learner.grade === "Grade " + grade ? "selected" : "")}>Grade ${escapeHtml(grade)}</option>`).join("")}</select></label><label>Term<select class="select" id="historyTerm">${(learnerHistoryPeriods(learner).find(p=>p.grade===Number(String(learner.grade).match(/\d+/)?.[0]))?.terms||[]).map(t=>`<option value="${t}">Term ${t}</option>`).join("")}</select></label></div><div class="panel-foot"><button class="btn ghost" data-action="view-history" data-learner="${escapeHtml(learner.id)}">View selected report</button><button class="btn primary" data-action="download-history" data-learner="${escapeHtml(learner.id)}">Download PDF</button></div></section>`;
   const footer = opts.request
     ? `<section class="panel"><div class="panel-head"><div><h3>Need a class-wide report?</h3><p>Request a compiled report for the whole class from the clerk.</p></div><button class="btn primary" data-action="request-report" data-class="${escapeHtml(learner.class)}">Request class report</button></div></section>`
     : "";
-  return `<section class="profile-card"><div class="student-avatar">${escapeHtml(initials(learner.name))}</div><div><h2>${escapeHtml(learner.name)}</h2><p>${escapeHtml(learner.id)} · ${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}</p></div><span>${badge(standingFor(learner))}</span></section><div class="dashboard-grid">${details}${academic}</div>${reports}${history}${footer}`;
+  return `<section class="profile-card"><div class="student-avatar">${escapeHtml(initials(learner.name))}</div><div><h2>${escapeHtml(learner.name)}</h2><p>${escapeHtml(learner.id)} · ${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}</p></div><span>${badge(standingFor(learner))}</span></section><div class="dashboard-grid">${details}${academic}</div>${reports}<section class="panel" id="learnerSubjectTeachers" data-learner="${escapeHtml(learner.id)}" aria-live="polite">Loading teaching assignments...</section>${history}${footer}`;
 }
 
 /* -------------------- student records (clerk administration) ------------- */
@@ -2675,7 +2749,7 @@ function staff() {
       ["Employee", "Role", "Department", "Status", ""],
       s.staff.map(
         (x) =>
-          `<tr><td><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.id)}</small></td><td>${escapeHtml(x.role)}</td><td>${escapeHtml(x.department)}</td><td>${badge(x.status)}</td><td>${canManage ? `<button class="table-action" data-action="manage-staff" data-staff="${escapeHtml(x.id)}">Manage</button>` : "—"}</td></tr>`,
+          `<tr><td><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.employeeId || x.staffRef || x.id)}</small></td><td>${escapeHtml(x.role)}</td><td>${escapeHtml(x.department)}</td><td>${badge(x.status)}</td><td>${canManage ? `<button class="table-action" data-action="manage-staff" data-staff="${escapeHtml(x.id)}">Manage</button>` : "—"}</td></tr>`,
       ),
     )}</section>`,
     canManage
@@ -3866,27 +3940,31 @@ async function downloadPdf(filename, title, lines) {
   }
 }
 
+function learnerHistoryScore(learner, grade, subject, term) {
+  const scores = (getState().assessments || []).filter(a=>a.subject===subject && a.term===term &&
+    (Number(String(a.grade || classById(a.class)?.grade || '').match(/\d+/)?.[0])===Number(grade)) &&
+    (!a.academicYear || Number(a.academicYear)===Number(learner.academicYear || new Date().getFullYear())))
+    .map(a=>a.scores?.[learner.id]).filter(score=>score!==null && score!==undefined && score!=='' && Number.isFinite(Number(score))).map(Number);
+  return scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1)+'%' : 'Not enough data';
+}
 function historyReportDetails(learnerId) {
   const learner = learnerById(learnerId),
     grade = inputValue("historyGrade"),
     selectedTerm = Number(inputValue("historyTerm"));
-  if (!learner || !grade || !selectedTerm) return null;
-  const terms = Array.from(
-    { length: selectedTerm },
-    (_, index) => `Term ${index + 1}`,
-  );
+  if (!learner || !learnerHistoryPeriods(learner).some(p=>p.grade===Number(grade)&&p.terms.includes(selectedTerm))) return null;
+  const terms = learnerHistoryPeriods(learner).find(p=>p.grade===Number(grade)).terms.filter(t=>t<=selectedTerm).map(t=>`Term ${t}`);
   const subjects =
-    subjectsForGrade(grade);
+    Number(String(learner.grade).match(/\d+/)?.[0])===Number(grade) ? subjectsForClass(learner.class) : [...new Set((getState().assessments||[]).filter(a=>a.scores?.[learner.id]!==undefined && Number(String(a.grade||classById(a.class)?.grade||'').match(/\d+/)?.[0])===Number(grade)).map(a=>a.subject))];
   const lines = [
     `Learner: ${learner.name} (${learner.id})`,
-    `Grade ${grade} · 2026`,
+    `Grade ${grade} | ${learner.academicYear || new Date().getFullYear()}`,
     `Included: ${terms.join(", ")}`,
     "",
     "Subject performance",
   ];
   subjects.forEach((subject, index) =>
     lines.push(
-      `${subject} — ${terms.map((term, termIndex) => `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`).join(" · ")}`,
+      `${subject} — ${terms.map((term, termIndex) => `${term}: ${learnerHistoryScore(learner, grade, subject, term)}`).join(" · ")}`,
     ),
   );
   lines.push(
@@ -3894,7 +3972,7 @@ function historyReportDetails(learnerId) {
     `Attendance: ${learner.attendance}%`,
     `Current standing: ${standingFor(learner)}`,
   );
-  return { learner, grade, selectedTerm, lines };
+  return { learner, grade, selectedTerm, lines, terms, subjects, year: Number(learner.academicYear || new Date().getFullYear()) };
 }
 
 async function downloadReport(classId, learnerId) {
@@ -3989,60 +4067,58 @@ function previewLearnerReport(classId, learnerId) {
   );
 }
 
-async function downloadHistory(learnerId) {
-  const selected = historyReportDetails(learnerId);
-  if (!selected) return;
-  await downloadPdf(
-    `${selected.learner.id}-grade-${selected.grade}-term-${selected.selectedTerm}-report-history.pdf`,
-    "Academic report history",
-    selected.lines,
-  );
-  return;
-  const learner = learnerById(learnerId);
-  const grade = inputValue("historyGrade");
-  const selectedTerm = Number(inputValue("historyTerm"));
-  if (!learner || !grade || !selectedTerm) return;
-  const terms = Array.from(
-    { length: selectedTerm },
-    (_, index) => `Term ${index + 1}`,
-  );
-  const subjects =
-    subjectsForGrade(grade);
-  const lines = [
-    SCHOOL.name,
-    "Academic report history",
-    `Learner: ${learner.name} (${learner.id})`,
-    `Grade ${grade} · 2026`,
-    `Included: ${terms.join(", ")}`,
-    "",
-    "Subject performance",
-  ];
-  subjects.forEach((subject, index) => {
-    const results = terms
-      .map(
-        (term, termIndex) =>
-          `${term}: ${Math.min(100, Math.max(35, learner.average + ((index * 7 + termIndex * 3) % 17) - 8))}%`,
-      )
-      .join(" · ");
-    lines.push(`${subject} — ${results}`);
-  });
-  lines.push(
-    "",
-    `Attendance: ${learner.attendance}%`,
-    `Current standing: ${standingFor(learner)}`,
-  );
-  downloadTextFile(
-    `${learner.id}-grade-${grade}-term-${selectedTerm}-report-history.txt`,
-    lines.join("\n"),
-  );
+function learnerHistoryMarkup(selected, teachers=[]) {
+  const {learner,grade,terms,subjects,year}=selected;
+  const assigned=teachers.filter(t=>Number(t.academicYear)===year);
+  const multiple=new Set(assigned.map(t=>t.teacherId)).size>1;
+  const teacherNames=subject=>[...new Set(assigned.filter(t=>t.subject===subject).map(t=>t.teacherName))].join(', ')||'Not assigned';
+  return `<article class="learner-report"><header class="learner-report-header"><span class="pill">Academic record</span><h2>${escapeHtml(SCHOOL.name)}</h2><p>${escapeHtml(schoolPhase('Grade '+grade))} &middot; ${year}</p></header><div class="report-identity"><div><small>Learner</small><strong>${escapeHtml(learner.name)}</strong></div><div><small>Learner number</small><strong>${escapeHtml(learner.id)}</strong></div><div><small>Grade / class</small><strong>Grade ${escapeHtml(grade)} &middot; ${escapeHtml(learner.class)}</strong></div><div><small>Included terms</small><strong>${escapeHtml(terms.join(', '))}</strong></div></div><h3>Subject performance</h3>${table(['Subject',...(multiple?['Subject teacher(s)']:[]),...terms],subjects.map(subject=>`<tr><td><b>${escapeHtml(subject)}</b></td>${multiple?`<td>${escapeHtml(teacherNames(subject))}</td>`:''}${terms.map(term=>`<td>${escapeHtml(learnerHistoryScore(learner,grade,subject,term))}</td>`).join('')}</tr>`),'No subject results recorded')}<div class="report-summary"><div><small>Current attendance</small><strong>${escapeHtml(learner.attendance)}%</strong></div><div><small>Current standing</small><strong>${escapeHtml(standingFor(learner))}</strong></div></div><p class="muted">Recorded assessment averages only. Missing marks are not treated as zero. This history summary does not replace a finalised school report.</p></article>`;
 }
-function viewHistory(learnerId) {
-  const selected = historyReportDetails(learnerId);
-  if (!selected) return;
-  modal(
-    `${selected.learner.name} — selected report`,
-    `<div style="white-space:pre-wrap;line-height:1.7;padding:6px">${escapeHtml(selected.lines.join("\n"))}</div><div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${escapeHtml(learnerId)}">Download PDF</button></div>`,
-  );
+async function downloadLearnerHistoryPdf(selected,teachers=[]) {
+  const JsPdf=await loadPdfLibrary(), pdf=new JsPdf({unit:'mm',format:'a4'});
+  const {learner,grade,year,terms,subjects}=selected;
+  const assigned=teachers.filter(t=>Number(t.academicYear)===year);
+  const multiple=new Set(assigned.map(t=>t.teacherId)).size>1;
+  const widths=multiple ? [48,46,...terms.map(()=>84/terms.length)] : [70,...terms.map(()=>108/terms.length)];
+  const headers=['Subject',...(multiple?['Subject teacher(s)']:[]),...terms];
+  let y=18;
+  pdf.setFont('helvetica','bold');pdf.setFontSize(16);
+  const heading=pdf.splitTextToSize(SCHOOL.name,178);pdf.text(heading,16,y);y+=heading.length*7;
+  pdf.setFontSize(12);pdf.text('Learner academic report',16,y);y+=9;
+  pdf.setFont('helvetica','normal');pdf.setFontSize(10);
+  for(const line of [`${learner.name} (${learner.id})`,`Grade ${grade} | ${learner.class} | ${year}`,schoolPhase('Grade '+grade)]) {
+    const wrapped=pdf.splitTextToSize(line,178);pdf.text(wrapped,16,y);y+=wrapped.length*5+2;
+  }
+  y+=4;
+  const row=(values,header=false)=>{
+    pdf.setFont('helvetica',header?'bold':'normal');pdf.setFontSize(9);
+    const wrapped=values.map((v,i)=>pdf.splitTextToSize(String(v),widths[i]-4));
+    const height=Math.max(...wrapped.map(v=>v.length))*4.5+6;
+    if(y+height>270){pdf.addPage();y=18;if(!header)row(headers,true);}
+    let x=16;
+    values.forEach((_,i)=>{pdf.setDrawColor(215,225,229);if(header){pdf.setFillColor(232,245,241);pdf.rect(x,y,widths[i],height,'FD');}else pdf.rect(x,y,widths[i],height);pdf.text(wrapped[i],x+2,y+5);x+=widths[i];});y+=height;
+  };
+  row(headers,true);
+  for(const subject of subjects)row([subject,...(multiple?[[...new Set(assigned.filter(t=>t.subject===subject).map(t=>t.teacherName))].join(', ')||'Not assigned']:[]),...terms.map(t=>learnerHistoryScore(learner,grade,subject,t))]);
+  if(!subjects.length)row(['No subject results recorded',...headers.slice(1).map(()=>'—')]);
+  if(y>245){pdf.addPage();y=18;}y+=9;
+  pdf.setFontSize(10);pdf.text(`Current attendance: ${learner.attendance}% | Current standing: ${standingFor(learner)}`,16,y);y+=8;
+  pdf.setFontSize(9);pdf.text(pdf.splitTextToSize('Recorded assessment averages only. Missing marks are not zero. This history summary does not replace a finalised school report.',178),16,y);
+  const count=pdf.getNumberOfPages();for(let page=1;page<=count;page++){pdf.setPage(page);pdf.setFontSize(8);pdf.text(`Confidential learner record | Page ${page} of ${count}`,16,290);}
+  pdf.save(`${learner.id}-grade-${grade}-term-${selected.selectedTerm}-history.pdf`);
+}
+async function downloadHistory(learnerId) {
+  const selected=historyReportDetails(learnerId);if(!selected)return;
+  try{await downloadLearnerHistoryPdf(selected,await loadLearnerSubjectTeachers(selected.learner));}
+  catch(error){modal('Report unavailable',`<p>${escapeHtml(error.message)}</p>`);}
+}
+async function viewHistory(learnerId) {
+  const selected=historyReportDetails(learnerId);if(!selected)return;
+  try {
+    const teachers=await loadLearnerSubjectTeachers(selected.learner);
+    modal('Learner academic report',learnerHistoryMarkup(selected,teachers)+`<div class="modal-foot"><button class="btn primary" data-action="download-history" data-learner="${escapeHtml(learnerId)}">Download PDF</button></div>`);
+    document.querySelector('.modal-backdrop:last-child .modal')?.classList.add('report-modal');
+  } catch(error){modal('Report unavailable',`<p>${escapeHtml(error.message)}</p>`);}
 }
 function visitorReportLines() {
   const visitors = getState().visitors;
@@ -6646,6 +6722,8 @@ function toggleNotificationCenter() {
   bindNotificationFilters(drawer);
 }
 function bind() {
+  bindLearnerHistory();
+  bindLearnerSubjectTeachers();
   if (page()==="notifications") bindNotificationFilters(document);
   initWorkspaceChrome();
   updateTeachingAssignmentBadge();
@@ -6667,7 +6745,10 @@ function bind() {
     if (quickPanel && dashboardPanels) dashboardPanels.before(quickPanel);
   }
   $("#logout")?.addEventListener("click", async () => {
-    await window.schoolshieldSupabase?.auth.signOut();
+    if (workspaceHasUnsavedChanges() && !window.confirm('You have unsaved changes. Sign out and leave this draft?')) return;
+    const result = await window.schoolshieldSupabase?.auth.signOut();
+    if (result?.error) { modal('Sign out failed','<p>You could not be signed out. Check your connection and try again.</p>'); return; }
+    window.schoolshieldLeavingAfterSignOut = true;
     sessionStorage.removeItem("schoolshieldRole");
     sessionStorage.removeItem("schoolshieldSession");
     location.href = "login.html";
@@ -6747,6 +6828,7 @@ function bind() {
 
 /* Both live and optional demo schools use real Supabase authentication. */
 async function startWorkspace() {
+  try {
   const client = window.schoolshieldSupabase;
   if (!client) return location.replace("login.html");
   if (client) {
@@ -6789,6 +6871,7 @@ async function startWorkspace() {
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
     await connectCloudWorkspace(session.user, profile, school);
+    if (profile.role!=="parent" && !window.schoolshieldCloudWorkspaceReady) throw new Error("School data could not be loaded.");
     await loadTeachingAssignmentNotifications();
     await loadPersonalNotificationReads();
     startNotificationReadSync();
@@ -6804,6 +6887,11 @@ async function startWorkspace() {
   render();
   if (sessionStorage.getItem(`${workspaceCacheKey()}:pending`)) {
     modal('Unsynced draft retained', '<p>This tab has changes that Supabase has not confirmed. You can retry the draft or download it before closing this tab. Conflicting server records will not be overwritten.</p><button class="btn primary" data-action="retry-school-draft">Retry saved draft</button><button class="btn" data-action="export-school-draft">Download draft</button>');
+  }
+  } catch (error) {
+    const app=document.getElementById('app');
+    if(app){app.innerHTML='<section class="workspace-load-error" role="alert"><h2>Workspace could not be loaded</h2><p>Check your connection and try again.</p><button class="btn primary" id="retryWorkspaceLoad">Retry</button><a class="btn" href="login.html">Return to sign in</a></section>';document.getElementById('retryWorkspaceLoad').onclick=()=>location.reload();}
+    console.warn('Workspace loading failed',error.message);
   }
 }
 startWorkspace();

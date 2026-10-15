@@ -38,7 +38,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     const builder={select:()=>builder,eq:(k,v)=>{filters.push([k,v]);return builder;},in:(k,v)=>{filters.push([k,v]);return builder;},order:()=>builder,limit:()=>builder,update:value=>{update=value;return builder;},single:async()=>{const result=execute();return {...result,data:result.data[0]};},then:(resolve,reject)=>Promise.resolve(execute()).then(resolve,reject)};return builder;
    }};render();
   });
-  await page.waitForSelector('[data-performance-open="T1"]');await page.click('[data-performance-open="T1"]');await page.waitForSelector('[data-assignment-new]');assert.match(await page.textContent('#app'),/No teaching assignments found for this teacher/);
+  await page.waitForSelector('[data-performance-open="T1"]');await page.click('[data-performance-open="T1"]');await page.click('[data-performance-assignments]');await page.waitForSelector('[data-assignment-new]');assert.match(await page.textContent('#app'),/No teaching assignments found for this teacher/);
   async function fill(grade,classId,subject) {
    await page.click('[data-assignment-new]');await page.selectOption('[name="grade"]',grade);await page.selectOption('[name="class"]',classId);await page.selectOption('[name="subject"]',subject);await page.fill('[name="start"]','2026-01-15');await page.fill('[name="notes"]','Approved teaching allocation');
   }

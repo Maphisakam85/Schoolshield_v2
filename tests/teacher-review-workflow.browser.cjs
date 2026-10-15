@@ -30,7 +30,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
    }};render();
   },currentRole);
   await page.waitForSelector('[data-performance-open]');assert.equal(await page.locator('[data-performance-filter]').count(),7);
-  await page.click('[data-performance-open]');assert.equal(await page.locator('[data-review-status]').count(),0);
+  await page.click('[data-performance-open]');await page.click('[data-performance-subject]');await page.click('[data-performance-grade]');await page.click('[data-performance-context]');await page.click('[data-performance-term="2"]');assert.equal(await page.locator('[data-review-status]').count(),0);
   const open=async()=>{await page.click('[data-workflow-open]');await page.waitForSelector('[data-review-form]');};
   const close=async()=>{await page.evaluate(()=>document.querySelectorAll('.modal-backdrop').forEach(el=>el.remove()));};
   await open();assert.equal(await page.locator('[data-area-comment]').count(),5);

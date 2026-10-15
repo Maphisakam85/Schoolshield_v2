@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const app=fs.readFileSync('SchoolShield/app.js','utf8').replace(/startWorkspace\(\);\s*$/,'');
 const feature=fs.readFileSync('SchoolShield/teacher-performance.js','utf8');
 function harness(selectedRole='principal') {
- const context=vm.createContext({window:{},document:{},sessionStorage:{getItem:()=>null}});vm.runInContext(app,context);
+ const context=vm.createContext({URL,URLSearchParams,window:{},document:{},sessionStorage:{getItem:()=>null}});vm.runInContext(app,context);
  Object.assign(context,{role:()=>selectedRole,generic:(title,section,description,body)=>description+body,table:(headers,rows)=>rows.join('')});
  vm.runInContext(feature,context);return {context,feature:context.window.SchoolShieldTeacherPerformance};
 }
@@ -24,10 +24,13 @@ test('all six requested filters operate on separate teacher/subject/grade/class/
  }
  feature.state.filters.term='2';assert.equal(feature.roster()[0].latest,'Not Started');assert.equal(feature.roster()[0].overall,'Not assessed');
 });
-test('teacher detail keeps subject and grade/class sections separate without numeric performance scores',()=>{
+test('teacher details drill into one subject grade class and term without directory summaries',()=>{
  const {feature}=harness();Object.assign(feature.state,{data:structuredClone(data),selected:'A'});feature.state.filters.term='1';
- const html=feature.view();for(const text of ['Mathematics','English','Grade 8','Grade 9','8A','9B','Term 1','Completed','In Progress','Not assessed']) assert.ok(html.includes(text));
- assert.match(html,/does not replace the formal DBE\/ELRC QMS appraisal process/);assert.ok(!html.includes('Overall academic score'));assert.ok(!html.includes('Acknowledge review'));
+ let html=feature.view();assert.ok(html.includes('Mathematics'));assert.ok(html.includes('English'));assert.ok(!html.includes('data-performance-filter'));assert.ok(!html.includes('data-performance-context'));assert.ok(!html.includes('data-review'));
+ feature.state.selectedSubject='Maths';html=feature.view();assert.ok(html.includes('Grade 8'));assert.ok(!html.includes('Grade 9'));
+ feature.state.selectedGrade='Grade 8';html=feature.view();assert.ok(html.includes('8A'));assert.ok(!html.includes('9B'));
+ feature.state.selectedContext='C1';html=feature.view();assert.ok(html.includes('Term 1'));assert.ok(html.includes('Completed'));assert.ok(html.includes('Term 4'));assert.ok(!html.includes('English'));
+ feature.state.reviewOpen=true;html=feature.view();assert.ok(html.includes('Mathematics'));assert.ok(html.includes('Term 1'));assert.ok(!html.includes('English'));assert.match(html,/does not replace the formal DBE\/ELRC QMS appraisal process/);assert.ok(!html.includes('Overall academic score'));
 });
 
 test('dated assignments follow server term eligibility while ended links remain available in their historical term',()=>{
@@ -36,7 +39,7 @@ test('dated assignments follow server term eligibility while ended links remain 
  feature.state.data.contexts=[{...data.contexts[0],status:'Ended',eligibleTerms:[1,2]},
   {...data.contexts[1],id:'NEW',status:'Active',eligibleTerms:[3,4]}];
  feature.state.data.reviews=data.reviews.filter(r=>r.teaching_context_id==='C1');
- feature.state.filters.term='1';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['C1']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1']);
- feature.state.filters.term='3';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['NEW']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['NEW']);
+ feature.state.filters.term='1';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['C1']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1','NEW']);
+ feature.state.filters.term='3';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['NEW']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1','NEW']);
  assert.equal(feature.state.data.contexts.length,2);
 });
