@@ -20,7 +20,15 @@ function secretKey() {
 function parentPayload(raw: Record<string, any>, learnerIds: Set<string>) {
   const learners = (raw.learners || []).filter((learner: any) => learnerIds.has(learner.id));
   const classIds = new Set(learners.map((learner: any) => learner.class));
-  const learnerNames = new Set(learners.map((learner: any) => learner.name));
+  const familyAnnouncement = (announcement: any) => {
+    const audience = announcement.audienceId;
+    if (!audience) return /parent|family|whole.school/i.test(String(announcement.audience || ""));
+    if (["whole-school", "all-parents"].includes(audience)) return true;
+    if (audience === "my-classes-parents") return (announcement.classIds || []).some((id: string) => classIds.has(id));
+    if (audience.startsWith("class-")) return classIds.has(audience.slice(6));
+    if (audience.startsWith("grade-")) return learners.some((learner: any) => String(learner.grade).replace(/\s+/g, "-") === audience.slice(6));
+    return false;
+  };
   const onlyLearnerScores = (scores: Record<string, unknown> = {}) => Object.fromEntries(
     Object.entries(scores).filter(([id]) => learnerIds.has(id)),
   );
@@ -31,14 +39,16 @@ function parentPayload(raw: Record<string, any>, learnerIds: Set<string>) {
 
   return {
     __v: raw.__v || 13,
+    subjects: raw.subjects || [],
+    grades: raw.grades || [],
     classes: (raw.classes || []).filter((schoolClass: any) => classIds.has(schoolClass.id)),
     learners,
     assessments: (raw.assessments || []).filter((assessment: any) => classIds.has(assessment.class)).map((assessment: any) => ({ ...assessment, scores: onlyLearnerScores(assessment.scores) })),
     reports,
-    announcements: (raw.announcements || []).filter((announcement: any) => /parent|family|whole.school/i.test(String(announcement.audience || ""))),
+    announcements: (raw.announcements || []).filter(familyAnnouncement),
     visitors: [], incidents: [], staff: [], staffChangeRequests: [], security: [], appointments: [], teacherChat: [],
-    notifications: (raw.notifications || []).filter((notice: any) => notice.scope === "whole-school" || notice.scope === "parents" || learnerIds.has(notice.learnerId)),
-    sickNotices: (raw.sickNotices || []).filter((notice: any) => learnerNames.has(notice.person)),
+    notifications: (raw.notifications || []).filter((notice: any) => notice.announcementId ? familyAnnouncement(notice) : notice.scope === "whole-school" || notice.scope === "parents" || learnerIds.has(notice.learnerId)),
+    sickNotices: (raw.sickNotices || []).filter((notice: any) => learnerIds.has(notice.learnerId)),
     parentChat: (raw.parentChat || []).filter((conversation: any) => learnerIds.has(conversation.learnerId)),
     attendanceRegisters: (raw.attendanceRegisters || []).filter((register: any) => classIds.has(register.class)).map((register: any) => ({ ...register, entries: onlyLearnerScores(register.entries) })),
     attendanceWeeks: (raw.attendanceWeeks || []).filter((week: any) => classIds.has(week.class)),
@@ -56,8 +66,8 @@ Deno.serve(async (request) => {
   const { data: authData, error: authError } = await admin.auth.getUser(token);
   if (authError || !authData.user) return json({ error: "Invalid session" }, 401);
 
-  const { data: profile } = await admin.from("profiles").select("school_id, role").eq("id", authData.user.id).maybeSingle();
-  if (!profile || profile.role !== "parent") return json({ error: "This service is only available to parent accounts" }, 403);
+  const { data: profile } = await admin.from("profiles").select("school_id, role, account_status, requires_setup, onboarding_completed_at").eq("id", authData.user.id).maybeSingle();
+  if (!profile || profile.account_status !== "Active" || (profile.requires_setup && !profile.onboarding_completed_at) || profile.role !== "parent") return json({ error: "This service is only available to parent accounts" }, 403);
   const { data: links } = await admin.from("parent_learner_links").select("learner_ref").eq("school_id", profile.school_id).eq("parent_id", authData.user.id);
   const learnerIds = new Set((links || []).map((link) => link.learner_ref));
   if (!learnerIds.size) return json({ payload: parentPayload({}, learnerIds), linked: false });

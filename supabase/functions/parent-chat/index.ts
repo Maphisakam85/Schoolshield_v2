@@ -20,8 +20,8 @@ Deno.serve(async (request) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { auth: { autoRefreshToken: false, persistSession: false } });
   const { data: auth } = await admin.auth.getUser(token);
   if (!auth.user) return json({ error: "Invalid session" }, 401);
-  const { data: profile } = await admin.from("profiles").select("school_id, role, display_name").eq("id", auth.user.id).maybeSingle();
-  if (!profile || !["parent", "teacher"].includes(profile.role)) return json({ error: "Only parent or teacher accounts can use this endpoint" }, 403);
+  const { data: profile } = await admin.from("profiles").select("school_id, role, display_name, account_status, requires_setup, onboarding_completed_at").eq("id", auth.user.id).maybeSingle();
+  if (!profile || profile.account_status !== "Active" || (profile.requires_setup && !profile.onboarding_completed_at) || !["parent", "teacher"].includes(profile.role)) return json({ error: "Only parent or teacher accounts can use this endpoint" }, 403);
   const body = await request.json().catch(() => ({}));
   const learnerId = String(body.learner_id || "");
   const text = String(body.text || "").trim();
@@ -36,17 +36,24 @@ Deno.serve(async (request) => {
     if (!link) return json({ error: "This learner is not linked to your account" }, 403);
   } else {
     const schoolClass = (payload.classes || []).find((item: any) => item.id === learner.class);
-    if (!schoolClass || schoolClass.teacher !== profile.display_name) return json({ error: "You are not assigned to this learner's class" }, 403);
+    if (!schoolClass) return json({ error: "You are not assigned to this learner's class" }, 403);
+    if (schoolClass.teacherProfileId !== auth.user.id) {
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
+      const { data: assignments, error } = await admin.from("teacher_teaching_contexts").select("id")
+        .eq("school_id", profile.school_id).eq("teacher_id", auth.user.id).eq("class_id", schoolClass.entityId)
+        .lte("start_date", today).or(`end_date.is.null,end_date.gte.${today}`).limit(1);
+      if (error || !assignments?.length) return json({ error: "You are not assigned to this learner's class" }, 403);
+    }
   }
   payload.parentChat = payload.parentChat || [];
   let conversation = payload.parentChat.find((item: any) => item.learnerId === learnerId);
   if (!conversation) {
     const schoolClass = (payload.classes || []).find((item: any) => item.id === learner.class);
-    conversation = { id: profile.display_name, learnerId, class: learner.class, role: `Parent · ${learner.name} (${learner.class})`, initials: profile.display_name.slice(0, 2).toUpperCase(), legacyOwner: "parent", messages: [] };
+    conversation = { id: crypto.randomUUID(), learnerId, class: learner.class, role: `Parent · ${learner.name} (${learner.class})`, initials: profile.display_name.slice(0, 2).toUpperCase(), legacyOwner: "parent", messages: [] };
     payload.parentChat.push(conversation);
   }
   conversation.messages = conversation.messages || [];
-  conversation.messages.push({ from: "me", sender: profile.display_name, text, date: new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }), sentAt: new Date().toISOString() });
+  conversation.messages.push({ from: "me", sender: profile.display_name, senderId: auth.user.id, text, date: new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" }), sentAt: new Date().toISOString() });
   const { error: updateError } = await admin.from("school_workspaces").update({ payload, updated_by: auth.user.id }).eq("school_id", profile.school_id);
   if (updateError) return json({ error: "Could not save message" }, 500);
   return json({ ok: true });

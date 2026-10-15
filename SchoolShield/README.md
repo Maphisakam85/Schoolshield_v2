@@ -1,27 +1,28 @@
-# SchoolShield — Proper Role-Based Multi-Page Prototype
+﻿# SchoolShield
 
-The interface is plain HTML/CSS/JS. Every module is a real physical HTML page shared by roles. Roles do not get duplicate copies of the same page; the shared page reads the logged-in role from sessionStorage and builds the permitted navigation. Unauthorized direct URLs redirect to the role's dashboard.
+SchoolShield uses shared HTML/CSS/JavaScript pages and real Supabase Auth accounts.
+Navigation reflects the signed-in profile; backend RPCs, RLS and private Storage
+policies enforce role and school permissions. Browser/session storage is a cache,
+not the authoritative school dataset.
 
-Roles: Principal, Deputy Principal, SGB Member, Security Officer, Parent/Guardian, School Clerk, Teacher.
+## Pilot administration
 
-Session behaviour: closing the browser tab ends the prototype session. Use one of the Botshabelo school codes and role-based demo emails listed in [demo-credentials.md](demo-credentials.md) to preview each permission set.
+- **Administration > User Management:** real accounts, invitations and access.
+- **Administration > School Records:** staff, learners, guardians, grades,
+  classes, subjects, dated teaching assignments and data-integrity checks.
+- New live schools start empty. Account/profile/staff relationships use UUIDs.
+- Demo and QA schools are explicitly labelled and isolated. Demo bootstrap is
+  disabled by default and can never run in a live school.
+- Development credentials are documented only in
+  [test fixtures](../tests/fixtures/demo-credentials.md); they are not deployed
+  with the browser application and are not required for live accounts.
 
-## Deploy to Vercel
+See [pilot setup and verification](../docs/pilot-readiness.md) for backend
+configuration, migrations, permissions, test evidence and current limitations.
 
-Import this repository with the Vercel **Root Directory** left at the repository
-root (blank), and use the **Other** framework preset. The root `vercel.json`
-serves `SchoolShield/` as the static output directory and skips build and install
-commands. No build step is needed for this HTML/CSS/JavaScript application.
+## Hosting
 
-After pushing the configuration, deploy the latest commit. The deployment root
-(`/`) serves `index.html`; `/login.html` and `/dashboard.html` serve their
-respective pages. If an existing project returns `404 NOT_FOUND`, check that its
-Root Directory is blank and redeploy the latest commit.
-
-## Supabase operational prototype baseline
-
-The repository includes a Supabase migration with Auth profiles, school-tenant
-RLS, a staff workspace store, parent-owned sick notices, and private document
-storage. See [the setup guide](../supabase/README.md) to link a Supabase
-project and apply it. The `SUPABASE_SECRET_KEY` is never used in or
-exposed to this browser application.
+The existing Vercel project serves `SchoolShield/` at the deployment root. Run
+JavaScript checks and relevant tests before deployment. Only public Supabase
+configuration belongs in `supabase-config.js`; service credentials and provider
+keys stay in Supabase Edge Function secrets.

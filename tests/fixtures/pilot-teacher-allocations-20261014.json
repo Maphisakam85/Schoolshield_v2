@@ -1,0 +1,121 @@
+{
+  "schoolId": "08e43df8-d96c-4031-b8b8-5d3c20a21b61",
+  "schoolCode": "SMM-001",
+  "mode": "demo",
+  "academicYear": 2026,
+  "reason": "Random demo teaching allocations explicitly requested by the pilot administrator on 14 October 2026. Not real staffing.",
+  "startDate": "2026-01-14",
+  "endDate": "2026-12-09",
+  "allocations": [
+    {
+      "teacherId": "06fb9e64-52cc-4be8-9b4d-ea9eba8b4f5c",
+      "name": "Gift Maphisa",
+      "staffRef": "STAFF-108",
+      "revision": 3,
+      "operation": "1f94500b-31aa-40e5-a90e-1dbbc39c0c94",
+      "employeeId": null,
+      "department": "Senior Phase",
+      "grade": 9,
+      "classId": "710caef5-34b2-4994-8b9d-e5359c3fa939",
+      "className": "9B",
+      "subjects": [
+        {
+          "id": "d80aee0f-7478-4077-a3cc-c385a15fe0de",
+          "name": "Mathematics"
+        },
+        {
+          "id": "c081a50d-4e64-482f-9aba-b1af5235c4d2",
+          "name": "English"
+        }
+      ]
+    },
+    {
+      "teacherId": "6106f980-77d2-49ad-bac4-8b414560ffd4",
+      "name": "Kamohelo Maphisa",
+      "staffRef": "STAFF-106",
+      "revision": 3,
+      "operation": "fbba479d-a050-4792-9b4b-05edeba75bbd",
+      "employeeId": null,
+      "department": "FET Phase",
+      "grade": 12,
+      "classId": "18da4361-4af6-4e99-b59a-3a41716ca828",
+      "className": "12A",
+      "subjects": [
+        {
+          "id": "d80aee0f-7478-4077-a3cc-c385a15fe0de",
+          "name": "Mathematics"
+        },
+        {
+          "id": "c081a50d-4e64-482f-9aba-b1af5235c4d2",
+          "name": "English"
+        }
+      ]
+    },
+    {
+      "teacherId": "0da24200-4dc5-48a9-855b-0d5b58510522",
+      "name": "Kaymoo Lite",
+      "staffRef": "STAFF-105",
+      "revision": 3,
+      "operation": "fc59488c-bcf0-4720-9e7f-9b3c1646f9ca",
+      "employeeId": null,
+      "department": "FET Phase",
+      "grade": 11,
+      "classId": "8311cb89-c599-4c3f-a94f-07e16cc1def4",
+      "className": "11A",
+      "subjects": [
+        {
+          "id": "d80aee0f-7478-4077-a3cc-c385a15fe0de",
+          "name": "Mathematics"
+        },
+        {
+          "id": "c081a50d-4e64-482f-9aba-b1af5235c4d2",
+          "name": "English"
+        }
+      ]
+    },
+    {
+      "teacherId": "8036da1f-0edc-40a2-8f74-50642aa38eca",
+      "name": "tumelo ke tshepo",
+      "staffRef": "STAFF-107",
+      "revision": 3,
+      "operation": "72dff4cc-bfff-4fb8-9718-69214183d5a9",
+      "employeeId": null,
+      "department": "FET Phase",
+      "grade": 10,
+      "classId": "c9f60421-a6db-4442-8627-9a7ad972ebdf",
+      "className": "10C",
+      "subjects": [
+        {
+          "id": "d80aee0f-7478-4077-a3cc-c385a15fe0de",
+          "name": "Mathematics"
+        },
+        {
+          "id": "c081a50d-4e64-482f-9aba-b1af5235c4d2",
+          "name": "English"
+        }
+      ]
+    },
+    {
+      "teacherId": "fa135e0b-7f5b-4f4f-98bc-fcd9ff2b3e79",
+      "name": "Setjhaba-Se-Maketse Teacher",
+      "staffRef": "STAFF-79",
+      "revision": 3,
+      "operation": "e710b90d-5925-4fa3-b168-46a6d347516f",
+      "employeeId": null,
+      "department": "Senior Phase",
+      "grade": 8,
+      "classId": "59f6a8f0-8643-4c8c-b422-9446e9614670",
+      "className": "8A",
+      "subjects": [
+        {
+          "id": "d80aee0f-7478-4077-a3cc-c385a15fe0de",
+          "name": "Mathematics"
+        },
+        {
+          "id": "c081a50d-4e64-482f-9aba-b1af5235c4d2",
+          "name": "English"
+        }
+      ]
+    }
+  ]
+}
