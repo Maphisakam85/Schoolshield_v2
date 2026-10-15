@@ -95,5 +95,11 @@ try {
  await db.exec('reset role');const reference=(await db.query('select staff_ref from school_staff where id=$1',[teacherDetails.staffId])).rows[0].staff_ref;
  await db.query("update school_staff set record=record||'{\"staffRef\":\"FORGED\"}'::jsonb where id=$1",[teacherDetails.staffId]);equal((await db.query("select record->>'staffRef' as ref from school_staff where id=$1",[teacherDetails.staffId])).rows[0].ref,reference);
  await assert.rejects(db.query('update school_staff set staff_number=staff_number+1000 where id=$1',[teacherDetails.staffId]),/immutable|identity column|updated to DEFAULT/);checks++;
+ await db.exec('reset role');await db.exec(fs.readFileSync('supabase/migrations/20261015090000_cache_workspace_save_authorization.sql','utf8'));
+ await login(12);const baseline=(await db.query('select read_school_dataset() as d')).rows[0].d.payload;const changed=structuredClone(baseline);changed.notifications.push({id:id(9911),title:'Confirmed Clerk notice',scope:'clerk'});
+ const saved=(await db.query('select save_school_dataset($1,$2) as d',[baseline,changed])).rows[0].d;equal(saved.payload.notifications.some(n=>n.id===id(9911)),true);
+ const stale=structuredClone(changed);stale.notifications.find(n=>n.id===id(9911)).title='Stale edit';await assert.rejects(db.query('select save_school_dataset($1,$2)',[baseline,stale]),/changed in another session/);checks++;
+ const denied=structuredClone(saved.payload);denied.security.push({id:id(9912),name:'Denied officer'});await assert.rejects(db.query('select save_school_dataset($1,$2)',[saved.payload,denied]),/denied/i);checks++;
+ const foreign=structuredClone(saved.payload);foreign.notifications[0].school_id=other;await assert.rejects(db.query('select save_school_dataset($1,$2)',[saved.payload,foreign]),/another school/);checks++;
  console.log(checks+' live/demo isolation, integrity, privacy and operational RPC assertions passed');
 }finally{await db.close();}})().catch(e=>{console.error(e);process.exit(1)});

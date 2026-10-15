@@ -6,7 +6,7 @@
  await page.evaluate(()=>{
  sessionStorage.setItem('schoolshieldSession',JSON.stringify({userId:'P1',role:'principal'}));window.currentRole='principal';window.role=()=>window.currentRole;
  window.generic=(a,b,c,body)=>'<h1>'+a+'</h1>'+body;
- window.users=[{id:'P1',first_name:'School',last_name:'Principal',display_name:'School Principal',email:'principal@school.test',role:'principal',phone:'+27821234567',account_status:'Active',management_revision:1},{id:'T1',first_name:'Thabo',last_name:'Mokoena',display_name:'Thabo Mokoena',email:'teacher@school.test',role:'teacher',phone:'+27821234567',account_status:'Active',requires_setup:true,management_revision:1}];
+ window.users=[{id:'QA1',display_name:'QA archived account',email:'qa@school.test',role:'teacher',account_status:'Inactive'},{id:'P1',first_name:'School',last_name:'Principal',display_name:'School Principal',email:'principal@school.test',role:'principal',phone:'+27821234567',account_status:'Active',management_revision:1},{id:'T1',first_name:'Thabo',last_name:'Mokoena',display_name:'Thabo Mokoena',email:'teacher@school.test',role:'teacher',phone:'+27821234567',account_status:'Active',requires_setup:true,management_revision:1}];
  window.schoolshieldSupabase={rpc:async()=>({data:{school:{id:'S1',name:'School'},users,staff:[],learners:[]}})};
  window.refreshCloudWorkspace=async()=>false;window.requests=[];
  window.schoolshieldFunctionRequest=async(name,body)=>{requests.push(body);await new Promise(r=>window.releaseSave=r);return {ok:!window.failSave,json:async()=>window.failSave?{error:'Mailer unavailable; account retained'}:{ok:true,message:'Account changes confirmed.',setup_link:body.action==='create'?'https://school.test/account-setup.html?token_hash=hash&type=invite':undefined}};};

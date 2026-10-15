@@ -464,10 +464,12 @@ function getState() {
 
 function save(state) {
   const cacheKey = workspaceCacheKey();
-  const before = window.schoolshieldWorkspaceLocalSnapshot || window.schoolshieldWorkspaceConfirmed;
+  const retained = JSON.parse(sessionStorage.getItem(`${cacheKey}:pending`) || 'null');
+  let before = retained?.before || window.schoolshieldWorkspaceLocalSnapshot || window.schoolshieldWorkspaceConfirmed;
   const snapshot = JSON.parse(JSON.stringify(state));
   for (const [key, records] of Object.entries(snapshot)) {
     if (!Array.isArray(records) || ['subjects','grades'].includes(key)) continue;
+    if (JSON.stringify(records) === JSON.stringify(before?.[key])) continue;
     for (const record of records) {
       if (record && typeof record === 'object' && !Array.isArray(record) && !record.id) record.id = crypto.randomUUID();
     }
@@ -482,11 +484,9 @@ function save(state) {
   const previous = window.schoolshieldWorkspaceSaveQueue || Promise.resolve(true);
   window.schoolshieldWorkspaceSaveQueue = previous.then(async (saved) => {
     if (workspaceCacheKey() !== cacheKey) return false;
-    if (!saved || saved.error) {
-      const pending = JSON.parse(sessionStorage.getItem(`${cacheKey}:pending`) || 'null');
-      sessionStorage.setItem(`${cacheKey}:pending`, JSON.stringify({ before: pending?.before || before, after: snapshot }));
-      return false;
-    }
+    // A previous failure must not permanently poison all subsequent saves.
+    // Retry the retained baseline; server conflict checks still protect newer data.
+    before = JSON.parse(sessionStorage.getItem(`${cacheKey}:pending`) || 'null')?.before || before;
     const {data, error} = await window.schoolshieldSupabase.rpc('save_school_dataset', {
       p_before: before, p_after: snapshot,
     });
@@ -516,25 +516,101 @@ function save(state) {
   return window.schoolshieldWorkspaceSaveQueue;
 }
 
+// Check the intended delta, allowing unrelated newer server changes.
+function schoolDraftApplied(before, after, current) {
+  if (JSON.stringify(before) === JSON.stringify(after)) return true;
+  if (Array.isArray(before) && Array.isArray(after) && Array.isArray(current) && [...before, ...after].every(row => row && typeof row === 'object' && row.id)) {
+    const old = new Map(before.map(row => [row.id, row]));
+    const next = new Map(after.map(row => [row.id, row]));
+    const live = new Map(current.map(row => [row.id, row]));
+    return [...new Set([...old.keys(), ...next.keys()])].every(id => schoolDraftApplied(old.get(id), next.get(id), live.get(id)));
+  }
+  if (after && typeof after === 'object' && !Array.isArray(after) && current && typeof current === 'object') {
+    return [...new Set([...Object.keys(before || {}), ...Object.keys(after)])].every(key => schoolDraftApplied(before?.[key], after[key], current[key]));
+  }
+  return JSON.stringify(after) === JSON.stringify(current);
+}
+function showRetainedSchoolDraft() {
+  // Retained workspace changes belong to the account, not the page being opened.
+  // Keep recovery available without interrupting every portal with a modal.
+  const pending = sessionStorage.getItem(`${workspaceCacheKey()}:pending`);
+  const existing = document.getElementById?.('schoolDraftStatus');
+  if (!pending) { existing?.remove(); return; }
+  if (existing || !document.body) return;
+  const notice = document.createElement('aside');
+  notice.id = 'schoolDraftStatus';
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'padding:10px 16px;background:#fff8e6;color:#253d46;border-bottom:1px solid #e5d6ae;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+  notice.innerHTML = '<span>An earlier workspace draft is still unsynced. Retry or download it.</span><button class="btn small" type="button" data-draft-retry>Retry changes</button><button class="btn small" type="button" data-draft-download>Download draft</button>';
+  notice.querySelector('[data-draft-retry]').onclick = retrySchoolDraft;
+  notice.querySelector('[data-draft-download]').onclick = () => downloadTextFile('schoolshield-unsynced-draft.json', sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || '{}');
+  document.body.prepend(notice);
+}
+function reconcileSchoolDraft(payload) {
+  const key = `${workspaceCacheKey()}:pending`;
+  const pending = JSON.parse(sessionStorage.getItem(key) || 'null');
+  if (!pending || !payload || !schoolDraftApplied(pending.before, pending.after, payload)) return false;
+  sessionStorage.removeItem(key);
+  showRetainedSchoolDraft();
+  window.schoolshieldWorkspaceSaveQueue = Promise.resolve(true);
+  window.schoolshieldLastSyncError = '';
+  return true;
+}
+async function schoolDraftRequest(name, args = {}, timeoutMs = 15000) {
+  let timer;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => window.schoolshieldSupabase.rpc(name, args)),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('The server did not respond in time. The save is unconfirmed. Check your connection and retry; your draft is retained.')), timeoutMs); }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
 async function retrySchoolDraft() {
+  if (window.schoolshieldDraftRetrying) return;
+  const cacheKey = workspaceCacheKey();
   const pending = JSON.parse(sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || 'null');
   if (!pending || !window.schoolshieldSupabase) return;
-  const {data,error} = await window.schoolshieldSupabase.rpc('save_school_dataset', {p_before: pending.before, p_after: pending.after});
-  if (error) return modal('Draft not saved', `<p>${announcementText(error.message)} The draft is still retained in this tab.</p>`);
+  window.schoolshieldDraftRetrying = true;
+  const buttons = Array.from(document.querySelectorAll('[data-action="retry-school-draft"],[data-draft-retry]'));
+  buttons.forEach(button => { button.disabled = true; button.textContent = 'Saving...'; });
+  try {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('You are offline. Reconnect before retrying.');
+  // A timed-out response may have committed. Verify before resubmitting a stale delta.
+  const fresh = await schoolDraftRequest('read_school_dataset');
+  if (workspaceCacheKey() !== cacheKey) return;
+  if (fresh.error || !fresh.data?.payload) throw new Error(fresh.error?.message || 'Could not verify the latest school records.');
+  const alreadySaved = schoolDraftApplied(pending.before, pending.after, fresh.data.payload);
+  const {data,error} = alreadySaved ? fresh : await schoolDraftRequest('save_school_dataset', {p_before: pending.before, p_after: pending.after});
+  if (workspaceCacheKey() !== cacheKey) return;
+  if (error || !data?.payload) throw new Error(error?.message || 'Supabase did not confirm the saved data.');
+  if (sessionStorage.getItem(`${cacheKey}:pending`) !== JSON.stringify(pending)) throw new Error('The draft changed while saving. Retry the latest draft.');
   sessionStorage.removeItem(`${workspaceCacheKey()}:pending`);
+  showRetainedSchoolDraft();
   sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(data.payload));
   window.schoolshieldWorkspaceSaveQueue = Promise.resolve(true);
   window.schoolshieldWorkspaceConfirmed = data.payload;
   window.schoolshieldWorkspaceLocalSnapshot = data.payload;
   window.schoolshieldIdentityIssues = data.identityIssues || [];
   window.schoolshieldLastSyncError = '';
+  document.querySelectorAll('.modal-backdrop').forEach(dialog => dialog.remove());
+  resetWorkspaceDraftState();
   render();
   modal('Draft saved', '<p>Supabase confirmed your changes.</p>');
+  } catch (error) {
+    window.schoolshieldLastSyncError = error.message;
+    const message = document.querySelector('#schoolDraftStatus span');
+    if (message) message.textContent = 'Not saved: ' + error.message;
+    window.schoolshieldPersistenceFeedback?.('failed');
+    modal('Draft not saved', `<p>${announcementText(error.message)} The draft is still retained in this tab.</p>`);
+  } finally {
+    window.schoolshieldDraftRetrying = false;
+    buttons.forEach(button => { button.disabled = false; button.textContent = button.hasAttribute('data-draft-retry') ? 'Retry changes' : 'Retry saved draft'; });
+  }
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
   if (window.schoolshieldWorkspaceSaveQueue)
-    if (!await window.schoolshieldWorkspaceSaveQueue) return false;
+    await window.schoolshieldWorkspaceSaveQueue;
   const client = window.schoolshieldSupabase;
   const session = JSON.parse(
     sessionStorage.getItem("schoolshieldSession") || "{}",
@@ -588,7 +664,18 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     window.schoolshieldLastSyncError = error?.message || 'School dataset is not available.';
     return false;
   }
-  window.schoolshieldLastSyncError = '';
+  reconcileSchoolDraft(data.payload);
+  window.schoolshieldLastSyncError = sessionStorage.getItem(`${workspaceCacheKey()}:pending`) ? 'Unsynced changes are retained. Retry the saved draft.' : '';
+  const pendingDraft = JSON.parse(sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || 'null');
+  if (pendingDraft) {
+    window.schoolshieldWorkspaceConfirmed = data.payload;
+    window.schoolshieldCloudWorkspaceReady = true;
+    if (!window.schoolshieldWorkspaceLocalSnapshot) {
+      window.schoolshieldWorkspaceLocalSnapshot = pendingDraft.after;
+      sessionStorage.setItem(workspaceCacheKey(), JSON.stringify(pendingDraft.after));
+    }
+    return false;
+  }
   if (deferWorkspaceSnapshot(data.payload)) return false;
   window.schoolshieldWorkspaceConfirmed = data.payload;
   window.schoolshieldWorkspaceLocalSnapshot = data.payload;
@@ -1171,8 +1258,8 @@ function nav() {
         .filter((item) => item && allowed(item[0]));
       if (!links.length) return "";
       const isCurrentGroup = links.some(([id]) => page() === id);
-      const open = isCurrentGroup || links.some(([id]) => navHasNewUpdates(id));
-      return `<details class="nav-group" ${escapeHtml(open ? "open" : "")}><summary>${escapeHtml(group.label)}<span>⌄</span></summary>${links
+      const open = isCurrentGroup;
+      return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary>${escapeHtml(group.label)}<span>⌄</span></summary>${links
         .map(([id, label, url, ic]) => {
           const hasUpdates = navHasNewUpdates(id);
           return `<a href="${escapeHtml(url)}" class="nav-item ${escapeHtml(page() === id ? "active" : "")} ${escapeHtml(hasUpdates ? "has-updates" : "")}" title="${escapeHtml(hasUpdates ? label + ": new updates" : label)}" aria-label="${escapeHtml(hasUpdates ? label + ", new updates" : label)}">${icon(ic)}<span>${escapeHtml(label)}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
@@ -1346,6 +1433,25 @@ function parentDashboard() {
   );
 }
 function quickForRole(r) {
+  const descriptions = {
+    'class-records.html': 'Open class records and teaching assignments.',
+    'learners.html': 'View learners in the grades and classes available to your role.',
+    'test-scores.html': 'View or capture assessment marks for your authorised classes.',
+    'announcements.html': 'Read school announcements and publish notices where permitted.',
+    'reports.html': 'Open school reports and summaries available to your role.',
+    'parents.html': 'View parent and guardian contact records.',
+    'visitors.html': 'Open visitor registration and visit history.',
+    'incidents.html': 'Report an incident or review authorised incident records.',
+    'sgb-chat.html': 'Open your private governance conversation with the Principal.',
+    'security-officers.html': 'View security officers and shift information.',
+    'notifications.html': 'Read alerts and updates shared with your account.',
+    'student-record.html': 'View your linked learner\'s academic record and reports.',
+    'parent-chat.html': 'Open your authorised parent and teacher conversations.',
+    'sick-notice.html': 'Submit a sick notice and supporting document.',
+    'student-reports.html': 'Open learner report preparation and review.',
+    'student-records.html': 'View and manage authorised learner records.',
+    'attendance-register.html': 'Record daily attendance for your assigned classes.',
+  };
   const map = {
     principal: [
       ["Class records", "class-records.html"],
@@ -1394,9 +1500,11 @@ function quickForRole(r) {
     ],
   };
   return (map[r] || [])
-    .map((x) => {
+    .map((x, index) => {
       const navItem = NAV.find((item) => item[2] === x[1]);
-      return `<a class="quick" style="min-height:68px;padding:13px 15px;gap:11px" href="${escapeHtml(x[1])}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(x[0])}</span><b>→</b></a>`;
+      const description = descriptions[x[1]] || 'Open ' + x[0] + '.';
+      const tooltipId = `quick-description-${r}-${index}`;
+      return `<button class="quick" type="button" aria-label="${escapeHtml(x[0])}" data-quick-url="${escapeHtml(x[1])}" aria-describedby="${escapeHtml(tooltipId)}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(x[0])}</span><b aria-hidden="true">→</b><span class="quick-description" id="${escapeHtml(tooltipId)}" role="tooltip">${escapeHtml(description)}</span></button>`;
     })
     .join("");
 }
@@ -4203,6 +4311,7 @@ function action(type, el) {
     return go(`school-records.html?type=${type === "add-learner" ? "learners" : "staff"}&new=1`);
   }
   if (type === 'retry-school-draft') return retrySchoolDraft();
+  if (type === 'notify-parent-critical-subject') return notifyParentCriticalSubject(el.dataset.assessment, el.dataset.learner);
   if (type === 'export-school-draft') return downloadTextFile('schoolshield-unsynced-draft.json', sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || '{}');
   if (type === 'link-staff-account') return linkStaffAccount(el.dataset.staff);
   const classId = el && el.dataset.class;
@@ -5819,7 +5928,8 @@ function saveWeeklyAttendance(classId, weekStart) {
   render();
 }
 
-function saveTestScores(classId, mode, assessmentId = "") {
+async function saveTestScores(classId, mode, assessmentId = "") {
+  if (window.schoolshieldScoresSaving) return;
   const inputs = $$("[data-score]");
   const scores = {};
   for (const input of inputs) {
@@ -5836,6 +5946,7 @@ function saveTestScores(classId, mode, assessmentId = "") {
   }
   let savedAssessment = null;
   let criticalLearners = [];
+  window.schoolshieldScoresSaving = true;
   persist((state) => {
     const assessment =
       state.assessments.find((a) => a.id === assessmentId) ||
@@ -5896,6 +6007,10 @@ function saveTestScores(classId, mode, assessmentId = "") {
       }
     }
   });
+  const confirmed = await window.schoolshieldWorkspaceSaveQueue;
+  window.schoolshieldScoresSaving = false;
+  if (!confirmed) return modal('Scores not saved', `<p>${escapeHtml(window.schoolshieldLastSyncError || 'Supabase did not confirm the scores.')} Your draft is retained.</p><button class="btn primary" data-action="retry-school-draft">Retry saved draft</button>`);
+  resetWorkspaceDraftState();
   if (mode === "teacher") criticalLearners.forEach((learner) => sessionStorage.setItem(`schoolshield:critical-popup:${SCHOOL.code}:${savedAssessment?.id}:${learner.id}`, "shown"));
   render();
   if (mode === "teacher" && savedAssessment) {
@@ -5914,7 +6029,7 @@ function showClerkAssessmentPopup() {
   modal("New scores ready for review", `<p><b>${escapeHtml(notice.title)}</b></p><p class="muted">${escapeHtml(notice.description)}</p><div class="modal-foot"><a class="btn primary" href="test-scores.html?class=${escapeHtml(notice.class)}&assessment=${escapeHtml(notice.assessmentId)}">Open scores</a><button class="btn ghost" data-action="close-modal">Later</button></div>`);
 }
 
-function notifyParentCriticalSubject(assessmentId, learnerId) {
+async function notifyParentCriticalSubject(assessmentId, learnerId) {
   let result = "missing";
   let learnerName = "";
   let subject = "";
@@ -5944,6 +6059,7 @@ function notifyParentCriticalSubject(assessmentId, learnerId) {
     });
     result = "sent";
   });
+  if (result === 'sent' && !await window.schoolshieldWorkspaceSaveQueue) return modal('Parent notification not saved', '<p>The notification could not be saved. Your draft is retained. Retry the saved draft before contacting the parent again.</p>');
   if (result === "sent") modal("Parent notified", `<p>${escapeHtml(learnerName)}'s parent or guardian has been notified about the ${escapeHtml(subject)} support discussion.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
   else if (result === "already-sent") modal("Parent already notified", `<p class="muted">A parent-contact notice for ${escapeHtml(learnerName)}'s ${escapeHtml(subject)} result has already been sent.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`);
   else modal("Unable to notify parent", '<p class="muted">The assessment or learner record could not be found. Refresh the page and try again.</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>');
@@ -6594,11 +6710,25 @@ async function rejectAccountRequest(id) {
   loadAccountRequests();
 }
 
+function initSidebarAccordion(sidebar) {
+  const groups = Array.from(sidebar.querySelectorAll('details.nav-group'));
+  // Native grouped details plus a fallback for browsers without name support.
+  groups.forEach(group => {
+    const summary = group.querySelector('summary');
+    if (summary) summary.onclick = () => {
+      if (!group.open) groups.forEach(other => { if (other !== group) other.open = false; });
+    };
+    group.ontoggle = () => {
+      if (group.open) groups.forEach(other => { if (other !== group) other.open = false; });
+    };
+  });
+}
 function initWorkspaceChrome() {
   const sidebar = $(".sidebar");
   const main = $(".main");
   const topActions = $(".top-actions");
   if (!sidebar || !main || !topActions) return;
+  initSidebarAccordion(sidebar);
   if (!$("#refreshWorkspace")) {
     const refresh = document.createElement("button");
     refresh.id = "refreshWorkspace";
@@ -6744,14 +6874,38 @@ function bind() {
     const dashboardPanels = $(".dashboard-grid");
     if (quickPanel && dashboardPanels) dashboardPanels.before(quickPanel);
   }
-  $("#logout")?.addEventListener("click", async () => {
+  $("#logout")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (button.disabled) return;
     if (workspaceHasUnsavedChanges() && !window.confirm('You have unsaved changes. Sign out and leave this draft?')) return;
+    const previous = button.innerHTML;
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Signing you out...';
+    const notice = document.createElement('div');
+    notice.className = 'page-loading';
+    notice.id = 'signingOut';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    notice.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span><p>Signing you out...</p>';
+    document.body.appendChild(notice);
+    try {
     const result = await window.schoolshieldSupabase?.auth.signOut();
-    if (result?.error) { modal('Sign out failed','<p>You could not be signed out. Check your connection and try again.</p>'); return; }
+    if (result?.error) throw result.error;
     window.schoolshieldLeavingAfterSignOut = true;
     sessionStorage.removeItem("schoolshieldRole");
     sessionStorage.removeItem("schoolshieldSession");
     location.href = "login.html";
+    } catch (_) {
+      notice.remove();
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.innerHTML = previous;
+      modal('Sign out failed','<p>You could not be signed out. Check your connection and try again.</p>');
+    }
+  });
+  $$('[data-quick-url]').forEach(button => {
+    button.onclick = () => go(button.dataset.quickUrl);
   });
   $("#globalBell")?.addEventListener("click", toggleNotificationCenter);
   $$("[data-nav]").forEach(
@@ -6885,9 +7039,7 @@ async function startWorkspace() {
   )
     return location.replace("login.html");
   render();
-  if (sessionStorage.getItem(`${workspaceCacheKey()}:pending`)) {
-    modal('Unsynced draft retained', '<p>This tab has changes that Supabase has not confirmed. You can retry the draft or download it before closing this tab. Conflicting server records will not be overwritten.</p><button class="btn primary" data-action="retry-school-draft">Retry saved draft</button><button class="btn" data-action="export-school-draft">Download draft</button>');
-  }
+  showRetainedSchoolDraft();
   } catch (error) {
     const app=document.getElementById('app');
     if(app){app.innerHTML='<section class="workspace-load-error" role="alert"><h2>Workspace could not be loaded</h2><p>Check your connection and try again.</p><button class="btn primary" id="retryWorkspaceLoad">Retry</button><a class="btn" href="login.html">Return to sign in</a></section>';document.getElementById('retryWorkspaceLoad').onclick=()=>location.reload();}

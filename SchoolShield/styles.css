@@ -1075,6 +1075,14 @@ td small {
 }
 
 .quick {
+    position: relative;
+    width: 100%;
+    min-height: 68px;
+    gap: 11px;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
     border: 1px solid var(--line);
     border-radius: 10px;
     padding: 14px;
@@ -1086,9 +1094,35 @@ td small {
     font-weight: 600
 }
 
-.quick:hover {
+.quick:hover,
+.quick:focus-visible {
     border-color: #b9ddd0;
-    background: var(--mint)
+    background: var(--mint);
+    box-shadow: 0 3px 10px #12343b18;
+}
+.quick:focus-visible { outline: 2px solid #079568; outline-offset: 3px; }
+.quick:active { background: #cceade; box-shadow: inset 0 2px 4px #12343b20; }
+.quick-description {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: #12343b;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    z-index: 50;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+.quick:hover .quick-description,
+.quick:focus-visible .quick-description {
+    opacity: 1;
+    visibility: visible;
 }
 
 .toolbar {
