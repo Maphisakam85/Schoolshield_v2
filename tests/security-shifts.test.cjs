@@ -2,8 +2,10 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const source=fs.readFileSync('SchoolShield/app.js','utf8');
 test('deployment build includes the security regression suites',()=>{
   const config=JSON.parse(fs.readFileSync('vercel.json','utf8'));
-  assert.match(config.buildCommand,/tests\/security-shifts\.test\.cjs/);
-  assert.match(config.buildCommand,/tests\/security-evidence\.test\.cjs/);
+  assert.equal(config.buildCommand,'node scripts/build.cjs');
+  const build=fs.readFileSync('scripts/build.cjs','utf8');
+  assert.match(build,/tests\/security-shifts\.test\.cjs/);
+  assert.match(build,/tests\/security-evidence\.test\.cjs/);
 });
 function harness() {
   const state={security:[{id:'S1',name:'Officer A',shift:'18:00–06:00'},{id:'S2',name:'Officer B'}],securityAttendance:[]};
