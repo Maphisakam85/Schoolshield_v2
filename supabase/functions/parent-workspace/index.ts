@@ -68,11 +68,19 @@ Deno.serve(async (request) => {
 
   const { data: profile } = await admin.from("profiles").select("school_id, role, account_status, requires_setup, onboarding_completed_at").eq("id", authData.user.id).maybeSingle();
   if (!profile || profile.account_status !== "Active" || (profile.requires_setup && !profile.onboarding_completed_at) || profile.role !== "parent") return json({ error: "This service is only available to parent accounts" }, 403);
+  const caller = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false } });
+  const { data: access, error: accessError } = await caller.rpc("get_my_school_access");
+  if (accessError || access?.school_id !== profile.school_id) return json({ error: "School access is unavailable or suspended" }, 403);
   const { data: links } = await admin.from("parent_learner_links").select("learner_ref").eq("school_id", profile.school_id).eq("parent_id", authData.user.id);
   const learnerIds = new Set((links || []).map((link) => link.learner_ref));
   if (!learnerIds.size) return json({ payload: parentPayload({}, learnerIds), linked: false });
 
   const { data: workspace, error: workspaceError } = await admin.from("school_workspaces").select("payload, updated_at").eq("school_id", profile.school_id).maybeSingle();
   if (workspaceError || !workspace?.payload) return json({ error: "School workspace is not available" }, 404);
-  return json({ payload: parentPayload(workspace.payload as Record<string, any>, learnerIds), linked: true, updated_at: workspace.updated_at });
+  const projected = parentPayload(workspace.payload as Record<string, any>, learnerIds);
+  if (!access.features.announcements) {
+    projected.announcements = [];
+    projected.notifications = projected.notifications.filter((n: any) => !n.announcementId && !/announcement/i.test(n.type || ""));
+  }
+  return json({ payload: projected, linked: true, updated_at: workspace.updated_at });
 });

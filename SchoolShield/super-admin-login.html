@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>SchoolShield | Platform sign in</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="super-admin.css">
+</head>
+
+<body data-platform-page="login">
+    <main class="platform-login panel"><img class="platform-logo" src="assets/schoolshield-logo.png" alt="SchoolShield">
+        <h1>Super Admin</h1>
+        <p>Platform owner sign in. School roles do not grant access.</p>
+        <form id="platformLogin"><label>Email<input class="input" name="email" type="email" required
+                    autocomplete="username"></label><label>Password<input class="input" name="password" type="password"
+                    required autocomplete="current-password"></label><button class="btn primary" type="submit">Sign
+                in</button></form>
+        <p id="platformStatus" role="status" aria-live="polite"></p><a href="login.html">School portal sign in</a>
+    </main>
+    <script src="supabase-config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="super-admin.js"></script>
+</body>
+
+</html>

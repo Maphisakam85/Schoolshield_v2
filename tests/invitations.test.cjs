@@ -67,10 +67,10 @@ test('setup creates a password, completes only personal fields, signs out and re
   assert.equal(calls[2], 'signOut'); assert.equal(redirect, 'login.html?setup=complete');
 });
 
-async function approvalHarness({ role='principal', school='school-1', existing=false, inactive=false, delivery='email' }={}) {
+async function approvalHarness({ role='principal', school='school-1', existing=false, inactive=false, suspended=false, delivery='email' }={}) {
  let handler; const calls=[];
  const pending={id:'00000000-0000-4000-8000-000000000001',school_id:'school-1',email:'parent@example.test',display_name:'Real Parent',phone:'+27821234567',invitation_method:delivery};
- const admin={auth:{getUser:async()=>({data:{user:{id:'approver'}}})},from(table){const filters={};return {select(){return this},eq(k,v){filters[k]=v;return this},maybeSingle:async()=>({data:table==='profiles'?{id:'approver',school_id:school,role,account_status:inactive?'Inactive':'Active'}:filters.school_id==='school-1'?pending:null}),update(body){calls.push({table,body});return this},then(resolve){resolve({});}}}};
+ const admin={rpc:async name=>{assert.equal(name,'get_my_school_access');if(suspended)return {error:{message:'School suspended'}};return {data:{school_id:school,features:{announcements:true,appointments:true}}};},auth:{getUser:async()=>({data:{user:{id:'approver'}}})},from(table){const filters={};return {select(){return this},eq(k,v){filters[k]=v;return this},maybeSingle:async()=>({data:table==='profiles'?{id:'approver',school_id:school,role,account_status:inactive?'Inactive':'Active'}:filters.school_id==='school-1'?pending:null}),update(body){calls.push({table,body});return this},then(resolve){resolve({});}}}};
  const manageUser=async args=>{calls.push(args.body);if(existing)throw Error('Email already exists');return {ok:true,user_id:'new-user',message:'Supabase accepted email',setup_link:delivery==='setup_link'?'https://school.test/account-setup.html?token_hash=hash&type=invite':undefined};};
  let source=fs.readFileSync('supabase/functions/approve-account/index.ts','utf8').replace(/^import .*;\r?\n/gm,'').replace('body: unknown','body').replace('(name: string)','(name)').replace(/\)!/g,')');
  vm.runInContext(source,vm.createContext({manageUser,createClient:()=>admin,Deno:{env:{get:()=>''},serve:fn=>handler=fn},Response}));
@@ -110,3 +110,5 @@ test('recovery supports code, token hash and legacy fragment without using a cac
   }
   await assert.rejects(context.SchoolShieldInvitation.exchangeRecovery({auth:{exchangeCodeForSession:async()=>{throw Error('missing verifier')}}},'https://school.test/login.html?code=a'),/browser where you requested/);
 });
+
+test('a suspended school denies approval before any real account operation',async()=>{const {response,calls}=await approvalHarness({suspended:true});assert.equal(response.status,403);assert.equal(calls.some(c=>c.action==='create'),false);});

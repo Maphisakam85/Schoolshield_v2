@@ -22,6 +22,9 @@ Deno.serve(async (request) => {
   if (!auth.user) return json({ error: "Invalid session" }, 401);
   const { data: profile } = await admin.from("profiles").select("school_id, role, display_name, account_status, requires_setup, onboarding_completed_at").eq("id", auth.user.id).maybeSingle();
   if (!profile || profile.account_status !== "Active" || (profile.requires_setup && !profile.onboarding_completed_at) || !["parent", "teacher"].includes(profile.role)) return json({ error: "Only parent or teacher accounts can use this endpoint" }, 403);
+  const caller = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false } });
+  const { data: access, error: accessError } = await caller.rpc("get_my_school_access");
+  if (accessError || access?.school_id !== profile.school_id) return json({ error: "School access is unavailable or suspended" }, 403);
   const body = await request.json().catch(() => ({}));
   const learnerId = String(body.learner_id || "");
   const text = String(body.text || "").trim();

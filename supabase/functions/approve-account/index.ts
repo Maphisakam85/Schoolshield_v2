@@ -47,6 +47,9 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (!approver || approver.account_status !== "Active" || (approver.requires_setup && !approver.onboarding_completed_at) || !["principal", "clerk"].includes(approver.role)) return json({ error: "Only the principal or clerk can approve accounts" }, 403);
 
+    const caller = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false } });
+    const { data: access, error: accessError } = await caller.rpc("get_my_school_access");
+    if (accessError || access?.school_id !== approver.school_id) return json({ error: "School access is unavailable or suspended" }, 403);
     const { data: pending, error: pendingError } = await admin.from("account_requests")
       .select("id, school_id, email, display_name, status, invitation_method, phone")
       .eq("id", requestId)

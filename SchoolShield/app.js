@@ -155,6 +155,10 @@ const ROLE_NAMES = {
 };
 
 /* A signed-in person works within exactly one Supabase school tenant. */
+function schoolLogoMarkup() {
+  const logo=window.SchoolShieldBranding?.snapshot();
+  return logo && /^data:image\/png;base64,/.test(logo.dataUrl) ? '<img src="'+escapeHtml(logo.dataUrl)+'" alt="School logo" style="width:80px;height:60px;object-fit:contain">' : '';
+}
 function activeSchool() {
   try {
     const session = JSON.parse(
@@ -609,6 +613,7 @@ async function retrySchoolDraft() {
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
+  let featuresChanged = false;
   if (window.schoolshieldWorkspaceSaveQueue)
     await window.schoolshieldWorkspaceSaveQueue;
   const client = window.schoolshieldSupabase;
@@ -618,19 +623,26 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   if (!client || !session.schoolId) return false;
   if (client.auth?.getSession) {
     const { data: own, error } = await client.from("profiles")
-      .select("role,display_name,account_status,requires_setup,onboarding_completed_at")
+      .select("role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,enabled_features)")
       .eq("id", session.userId).maybeSingle();
     if (error) throw new Error("Could not verify your account. Check your connection.");
     if (!own || own.account_status === "Inactive" || (own.requires_setup && !own.onboarding_completed_at)) {
+      window.SchoolShieldBranding?.clear();
       sessionStorage.removeItem("schoolshieldSession");
       await client.auth.signOut();
       location.replace("login.html");
       return false;
     }
+    const accessSchool = Array.isArray(own.school) ? own.school[0] : own.school;
+    if (accessSchool?.id === session.schoolId) {
+      featuresChanged = JSON.stringify(window.schoolshieldFeatureAccess) !== JSON.stringify(accessSchool.enabled_features);
+      window.schoolshieldFeatureAccess = accessSchool.enabled_features;
+    }
     session.role = own.role;
     session.displayName = own.display_name;
     sessionStorage.setItem("schoolshieldSession", JSON.stringify(session));
   }
+  await window.SchoolShieldBranding?.refresh();
   if (session.role === "parent") {
     const previousError = window.schoolshieldParentWorkspaceError;
     const previousLinked = window.schoolshieldParentLearnerLinked;
@@ -656,7 +668,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     const changed = sessionStorage.getItem(key) !== incoming;
     sessionStorage.setItem(key, incoming);
     window.schoolshieldParentLearnerLinked = Boolean(data.linked);
-    if (renderAfterRefresh && (changed || previousError || previousLinked !== Boolean(data.linked))) render();
+    if (renderAfterRefresh && (changed || featuresChanged || previousError || previousLinked !== Boolean(data.linked))) render();
     return changed;
   }
   const { data, error } = await client.rpc('read_school_dataset');
@@ -685,7 +697,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   const changed = sessionStorage.getItem(key) !== incoming;
   sessionStorage.setItem(key, incoming);
   window.schoolshieldCloudWorkspaceReady = true;
-  if (changed && renderAfterRefresh) render();
+  if ((changed || featuresChanged) && renderAfterRefresh) render();
   return changed;
 }
 
@@ -808,6 +820,7 @@ function param(name) {
   return new URLSearchParams(location.search).get(name);
 }
 function allowed(target = page()) {
+  if (["announcements", "appointments"].includes(target) && window.schoolshieldFeatureAccess?.[target] === false) return false;
   if (target === "account-requests")
     return ["principal", "clerk"].includes(role());
   return (ACCESS[role()] || []).includes(target);
@@ -1500,6 +1513,7 @@ function quickForRole(r) {
     ],
   };
   return (map[r] || [])
+    .filter(x => !["announcements.html", "appointments.html"].includes(x[1]) || window.schoolshieldFeatureAccess?.[x[1].replace('.html','')] !== false)
     .map((x, index) => {
       const navItem = NAV.find((item) => item[2] === x[1]);
       const description = descriptions[x[1]] || 'Open ' + x[0] + '.';
@@ -3988,7 +4002,7 @@ function learnerReportMarkup(learner) {
       mean(subjects.map((subject) => reportMark(learner, subject, term))),
     ),
   );
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(learner.name)} ${escapeHtml(TERM)} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div><div class="brand">${escapeHtml(SCHOOL.name)}</div><div class="small">Academic term report · ${escapeHtml(SCHOOL.code)}</div><div class="small">Generated ${escapeHtml(todayLabel())}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${escapeHtml(learner.name)} · ${escapeHtml(learner.id)}<br>Parent / guardian: ${escapeHtml(learner.parent)}</div><div class="box"><b>Grade / class</b><br>${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}<br>Class teacher: ${escapeHtml(classInfo.teacher)}</div><div class="box"><b>Attendance</b><br>${escapeHtml(learner.attendance)}% · ${escapeHtml(daysAbsent(learner))} days absent</div><div class="box"><b>Report period</b><br>${escapeHtml(terms.join(" · "))} · 2026<br>Status: ${escapeHtml(standingFor(learner))}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${escapeHtml(average)}</td><td>${escapeHtml(achievementLevel(average))}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${escapeHtml(learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended.")}<br><span class="small">Sick notices recorded this term: ${escapeHtml(sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None")}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(learner.name)} ${escapeHtml(TERM)} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div>${schoolLogoMarkup()}<div class="brand">${escapeHtml(SCHOOL.name)}</div><div class="small">Academic term report · ${escapeHtml(SCHOOL.code)}</div><div class="small">Generated ${escapeHtml(todayLabel())}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${escapeHtml(learner.name)} · ${escapeHtml(learner.id)}<br>Parent / guardian: ${escapeHtml(learner.parent)}</div><div class="box"><b>Grade / class</b><br>${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}<br>Class teacher: ${escapeHtml(classInfo.teacher)}</div><div class="box"><b>Attendance</b><br>${escapeHtml(learner.attendance)}% · ${escapeHtml(daysAbsent(learner))} days absent</div><div class="box"><b>Report period</b><br>${escapeHtml(terms.join(" · "))} · 2026<br>Status: ${escapeHtml(standingFor(learner))}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${escapeHtml(average)}</td><td>${escapeHtml(achievementLevel(average))}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${escapeHtml(learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended.")}<br><span class="small">Sick notices recorded this term: ${escapeHtml(sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None")}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
 }
 let pdfLibraryPromise;
 function loadPdfLibrary() {
@@ -4017,7 +4031,7 @@ async function downloadPdf(filename, title, lines) {
     const margin = 16,
       width = 178,
       pageBottom = 280;
-    let y = 18;
+    let y = 18 + (await window.SchoolShieldBranding?.addToPdf(documentPdf) || 0);
     documentPdf.setFont("helvetica", "bold");
     documentPdf.setFontSize(16);
     documentPdf.text(SCHOOL.name, margin, y);
@@ -4165,7 +4179,8 @@ async function downloadReport(classId, learnerId) {
     lines,
   );
 }
-function previewLearnerReport(classId, learnerId) {
+async function previewLearnerReport(classId, learnerId) {
+  if (window.SchoolShieldBranding) await window.SchoolShieldBranding.refresh();
   const learner = learnerById(learnerId);
   if (!learner || learner.class !== classId) return;
   const source = encodeURIComponent(learnerReportMarkup(learner));
@@ -4180,7 +4195,7 @@ function learnerHistoryMarkup(selected, teachers=[]) {
   const assigned=teachers.filter(t=>Number(t.academicYear)===year);
   const multiple=new Set(assigned.map(t=>t.teacherId)).size>1;
   const teacherNames=subject=>[...new Set(assigned.filter(t=>t.subject===subject).map(t=>t.teacherName))].join(', ')||'Not assigned';
-  return `<article class="learner-report"><header class="learner-report-header"><span class="pill">Academic record</span><h2>${escapeHtml(SCHOOL.name)}</h2><p>${escapeHtml(schoolPhase('Grade '+grade))} &middot; ${year}</p></header><div class="report-identity"><div><small>Learner</small><strong>${escapeHtml(learner.name)}</strong></div><div><small>Learner number</small><strong>${escapeHtml(learner.id)}</strong></div><div><small>Grade / class</small><strong>Grade ${escapeHtml(grade)} &middot; ${escapeHtml(learner.class)}</strong></div><div><small>Included terms</small><strong>${escapeHtml(terms.join(', '))}</strong></div></div><h3>Subject performance</h3>${table(['Subject',...(multiple?['Subject teacher(s)']:[]),...terms],subjects.map(subject=>`<tr><td><b>${escapeHtml(subject)}</b></td>${multiple?`<td>${escapeHtml(teacherNames(subject))}</td>`:''}${terms.map(term=>`<td>${escapeHtml(learnerHistoryScore(learner,grade,subject,term))}</td>`).join('')}</tr>`),'No subject results recorded')}<div class="report-summary"><div><small>Current attendance</small><strong>${escapeHtml(learner.attendance)}%</strong></div><div><small>Current standing</small><strong>${escapeHtml(standingFor(learner))}</strong></div></div><p class="muted">Recorded assessment averages only. Missing marks are not treated as zero. This history summary does not replace a finalised school report.</p></article>`;
+  return `<article class="learner-report"><header class="learner-report-header">${schoolLogoMarkup()}<span class="pill">Academic record</span><h2>${escapeHtml(SCHOOL.name)}</h2><p>${escapeHtml(schoolPhase('Grade '+grade))} &middot; ${year}</p></header><div class="report-identity"><div><small>Learner</small><strong>${escapeHtml(learner.name)}</strong></div><div><small>Learner number</small><strong>${escapeHtml(learner.id)}</strong></div><div><small>Grade / class</small><strong>Grade ${escapeHtml(grade)} &middot; ${escapeHtml(learner.class)}</strong></div><div><small>Included terms</small><strong>${escapeHtml(terms.join(', '))}</strong></div></div><h3>Subject performance</h3>${table(['Subject',...(multiple?['Subject teacher(s)']:[]),...terms],subjects.map(subject=>`<tr><td><b>${escapeHtml(subject)}</b></td>${multiple?`<td>${escapeHtml(teacherNames(subject))}</td>`:''}${terms.map(term=>`<td>${escapeHtml(learnerHistoryScore(learner,grade,subject,term))}</td>`).join('')}</tr>`),'No subject results recorded')}<div class="report-summary"><div><small>Current attendance</small><strong>${escapeHtml(learner.attendance)}%</strong></div><div><small>Current standing</small><strong>${escapeHtml(standingFor(learner))}</strong></div></div><p class="muted">Recorded assessment averages only. Missing marks are not treated as zero. This history summary does not replace a finalised school report.</p></article>`;
 }
 async function downloadLearnerHistoryPdf(selected,teachers=[]) {
   const JsPdf=await loadPdfLibrary(), pdf=new JsPdf({unit:'mm',format:'a4'});
@@ -4189,7 +4204,7 @@ async function downloadLearnerHistoryPdf(selected,teachers=[]) {
   const multiple=new Set(assigned.map(t=>t.teacherId)).size>1;
   const widths=multiple ? [48,46,...terms.map(()=>84/terms.length)] : [70,...terms.map(()=>108/terms.length)];
   const headers=['Subject',...(multiple?['Subject teacher(s)']:[]),...terms];
-  let y=18;
+  let y=18+(await window.SchoolShieldBranding?.addToPdf(pdf)||0);
   pdf.setFont('helvetica','bold');pdf.setFontSize(16);
   const heading=pdf.splitTextToSize(SCHOOL.name,178);pdf.text(heading,16,y);y+=heading.length*7;
   pdf.setFontSize(12);pdf.text('Learner academic report',16,y);y+=9;
@@ -4221,6 +4236,7 @@ async function downloadHistory(learnerId) {
   catch(error){modal('Report unavailable',`<p>${escapeHtml(error.message)}</p>`);}
 }
 async function viewHistory(learnerId) {
+  await window.SchoolShieldBranding?.refresh();
   const selected=historyReportDetails(learnerId);if(!selected)return;
   try {
     const teachers=await loadLearnerSubjectTeachers(selected.learner);
@@ -6856,6 +6872,7 @@ function bind() {
   bindLearnerSubjectTeachers();
   if (page()==="notifications") bindNotificationFilters(document);
   initWorkspaceChrome();
+  window.SchoolShieldBranding?.apply();
   updateTeachingAssignmentBadge();
   if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
   if (page() === "teacher-targets") window.SchoolShieldTeacherTargets.bindOwn();
@@ -6892,6 +6909,7 @@ function bind() {
     try {
     const result = await window.schoolshieldSupabase?.auth.signOut();
     if (result?.error) throw result.error;
+    window.SchoolShieldBranding?.clear();
     window.schoolshieldLeavingAfterSignOut = true;
     sessionStorage.removeItem("schoolshieldRole");
     sessionStorage.removeItem("schoolshieldSession");
@@ -7002,6 +7020,9 @@ async function startWorkspace() {
       await client.auth.signOut();
       return location.replace("login.html");
     }
+    const {data: schoolAccess, error: schoolAccessError} = await client.rpc("get_my_school_access");
+    if (schoolAccessError || schoolAccess?.school_id !== school.id) throw new Error("School access is unavailable or suspended.");
+    window.schoolshieldFeatureAccess = schoolAccess.features;
     let principalName =
       profile.role === "principal" ? profile.display_name : "";
     if (!principalName) {
@@ -7024,6 +7045,7 @@ async function startWorkspace() {
     );
     sessionStorage.setItem("schoolshieldRole", profile.role);
     SCHOOL = activeSchool();
+    window.SchoolShieldBranding?.identify(client, session.user.id, school.id, school.name);
     await connectCloudWorkspace(session.user, profile, school);
     if (profile.role!=="parent" && !window.schoolshieldCloudWorkspaceReady) throw new Error("School data could not be loaded.");
     await loadTeachingAssignmentNotifications();

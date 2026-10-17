@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "node --check SchoolShield/analytics.js && node --check SchoolShield/app.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js && node --test tests/chat.test.cjs tests/portal-scope.test.cjs",
+  "buildCommand": "node --check SchoolShield/analytics.js && node --check SchoolShield/app.js && node --check SchoolShield/super-admin.js && node --check SchoolShield/school-branding.js && node --check SchoolShield/super-admin-branding.js && node --check SchoolShield/super-admin-accounts.js && node --check SchoolShield/super-admin-operations.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js && node --test tests/chat.test.cjs tests/portal-scope.test.cjs tests/platform-admin.test.cjs tests/platform-accounts.test.cjs tests/platform-portal-scope.test.cjs tests/school-branding.test.cjs",
   "installCommand": "",
   "outputDirectory": "SchoolShield",
   "headers": [

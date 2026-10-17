@@ -5,7 +5,7 @@ export function validateFields(body, actor) {
   const f = body.fields || {};
   if (f.school_id && f.school_id !== actor.school_id) throw new Error('Cross-school user management denied');
   if (!roles.includes(f.role)) throw new Error('Select a valid role');
-  if (actor.role !== 'principal' && ['principal','deputy','clerk'].includes(f.role)) throw new Error('Only Principal may assign administrative roles');
+  if (!actor.platform_admin_authorized && actor.role !== 'principal' && ['principal','deputy','clerk'].includes(f.role)) throw new Error('Only Principal may assign administrative roles');
   const first_name = String(f.first_name || '').trim(), last_name = String(f.last_name || '').trim();
   const email = String(f.email || '').trim().toLowerCase();
   if (!first_name || first_name.length>60 || !last_name || last_name.length>60) throw new Error('Enter first and last names (up to 60 characters each)');
@@ -18,15 +18,16 @@ export function validateFields(body, actor) {
 
 const checked = result => {if(result.error) throw new Error(result.error.message);return result.data;};
 export async function manageUser({admin, actorClient, actor, body, env}) {
-  if (actor.account_status !== 'Active' || actor.requires_setup && !actor.onboarding_completed_at || !['principal','deputy','clerk'].includes(actor.role)) throw new Error('User management access denied');
+  if (actor.account_status !== 'Active' || actor.requires_setup && !actor.onboarding_completed_at || (!actor.platform_admin_authorized && !['principal','deputy','clerk'].includes(actor.role))) throw new Error('User management access denied');
   if(body.school_id && body.school_id!==actor.school_id)throw new Error('Cross-school user management denied');
   if (body.action==='list') return checked(await actorClient.rpc('list_school_users'));
-  if (!['create','edit','status','invite'].includes(body.action)) throw new Error('Invalid management action');
+  const resetting=actor.platform_admin_authorized && body.action==='reset';
+  if (!['create','edit','status','invite'].includes(body.action) && !resetting) throw new Error('Invalid management action');
   const delivery = body.delivery || 'email';
   if (!['email','sms','setup_link'].includes(delivery)) throw new Error('Invalid invitation delivery');
   // Validate delivery configuration before creating any Auth account.
-  const willInvite = ['create','invite'].includes(body.action);
-  const redirect = willInvite ? setupUrl(delivery==='setup_link' ? env('SCHOOLSHIELD_MANUAL_SETUP_URL') || env('SCHOOLSHIELD_ACCOUNT_SETUP_URL') : env('SCHOOLSHIELD_ACCOUNT_SETUP_URL'), delivery==='setup_link' && env('SCHOOLSHIELD_ALLOW_LOCAL_SETUP')==='true') : null;
+  const willInvite = ['create','invite'].includes(body.action) || resetting;
+  const redirect = resetting ? recoveryUrl(env('SCHOOLSHIELD_PASSWORD_RESET_URL')) : willInvite ? setupUrl(delivery==='setup_link' ? env('SCHOOLSHIELD_MANUAL_SETUP_URL') || env('SCHOOLSHIELD_ACCOUNT_SETUP_URL') : env('SCHOOLSHIELD_ACCOUNT_SETUP_URL'), delivery==='setup_link' && env('SCHOOLSHIELD_ALLOW_LOCAL_SETUP')==='true') : null;
   const provider = willInvite && delivery==='sms' ? smsConfig(env) : null;
   let fields;
   if (['create','edit'].includes(body.action)) fields=validateFields(body,actor);
@@ -48,7 +49,9 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
     if(body.action==='create') {
       // Creation is real Auth, without a known/default password. Trusted metadata
       // is supplied only by this backend after the database permission check.
-      const result=await admin.auth.admin.createUser({id:op.target_id,email:fields.email,email_confirm:false,
+      const priorAuth=actor.platform_admin_authorized && op.resume_auth ? await admin.auth.admin.getUserById(op.target_id) : null;
+      if(priorAuth?.error && priorAuth.error.status!==404 && priorAuth.error.code!=='user_not_found')throw new Error('Could not verify the reserved Auth account; retry after checking the connection');
+      const result=priorAuth?.data?.user ? priorAuth : await admin.auth.admin.createUser({id:op.target_id,email:fields.email,email_confirm:false,
         app_metadata:{school_code:school.code,role:fields.role,onboarding_required:true},user_metadata:{display_name}});
       if(result.error) throw new Error(result.error.message);
       if(result.data?.user?.id!==op.target_id) throw new Error('Auth returned an unexpected account identity');
@@ -62,7 +65,7 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
       checked(await admin.auth.admin.updateUserById(op.target_id,attrs));
     }
     if(body.action==='create' && fields.account_status==='Inactive') checked(await admin.auth.admin.updateUserById(op.target_id,{ban_duration:'876000h'}));
-    if(body.action==='invite') {
+    if(body.action==='invite' || resetting) {
       const user=checked(await admin.from('profiles').select('*').eq('id',op.target_id).eq('school_id',op.school_id).single());
       fields={...fields,...user};
     }
@@ -70,9 +73,11 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
     const profile=checked(await admin.rpc('finish_user_management',{p_operation:operationId}));
     let setup_link;
     if(willInvite && profile.account_status==='Active') {
-      invitation=checked(await admin.from('user_invitations').insert({school_id:op.school_id,user_id:op.target_id,operation_id:operationId,delivery,status:'Pending'}).select().single());
+      const invitations=admin.from('user_invitations');
+      const invitationFields={school_id:op.school_id,user_id:op.target_id,operation_id:operationId,delivery,status:'Pending'};
+      invitation=checked(await (actor.platform_admin_authorized ? invitations.upsert(invitationFields,{onConflict:'operation_id'}) : invitations.insert(invitationFields)).select().single());
       const authUser=checked(await admin.auth.admin.getUserById(op.target_id)).user;
-      const type=authUser.email_confirmed_at?'recovery':'invite';
+      const type=resetting || authUser.email_confirmed_at?'recovery':'invite';
       if(delivery==='email') {
         if(type==='invite') checked(await admin.auth.admin.inviteUserByEmail(profile.email,{redirectTo:redirect,data:{display_name:profile.display_name}}));
         else checked(await admin.auth.resetPasswordForEmail(profile.email,{redirectTo:redirect}));
@@ -81,17 +86,23 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
         if(generated.user?.id!==op.target_id || !generated.properties?.hashed_token) throw new Error('Could not generate the account setup link');
         const link=new URL(redirect);link.searchParams.set('token_hash',generated.properties.hashed_token);link.searchParams.set('type',type);
         if(delivery==='sms') {
-          const reference=await sendSms(provider,profile.phone,`SchoolShield: your account at ${school.name} is ready for setup. School code: ${school.code}. ${link}`);
+          const reference=await sendSms(provider,profile.phone,resetting ? `SchoolShield: password reset requested for ${school.name}. ${link}` : `SchoolShield: your account at ${school.name} is ready for setup. School code: ${school.code}. ${link}`);
           checked(await admin.from('user_invitations').update({provider_reference:reference}).eq('id',invitation.id));
         } else setup_link=link.toString();
       }
       checked(await admin.from('user_invitations').update({status:delivery==='setup_link'?'Link generated':'Sent',sent_at:new Date().toISOString()}).eq('id',invitation.id));
     }
-    return {ok:true,user_id:op.target_id,setup_link,message:willInvite ? profile.account_status==='Inactive'?'Inactive account created. Activate it before sending an invitation.':delivery==='setup_link'?'Account saved. Secure setup link generated.':delivery==='sms'?'Account saved. SMS provider accepted the setup invitation.':'Account saved. Supabase accepted the setup email request.':'Account changes confirmed.'};
+    return {ok:true,user_id:op.target_id,setup_link,message:resetting ? delivery==='setup_link'?'Secure password-reset link generated.':delivery==='sms'?'SMS provider accepted the password-reset message.':'Supabase accepted the password-reset email request.' : willInvite ? profile.account_status==='Inactive'?'Inactive account created. Activate it before sending an invitation.':delivery==='setup_link'?'Account saved. Secure setup link generated.':delivery==='sms'?'Account saved. SMS provider accepted the setup invitation.':'Account saved. Supabase accepted the setup email request.':'Account changes confirmed.'};
   } catch(error) {
     if(invitation) await admin.from('user_invitations').update({status:'Failed',error:'Invitation could not be sent. Check backend delivery configuration and resend.'}).eq('id',invitation.id);
     await admin.rpc('fail_user_management',{p_operation:operationId,p_error:String(error.message || error)});
     // No hard deletion or password resets to a shared/default credential.
     throw new Error('Request incomplete: '+error.message+'. Refresh User Management before retrying; any account already created is retained.');
   }
+}
+
+export function recoveryUrl(value) {
+ if(!value)throw Error('Configure SCHOOLSHIELD_PASSWORD_RESET_URL as the HTTPS login.html recovery route.');
+ const url=new URL(value);if(url.protocol!=='https:'||['localhost','127.0.0.1','[::1]'].includes(url.hostname)||url.username||url.password||!url.pathname.endsWith('/login.html')||url.search||url.hash)throw Error('Configure a valid HTTPS login.html recovery route.');
+ return url.toString();
 }

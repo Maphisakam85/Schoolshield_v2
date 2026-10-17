@@ -1,0 +1,5 @@
+project_id = "schoolshield"
+
+[functions.school-branding]
+verify_jwt = true
+static_files = ["./functions/school-branding/vendor/*.wasm"]

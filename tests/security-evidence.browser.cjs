@@ -6,6 +6,7 @@ const source=fs.readFileSync('SchoolShield/app.js','utf8');
   try {
     const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
     await page.setContent('<html><body></body></html>');
+    await page.addScriptTag({content:require('./helpers/html-safety.cjs')});
     await page.addScriptTag({content:source.slice(source.indexOf('function photoCaptureField('),source.indexOf('function modal('))});
     await page.evaluate(()=>{
       window.role=()=> 'security';window.$$=(s,r=document)=>Array.from(r.querySelectorAll(s));
