@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+    <title>SchoolShield | Super Admin demo review</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="super-admin.css">
+</head>
+
+<body data-platform-page="review">
+    <header class="platform-header"><strong>SchoolShield Super Admin — Demo review</strong><a
+            href="super-admin-login.html">Real portal sign in</a></header>
+    <main class="platform-main">
+        <section class="panel">
+            <h1>Password-free demo review</h1>
+            <p>Fictional schools only. Changes stay in memory and reset on refresh. This page cannot access Supabase,
+                send invitations, provision accounts or change real schools.</p><label>Select a fictional school<select
+                    class="input" id="reviewSchool">
+                    <option value="alpha">Mmulakgoro QA (fictional) — QA-MMU</option>
+                    <option value="beta">Ntebaleng QA (fictional) — QA-NTE</option>
+                </select></label>
+            <h2 id="reviewName"></h2><strong id="reviewCode"></strong>
+            <p id="reviewStatus" role="status" aria-live="polite">Demo ready.</p>
+        </section>
+        <section class="panel">
+            <h2>School details</h2>
+            <form id="reviewDetails">
+                <div class="form-grid"><label>School name<input class="input" name="name" required
+                            maxlength="120"></label><label>EMIS<input class="input" name="emis"
+                            maxlength="20"></label><label>Contact<input class="input" name="contact"
+                            maxlength="120"></label><label>Email<input class="input" type="email"
+                            name="email"></label><label>Address<input class="input" name="address"
+                            maxlength="500"></label></div><button class="btn primary">Save demo details</button>
+            </form>
+        </section>
+        <section class="panel">
+            <h2>Branding preview</h2>
+            <p>Preview only; no upload occurs.</p><img id="reviewLogo" class="school-logo-preview"
+                src="assets/schoolshield-logo.png" alt="Demo school logo"><label>PNG, JPEG or WebP up to 2 MB<input
+                    class="input" id="reviewFile" type="file" accept="image/png,image/jpeg,image/webp"></label><button
+                class="btn" id="reviewReset">Reset demo logo</button>
+        </section>
+        <section class="panel">
+            <h2>School accounts</h2>
+            <p>Example identities, not Auth accounts.</p>
+            <div class="platform-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>School role</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reviewUsers"></tbody>
+                </table>
+            </div><button class="btn" id="reviewInvite">Review invitation feedback</button>
+        </section>
+        <section class="panel">
+            <h2>Lifecycle and features</h2>
+            <form id="reviewAccess"><label>Lifecycle<select class="input" name="status">
+                        <option>Onboarding</option>
+                        <option>Pilot</option>
+                        <option>Active</option>
+                        <option>Suspended</option>
+                    </select></label>
+                <p>Data mode: QA — independent of lifecycle.</p><label><input name="announcements" type="checkbox">
+                    Announcements</label><label><input name="appointments" type="checkbox"> Appointments</label>
+                <p><button class="btn primary">Save demo controls</button></p>
+            </form>
+        </section>
+        <section class="panel">
+            <h2>Owner-created support</h2>
+            <form id="reviewSupport"><label>Title<input class="input" name="title" required minlength="3"
+                        maxlength="160"></label><label>Description<textarea class="textarea" name="description" required
+                        minlength="5" maxlength="1000"></textarea></label><button class="btn">Add demo ticket</button>
+            </form>
+            <ul id="reviewTickets"></ul>
+        </section>
+        <section class="panel">
+            <h2>Demo audit history</h2>
+            <p>Production audit history is server-written and immutable. These are simulated demo events.</p>
+            <ul id="reviewAudit"></ul>
+        </section>
+    </main>
+    <script src="super-admin-review.js"></script>
+</body>
+
+</html>

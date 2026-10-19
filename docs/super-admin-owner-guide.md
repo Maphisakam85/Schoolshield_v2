@@ -106,3 +106,11 @@ Suspension cannot erase already downloaded or offline-cached information. Existi
 document signed URLs expire on their current 60-second TTL; in-flight service
 requests may finish. Do not delete historical profiles, tickets or audit events
 as a recovery method. See the [QA report and checklist](super-admin-qa.md).
+
+## Password-free visual review
+
+Open `super-admin-review.html`, or use the demo link on the real sign-in page.
+It uses two fictional schools in memory and has no Supabase client, credentials,
+network API access or real account actions. Refresh resets changes. Demo audit
+events and save feedback are labelled simulations. Real portal authentication
+and backend RLS remain enabled. This is a visual review, not live Auth testing.
