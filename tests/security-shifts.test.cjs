@@ -1,11 +1,47 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('SchoolShield/app.js','utf8');
+test('deployment build includes the security regression suites',()=>{
+  const config=JSON.parse(fs.readFileSync('vercel.json','utf8'));
+  assert.equal(config.buildCommand,'node scripts/build.cjs');
+  const build=fs.readFileSync('scripts/build.cjs','utf8');
+  assert.match(build,/tests\/security-shifts\.test\.cjs/);
+  assert.match(build,/tests\/security-evidence\.test\.cjs/);
+});
 function harness() {
   const state={security:[{id:'S1',name:'Officer A',shift:'18:00–06:00'},{id:'S2',name:'Officer B'}],securityAttendance:[]};
   const ctx=vm.createContext({window:{},document:{},sessionStorage:{getItem:()=>JSON.stringify({userId:'U1'})}});
   vm.runInContext(source.replace(/startWorkspace\(\);\s*$/,''),ctx);
   Object.assign(ctx,{role:()=> 'security',userName:()=> 'Officer A',getState:()=>state});return {ctx,state};
 }
+test('attendance table keeps site alignment, profile links and authorised shift editing',()=>{
+  const {ctx,state}=harness();
+  state.security[0].site='Main Gate';
+  state.securityAttendance=[{officerId:'S1',date:'2026-10-07',status:'Clocked In',actualCheckInAt:'2026-10-07T16:04:00Z'}];
+  Object.assign(ctx,{todayIso:()=> '2026-10-07',generic:(title,section,description,html)=>html,stat:()=>'',badge:value=>value});
+  const html=ctx.securityOfficers();
+  const rows=html.match(/<tbody>([\s\S]*?)<\/tbody>/)[1].match(/<tr>[\s\S]*?<\/tr>/g);
+  for(const row of rows) assert.equal((row.match(/<td\b/g)||[]).length,9);
+  assert.match(rows[0],/<td>Main Gate<\/td>/);
+  assert.match(rows[0],/data-action="view-security-officer"/);
+  assert.match(rows[0],/data-action="save-security-shift"/);
+  assert.match(rows[0],/18:04/);
+  assert.doesNotMatch(rows[1],/data-action="save-security-shift"/);
+});
+test('failed clock-out keeps the active record and allows a retry through the server',async()=>{
+  const {ctx,state}=harness();
+  state.securityAttendance=[{officerId:'S1',date:'2026-10-06',status:'Clocked In'}];
+  const before=JSON.stringify(state);let calls=0,saved=0,errorTitle;
+  Object.assign(ctx,{persist:()=>assert.fail('must not save attendance through generic persistence'),refreshCloudWorkspace:async()=>true,finishForm:()=>saved++,modal:title=>errorTitle=title});
+  ctx.window.schoolshieldSupabase={rpc:async(name,params)=>{
+    calls++;assert.equal(name,'record_security_shift');assert.equal(params.p_action,'check-out');
+    return calls===1?{error:{message:'Connection failed'}}:{data:{id:'saved'}};
+  }};
+  await ctx.clockOutSecurityOfficer('S1');
+  assert.equal(errorTitle,'Shift not saved');assert.equal(saved,0);
+  assert.equal(JSON.stringify(state),before);assert.equal(ctx.window.schoolshieldShiftSaving,false);
+  await ctx.clockOutSecurityOfficer('S1');assert.equal(calls,2);assert.equal(saved,1);
+  await ctx.clockOutSecurityOfficer('S2');assert.equal(calls,2);
+});
 test('inline shift saves respect ownership and preserve attendance audit records',()=>{
   const {ctx,state}=harness();
   const audit={officerId:'S1',date:'2026-10-07',scheduledStart:'18:00',scheduledEnd:'06:00',scheduledDurationMinutes:720,actualCheckInAt:'2026-10-07T16:00:00Z'};
