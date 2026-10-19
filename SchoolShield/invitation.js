@@ -32,5 +32,12 @@
   }
   const exchangeInvitation = (client, href) => exchangeAuthLink(client, href, 'invite');
   const exchangeRecovery = (client, href) => exchangeAuthLink(client, href, 'recovery');
-  root.SchoolShieldInvitation = { normalizePhone, exchangeInvitation, exchangeRecovery };
+  function passwordResetRedirect(value) {
+    let url;
+    try { url = new URL(value); } catch { throw new Error('Password recovery URL is not configured. Contact the administrator.'); }
+    if (url.protocol !== 'https:' || ['localhost','127.0.0.1','[::1]'].includes(url.hostname) || url.username || url.password || url.search || url.hash || !url.pathname.endsWith('/login.html'))
+      throw new Error('Password recovery requires a configured HTTPS login.html URL.');
+    return url.href;
+  }
+  root.SchoolShieldInvitation = { normalizePhone, exchangeInvitation, exchangeRecovery, passwordResetRedirect };
 })(typeof window === 'undefined' ? globalThis : window);

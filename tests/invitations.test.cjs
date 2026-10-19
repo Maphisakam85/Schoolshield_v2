@@ -6,6 +6,22 @@ const context = vm.createContext({ URL, URLSearchParams });
 vm.runInContext(fs.readFileSync('SchoolShield/invitation.js', 'utf8'), context);
 const { normalizePhone, exchangeInvitation } = context.SchoolShieldInvitation;
 const backend = () => import('../supabase/functions/approve-account/invitation.mjs');
+
+test('password reset uses the configured deployed recovery route even from localhost',async()=>{
+ const html=fs.readFileSync('SchoolShield/login.html','utf8');
+ const handler=html.slice(html.indexOf('forgotPasswordForm.onsubmit ='),html.indexOf('resetPasswordForm.onsubmit ='));
+ for(const origin of ['http://127.0.0.1:5500','http://localhost:5502','https://schoolshieldv2.vercel.app']){
+  const calls=[],messages=[],button={disabled:false},form={querySelector:()=>button,reset(){}};
+  const sandbox=vm.createContext({forgotPasswordForm:form,client:{auth:{resetPasswordForEmail:()=>{throw Error('Normal login client must remain untouched');}}},window:{SCHOOLSHIELD_SUPABASE_CONFIG:{url:'https://api.example.test',publishableKey:'public-fixture',passwordResetUrl:'https://schoolshieldv2.vercel.app/login.html'},supabase:{createClient:(url,key,options)=>{assert.equal(options.auth.flowType,'implicit');assert.equal(options.auth.persistSession,false);assert.equal(options.auth.detectSessionInUrl,false);return {auth:{resetPasswordForEmail:async(email,options)=>{calls.push({email,options});return {};}}};}}},SchoolShieldInvitation:context.SchoolShieldInvitation,document:{getElementById:()=>({value:' Owner@Example.test '})},location:{origin,pathname:'/SchoolShield/login.html'},showError:m=>messages.push(m),show(){},loginForm:{}});
+  vm.runInContext(handler,sandbox);await form.onsubmit({preventDefault(){}});
+  assert.equal(calls.length,1);assert.equal(calls[0].options.redirectTo,'https://schoolshieldv2.vercel.app/login.html');assert.equal(calls[0].email,'owner@example.test');assert.equal(button.disabled,false);assert.match(messages[0],/If that email/);
+ }
+});
+test('password recovery configuration rejects missing, local and malformed redirects',()=>{
+ const redirect=context.SchoolShieldInvitation.passwordResetRedirect;
+ for(const value of [undefined,'','http://127.0.0.1:5500/login.html','https://localhost/login.html','https://[::1]/login.html','https://school.test/account-setup.html','https://user:pass@school.test/login.html','https://school.test/login.html?token=x'])assert.throws(()=>redirect(value));
+ assert.equal(redirect('https://school.test/SchoolShield/login.html'),'https://school.test/SchoolShield/login.html');
+});
 test('South African cellphone formats normalize consistently in browser and backend', async () => {
   const server = await backend();
   for (const value of ['082 123 4567', '+27 82 123 4567', '27821234567', '0027821234567']) {

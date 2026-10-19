@@ -96,7 +96,21 @@
     async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,code,name,data_mode)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); if (profile.account_status === 'Inactive') throw new Error('This account is inactive. Contact your school administrator.'); if (profile.requires_setup && !profile.onboarding_completed_at) throw new Error('Complete account setup using your invitation before signing in.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, schoolMode: school.data_mode || 'live', role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
     loginForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); try { const schoolCode = document.getElementById('schoolCode').value.trim().toUpperCase(), { data, error } = await client.auth.signInWithPassword({ email: document.getElementById('email').value.trim().toLowerCase(), password: document.getElementById('password').value }); if (error?.code === 'user_banned') throw new Error('This account is inactive. Contact your school administrator.'); if (error || !data.user) throw new Error(error?.message || 'Sign-in failed.'); await createSession(data.user, schoolCode); location.href = 'dashboard.html' } catch (err) { await client.auth.signOut(); sessionStorage.removeItem('schoolshieldSession'); showError(err.message || 'We could not sign you in.') } };
     document.getElementById('showForgotPassword').onclick = () => show(forgotPasswordForm); document.getElementById('cancelForgotPassword').onclick = () => show(loginForm);
-    forgotPasswordForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); const redirectTo = `${location.origin}${location.pathname}`; const { error } = await client.auth.resetPasswordForEmail(document.getElementById('forgotPasswordEmail').value.trim().toLowerCase(), { redirectTo }); if (error) return showError(error.message); forgotPasswordForm.reset(); show(loginForm); showError('If that email belongs to an account, a password-reset link has been sent.', true) };
+    forgotPasswordForm.onsubmit = async event => {
+      event.preventDefault(); if (!client) return showError('Supabase configuration is not available.');
+      const button=forgotPasswordForm.querySelector('button[type="submit"]');if(button.disabled)return;button.disabled=true;
+      try {
+        const config=window.SCHOOLSHIELD_SUPABASE_CONFIG;
+        const redirectTo=SchoolShieldInvitation.passwordResetRedirect(config?.passwordResetUrl);
+        // Recovery may begin locally and finish on the deployed site or another
+        // browser. Do not bind it to a PKCE verifier stored on the local origin.
+        const recoveryClient=window.supabase.createClient(config.url,config.publishableKey,{auth:{flowType:'implicit',persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
+        const {error}=await recoveryClient.auth.resetPasswordForEmail(document.getElementById('forgotPasswordEmail').value.trim().toLowerCase(),{redirectTo});
+        if(error)throw error;
+        forgotPasswordForm.reset();show(loginForm);showError('If that email belongs to an account, a password-reset link has been sent.',true);
+      }catch{showError('Password reset could not be requested. Check your connection and recovery configuration.');}
+      finally{button.disabled=false;}
+    };
     resetPasswordForm.onsubmit = async event => {
       event.preventDefault(); if (!recoveryVerified) return showError('Open a new password-reset link first.');
       const button=resetPasswordForm.querySelector('button[type="submit"]'); if(button.disabled)return; button.disabled=true;
