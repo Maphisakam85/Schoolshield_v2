@@ -1,0 +1,4 @@
+const {spawnSync}=require('node:child_process');
+const files=['analytics.js','app.js','super-admin-review.js','super-admin.js','school-branding.js','super-admin-branding.js','super-admin-accounts.js','super-admin-operations.js','supabase-client.js','supabase-config.js','speed-insights-init.js','speed-insights.mjs','invitation.js'];
+for(const file of files){const result=spawnSync(process.execPath,['--check','SchoolShield/'+file],{stdio:'inherit'});if(result.error)throw result.error;if(result.status!==0)process.exit(result.status||1);}
+const result=spawnSync(process.execPath,['--test','tests/chat.test.cjs','tests/portal-scope.test.cjs','tests/platform-admin.test.cjs','tests/platform-accounts.test.cjs','tests/platform-portal-scope.test.cjs','tests/school-branding.test.cjs','tests/invitations.test.cjs'],{stdio:'inherit'});if(result.error)throw result.error;process.exit(result.status===null?1:result.status);
