@@ -5,13 +5,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node --check SchoolShield/analytics.js && node --check SchoolShield/app.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js && node --test tests/chat.test.cjs tests/portal-scope.test.cjs",
-    "test": "node --test tests/chat.test.cjs tests/portal-scope.test.cjs"
+    "build": "node --check SchoolShield/analytics.js && node --check SchoolShield/app.js && node --check SchoolShield/supabase-client.js && node --check SchoolShield/supabase-config.js && node --test tests/chat.test.cjs tests/portal-scope.test.cjs tests/analytics.test.cjs",
+    "test": "node --test tests/chat.test.cjs tests/portal-scope.test.cjs tests/analytics.test.cjs"
   },
   "dependencies": {
+    "@vercel/analytics": "1.6.1",
     "@vercel/speed-insights": "^1.1.0"
   },
-  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
   }
