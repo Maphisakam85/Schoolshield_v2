@@ -37,7 +37,8 @@
   finally{busy=false;root.schoolshieldChatSwitching=false;workspace()?.removeAttribute('aria-busy');}
  }
  function bind(){if(bound)return;bound=true;
-  document.addEventListener('click',e=>{const a=e.target.closest('a[data-chat-contact]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0)return;const url=new URL(a.href,location.href),id=url.pathname.split('/').pop().replace(/\.html$/,'');if(url.origin!==location.origin||!pages.includes(id))return;e.preventDefault();navigate(url);});
+  // Claim chat links during capture, before the general page-loading handler.
+  document.addEventListener('click',e=>{const a=e.target.closest('a[data-chat-contact]');if(!a||e.defaultPrevented||e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button!==0||a.target||a.hasAttribute('download'))return;const url=new URL(a.href,location.href),id=url.pathname.split('/').pop().replace(/\.html$/,'');if(url.origin!==location.origin||!pages.includes(id))return;e.preventDefault();navigate(url);},true);
   root.addEventListener('popstate',()=>{if(pages.includes(location.pathname.split('/').pop().replace(/\.html$/,'')))navigate(location.href,true);});
  }
  root.SchoolShieldChatNavigation={bind,navigate};
