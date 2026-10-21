@@ -2622,7 +2622,7 @@ function chatLayout(
         const mine = sender === userName();
         const grouped = sender === previousSender;
         previousSender = sender;
-        return `<div class="chat-message ${escapeHtml(mine ? "outgoing" : "incoming")} ${escapeHtml(grouped ? "grouped" : "")}"><div class="msg ${escapeHtml(mine ? "mine" : "other")}">${mine || grouped ? "" : `<b class="message-sender">${escapeHtml(sender)}</b>`}<span>${escapeHtml(message.text)}</span><small>${escapeHtml(chatTimestamp(message))}${mine ? " <em>sent</em>" : ""}</small></div></div>`;
+        return `<div class="chat-message ${escapeHtml(mine ? "outgoing" : "incoming")} ${escapeHtml(grouped ? "grouped" : "")}"><div class="msg ${escapeHtml(mine ? "mine" : "other")}">${mine || grouped ? "" : `<b class="message-sender">${escapeHtml(sender)}</b>`}<span>${escapeHtml(message.text)}</span><small>${escapeHtml(chatTimestamp(message))}${mine ? ` <em>${escapeHtml((typeof window!=="undefined"&&window.schoolshieldChatDelivery?.[message.id])||"sent")}</em>` : ""}</small></div></div>`;
       })
       .join("") ||
     '<p class="muted">No messages yet. Start the conversation below.</p>';
@@ -6376,74 +6376,42 @@ async function sendAnnouncement() {
 }
 
 async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
-  const input = $("#chatInput");
-  if (!input || !input.value.trim() || window.schoolshieldChatSending) return;
-  const text = input.value.trim();
-  if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
-    const child =
-      role() === "parent"
-        ? parentLearner()
-        : getState().parentChat?.[Number(chatIndex) || 0] &&
-          learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
-    const button = $("[data-action='send-message']");
-    window.schoolshieldChatSending = true;
-    if (button) button.disabled = true;
-    try {
-      if (!child?.id) throw new Error("This conversation is not linked to a learner. Refresh the page and select the parent again.");
-      if (text.length > 2000) throw new Error("Keep your message under 2,000 characters.");
-      // Finish queued staff changes before the endpoint appends to the workspace.
-      if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
-      const response = await window.schoolshieldFunctionRequest("parent-chat", { learner_id: child.id, text });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "The message could not be saved. Please try again.");
-      if (input.value.trim() === text) input.value = "";
-      const currentInput = $("#chatInput");
-      if (currentInput?.value.trim() === text) currentInput.value = "";
-      try {
-        await refreshCloudWorkspace(true);
-      } catch (error) {
-        modal("Message sent", '<p class="muted">Your message was saved. Refresh the conversation to load the latest messages.</p>');
-      }
-    } catch (error) {
-      const message = String(error.message || "Check your connection and try again.")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      modal("Message not sent", `<p class="muted">${escapeHtml(message)}</p>`);
-    } finally {
-      window.schoolshieldChatSending = false;
-      if (button) button.disabled = false;
-      const currentButton = $("[data-action='send-message']");
-      if (currentButton) currentButton.disabled = false;
-    }
-    return;
-  }
-  if (Array.isArray(getState()[storeKey])) {
-    persist((state) => {
-      const conversation =
-        state[storeKey][Number(chatIndex)] || state[storeKey][0];
-      if (conversation)
-        conversation.messages.push({
-          from: sender,
-          sender: userName(),
-          text,
-          date: todayLabel(),
-          sentAt: new Date().toISOString(),
-        });
-    });
-  } else {
-    persist((state) => {
-      state.chatExtras = state.chatExtras || {};
-      state.chatExtras[storeKey] = state.chatExtras[storeKey] || [];
-      state.chatExtras[storeKey].push({
-        from: sender,
-        sender: userName(),
-        text,
-        date: todayLabel(),
-        sentAt: new Date().toISOString(),
+  const input=$("#chatInput");if(!input||!input.value.trim()||window.schoolshieldChatSending)return;
+  const text=input.value.trim(),parentChannel=['parent','teacher'].includes(role())&&storeKey==='parentChat';
+  const button=$("[data-action='send-message']"),label=button?.textContent||'Send';
+  let pending,stamp,empty,confirmed=false,attempt;
+  window.schoolshieldChatSending=true;
+  if(button){button.disabled=true;button.textContent='Sending...';button.setAttribute?.('aria-busy','true');}
+  // Visible immediately, but never presented as a confirmed server message.
+  const pane=typeof document!=='undefined'?document.querySelector?.('.messages'):null;
+  if(pane&&document.createElement){empty=pane.querySelector?.('.muted');if(empty)empty.hidden=true;pending=document.createElement('div');pending.className='chat-message outgoing chat-pending';
+    const bubble=document.createElement('div'),body=document.createElement('span');bubble.className='msg mine';body.textContent=text;stamp=document.createElement('small');stamp.textContent='Sending...';bubble.append(body,stamp);pending.append(bubble);pane.append(pending);pane.scrollTop=pane.scrollHeight;}
+  try{
+    if(parentChannel){
+      const child=role()==='parent'?parentLearner():learnerById(getState().parentChat?.[Number(chatIndex)||0]?.learnerId);
+      if(!child?.id)throw Error('This conversation is not linked to a learner. Refresh and select the parent again.');
+      if(text.length>2000)throw Error('Keep your message under 2,000 characters.');
+      if(window.schoolshieldWorkspaceSaveQueue&&await window.schoolshieldWorkspaceSaveQueue===false)throw Error('A previous save is still pending. Retry that save before sending.');
+      const response=await window.schoolshieldFunctionRequest('parent-chat',{learner_id:child.id,text});
+      const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'The message could not be saved. Please try again.');
+    }else{
+      const signature=JSON.stringify([storeKey,chatIndex,text]);
+      attempt=window.schoolshieldChatRetry?.signature===signature?window.schoolshieldChatRetry:{signature,message:{id:crypto.randomUUID(),from:sender,sender:userName(),text,date:todayLabel(),sentAt:new Date().toISOString()}};
+      window.schoolshieldChatRetry=attempt;window.schoolshieldChatDelivery=window.schoolshieldChatDelivery||{};window.schoolshieldChatDelivery[attempt.message.id]='Sending...';
+      persist(state=>{
+        let messages;if(Array.isArray(state[storeKey])){const conversation=state[storeKey][Number(chatIndex)]||state[storeKey][0];if(!conversation)throw Error('Conversation unavailable. Refresh and try again.');messages=conversation.messages=conversation.messages||[];}
+        else{state.chatExtras=state.chatExtras||{};messages=state.chatExtras[storeKey]=state.chatExtras[storeKey]||[];}
+        if(!messages.some(m=>m.id===attempt.message.id))messages.push(attempt.message);
       });
-    });
-  }
-  input.value = "";
-  render();
+      if(await(window.schoolshieldWorkspaceSaveQueue||Promise.resolve(true))===false)throw Error(window.schoolshieldLastSyncError||'The message has not been confirmed. Your draft is kept.');
+      delete window.schoolshieldChatDelivery[attempt.message.id];window.schoolshieldChatRetry=null;
+    }
+    confirmed=true;if(stamp)stamp.textContent='Sent';pending?.classList.remove('chat-pending');
+    if(input.value.trim()===text)input.value='';
+    // The server has already confirmed the send. Do not block the composer on a full refresh.
+    if(parentChannel)Promise.resolve(refreshCloudWorkspace(true)).catch(()=>{if(stamp?.isConnected)stamp.textContent='Sent. Refresh to load the latest conversation.';});
+  }catch(error){pending?.remove();if(empty)empty.hidden=false;if(attempt)window.schoolshieldChatDelivery[attempt.message.id]='Not sent';modal('Message not sent','<p class="muted">'+escapeHtml(error.message||'Check your connection and try again.')+'</p>');}
+  finally{window.schoolshieldChatSending=false;if(button){button.disabled=false;button.textContent=label;button.removeAttribute?.('aria-busy');}if(confirmed&&!parentChannel)render();}
 }
 
 function exportCsv() {
@@ -6513,7 +6481,7 @@ function patchLiveChat(html) {
   return true;
 }
 function render() {
-  if(window.schoolshieldChatSwitching)return;
+  if(window.schoolshieldChatSwitching||window.schoolshieldChatSending)return;
   initWorkspaceDraftProtection();
   if (workspaceHasDraft() && (!workspaceIsChat() || workspaceHasOpenEditor())) { showWorkspaceUpdates(); return; }
   // Keep selected File objects and the original form mounted until its upload

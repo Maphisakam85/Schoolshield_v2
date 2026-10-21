@@ -5,7 +5,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync('SchoolShield/sgb-security-chat.js','utf8');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function harness(rpc,role="sgb"){
- const nodes={};const node=()=>({value:'',textContent:'',dataset:{},setAttribute(){},children:[],scrollHeight:100,clientHeight:100,scrollTop:0,appendChild(n){this.children.push(n);},append(...n){this.children.push(...n);},replaceChildren(){this.children=[];},focus(){}});
+ const nodes={};const node=()=>({value:'',textContent:'',dataset:{},remove(){},setAttribute(){},children:[],scrollHeight:100,clientHeight:100,scrollTop:0,appendChild(n){this.children.push(n);},append(...n){this.children.push(...n);},replaceChildren(){this.children=[];},focus(){}});
  const document={hidden:false,getElementById:id=>nodes[id]||(nodes[id]=node()),createElement:node};
  let poll;const window={schoolshieldSupabase:{rpc},clearInterval(){},setInterval(fn){poll=fn;},addEventListener(){}};
  let id=0;vm.runInNewContext(source,{window,document,sessionStorage:{getItem:()=>JSON.stringify({role})},crypto:{randomUUID:()=>`id-${++id}`},Date,Map,JSON,Error,URLSearchParams});window.SchoolShieldDirectChat.bind();
@@ -37,3 +37,7 @@ test('migration restricts RPC access and prevents generic table writes',()=>{
 
 test('direct channel headings identify the recipient role',async()=>{for(const [role,label] of [['sgb','Security Chat'],['security','SGB Chat']]){const h=harness(async()=>({data:{contacts:[]}}),role);await tick();assert.equal(h.nodes.directChatTitle.textContent,"Chats");}});
 test('chat labels use the recipient in each authorised portal',()=>{const app=fs.readFileSync('SchoolShield/app.js','utf8');const ctx=vm.createContext({});vm.runInContext(app.slice(app.indexOf('function chatLabel('),app.indexOf('function nav()')),ctx);for(const [id,role,label]of [['sgb-chat','sgb','Principal Chat'],['sgb-chat','principal','SGB Chat'],['sgb-security-chat','sgb','Security Chat'],['sgb-security-chat','security','SGB Chat'],['teacher-chat','teacher','Principal Chat'],['teacher-chat','principal','Teacher Chat'],['teacher-chat','deputy','Teacher Chat'],['parent-chat','parent','Teacher Chat'],['parent-chat','teacher','Parent Chat']])assert.equal(ctx.chatLabel(id,role),label);});
+test('direct send shows a pending bubble immediately while waiting for the server',async()=>{
+ let confirm;const h=harness(async(_,p)=>{if(!p.p_peer)return {data:{contacts:[{id:'peer',name:'Officer',role:'security'}]}};if(p.p_body)return new Promise(resolve=>{confirm=()=>resolve({data:{user_id:'me',messages:[{id:p.p_message_id,body:p.p_body,sender_id:'me',created_at:'2026-10-21T10:00:00Z'}]}});});return {data:{user_id:'me',messages:[]}};});
+ await h.select();h.nodes.directChatInput.value='Hello';const sending=h.send();assert.equal(h.nodes.directChatSend.textContent,'Sending...');assert.equal(h.nodes.directChatMessages.children[0].children[1].textContent,'Sending...');assert.equal(h.nodes.directChatInput.value,'Hello');confirm();await sending;assert.equal(h.nodes.directChatInput.value,'');assert.equal(h.nodes.directChatMessages.children[0].className,'direct-message mine');
+});

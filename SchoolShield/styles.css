@@ -1893,3 +1893,4 @@ body:is([data-page="parent-chat"],[data-page="teacher-chat"],[data-page="sgb-cha
 .chat-review-later:hover{background:#f9dde1}.chat-review-later:focus-visible{outline:2px solid #87323d;outline-offset:2px}
 @media(max-width:700px){.chat-review-later{font-size:10px;padding:4px 6px;margin-right:6px}.chat-alert-row .chat-alert-action{display:none}}
 #chatSwitchError{font-size:12px;background:#fff8e8;padding:10px;color:#6a5630;grid-column:1/-1}
+.chat-pending{opacity:.65}.chat-pending small,.chat-pending time{font-style:italic}
