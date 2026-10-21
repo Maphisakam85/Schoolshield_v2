@@ -1,5 +1,9 @@
 project_id = "schoolshield"
 
+[functions.approve-account]
+# This function verifies the Auth token and school approval permissions itself.
+verify_jwt = false
+
 [functions.school-branding]
 verify_jwt = true
 static_files = ["./functions/school-branding/vendor/*.wasm"]

@@ -13,7 +13,11 @@ export function validateFields(body, actor) {
   if (actor.school_mode==='live' && /\.test$/i.test(email)) throw new Error('Use a real invitation email for a live school. Test accounts belong in a Demo or QA school.');
   const account_status=f.account_status || 'Active';
   if (!['Active','Inactive'].includes(account_status)) throw new Error('Select Active or Inactive');
-  return {first_name,last_name,email,phone:normalizePhone(f.phone),role:f.role,school_id:actor.school_id,employee_id:String(f.employee_id || '').trim(),account_status,revision:f.revision,staff_id:f.staff_id || null,learner_ids:Array.isArray(f.learner_ids)?f.learner_ids:[]};
+  // Email requests do not collect a cellphone. A supplied number must still be
+  // valid, and SMS invitations always require one before creating an account.
+  const needsPhone = Boolean(String(f.phone || '').trim()) || body.delivery === 'sms';
+  const phone = needsPhone ? normalizePhone(f.phone) : '';
+  return {first_name,last_name,email,phone,role:f.role,school_id:actor.school_id,employee_id:String(f.employee_id || '').trim(),account_status,revision:f.revision,staff_id:f.staff_id || null,learner_ids:Array.isArray(f.learner_ids)?f.learner_ids:[]};
 }
 
 const checked = result => {if(result.error) throw new Error(result.error.message);return result.data;};

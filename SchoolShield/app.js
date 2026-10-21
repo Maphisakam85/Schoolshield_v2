@@ -6656,7 +6656,7 @@ async function approveAccountRequest(id, delivery = "preferred") {
   );
   const result = await response.json().catch(() => ({}));
   if (!response.ok)
-    return alert(result.error || "Could not approve this account.");
+    return modal("Account not approved", "<p>" + escapeHtml(result.error || "Could not approve this account.") + "</p>");
   if (delivery === "setup_link" && result.setup_link) {
     const link = String(result.setup_link);
     let trustedLink = "";
@@ -6680,7 +6680,7 @@ async function approveAccountRequest(id, delivery = "preferred") {
   } else {
     modal(
       "Account approved",
-      `<p><b>The account has been approved.</b> ${escapeHtml(result.message === "Account approved. The SMS provider accepted the invitation for delivery." ? "The SMS provider accepted the invitation for delivery." : "An invitation email has been sent.")}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+      `<p><b>The account has been approved.</b> ${escapeHtml(result.message || "The account approval was confirmed.")}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
     );
   }
   loadAccountRequests();

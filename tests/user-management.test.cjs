@@ -45,3 +45,10 @@ test('manual links use real Auth tokens; confirmed unfinished users receive reco
  const {manageUser}=await modulePromise;const h=harness();h.body.delivery='setup_link';const result=await manageUser(h);assert.match(result.setup_link,/token_hash=secure-hash&type=invite/);assert.equal(h.calls.some(c=>c[0]==='email'),false);
  const recovery=harness({confirmed:true});await manageUser(recovery);assert.ok(recovery.calls.some(c=>c[0]==='recovery'));assert.equal(recovery.calls.some(c=>c[0]==='email'),false);
 });
+test('email/manual invitations allow no phone, but SMS and supplied invalid numbers remain strict',async()=>{
+ const {validateFields,manageUser}=await modulePromise;
+ for(const delivery of ['email','setup_link'])for(const phone of [null,undefined,'','   '])assert.equal(validateFields({delivery,fields:{...fields,phone}},actor).phone,'');
+ for(const phone of [null,'','0212223333'])assert.throws(()=>validateFields({delivery:'sms',fields:{...fields,phone}},actor),/cellphone/);
+ assert.throws(()=>validateFields({delivery:'email',fields:{...fields,phone:'invalid'}},actor),/cellphone/);
+ const h=harness();h.body.fields={...fields,phone:''};await manageUser(h);assert.equal(h.calls.find(c=>c[0]==='begin_user_management')[1].p_fields.phone,'');assert.ok(h.calls.some(c=>c[0]==='email'));
+});
