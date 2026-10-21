@@ -611,6 +611,22 @@ a {
     font-size: 13px
 }
 
+#accountApprovalDashboardAlert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+}
+
+#accountApprovalDashboardAlert .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    text-decoration: none;
+}
+
 .panel-head p {
     margin: 4px 0 0;
     color: var(--muted);
