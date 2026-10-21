@@ -4,12 +4,12 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const source=fs.readFileSync('SchoolShield/sgb-security-chat.js','utf8');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function harness(rpc){
- const nodes={};const node=()=>({value:'',textContent:'',children:[],scrollHeight:100,clientHeight:100,scrollTop:0,appendChild(n){this.children.push(n);},append(...n){this.children.push(...n);},replaceChildren(){this.children=[];},focus(){}});
+function harness(rpc,role="sgb"){
+ const nodes={};const node=()=>({value:'',textContent:'',dataset:{},setAttribute(){},children:[],scrollHeight:100,clientHeight:100,scrollTop:0,appendChild(n){this.children.push(n);},append(...n){this.children.push(...n);},replaceChildren(){this.children=[];},focus(){}});
  const document={hidden:false,getElementById:id=>nodes[id]||(nodes[id]=node()),createElement:node};
  let poll;const window={schoolshieldSupabase:{rpc},clearInterval(){},setInterval(fn){poll=fn;},addEventListener(){}};
- let id=0;vm.runInNewContext(source,{window,document,crypto:{randomUUID:()=>`id-${++id}`},Date,Map,JSON,Error});window.SchoolShieldDirectChat.bind();
- return {nodes,poll:()=>poll(),select:async()=>{await tick();nodes.directChatPeer.value='peer';nodes.directChatPeer.onchange();await tick();},send:()=>nodes.directChatForm.onsubmit({preventDefault(){}})};
+ let id=0;vm.runInNewContext(source,{window,document,sessionStorage:{getItem:()=>JSON.stringify({role})},crypto:{randomUUID:()=>`id-${++id}`},Date,Map,JSON,Error,URLSearchParams});window.SchoolShieldDirectChat.bind();
+ return {nodes,poll:()=>poll(),select:async()=>{await tick();await tick();},send:()=>nodes.directChatForm.onsubmit({preventDefault(){}})};
 }
 test('send failures preserve drafts, retry the same ID, and clear only after success',async()=>{
  const sent=[];let fail=true;
@@ -34,3 +34,6 @@ test('migration restricts RPC access and prevents generic table writes',()=>{
  const sql=fs.readFileSync('supabase/migrations/20261021100000_sgb_security_chat.sql','utf8');
  for(const pattern of [/enable row level security/,/revoke all on public.sgb_security_messages from anon, authenticated/,/id=auth.uid\(\)/,/actor.role not in \('sgb','security'\)/,/peer.school_id is distinct from actor.school_id/,/peer.account_status is distinct from 'Active'/,/sender_id=actor.id and recipient_id=peer.id/,/sender_id=peer.id and recipient_id=actor.id/,/on conflict\(id\) do nothing/,/saved.sender_id is distinct from actor.id/])assert.match(sql,pattern);
 });
+
+test('direct channel headings identify the recipient role',async()=>{for(const [role,label] of [['sgb','Security Chat'],['security','SGB Chat']]){const h=harness(async()=>({data:{contacts:[]}}),role);await tick();assert.equal(h.nodes.directChatTitle.textContent,"Chats");}});
+test('chat labels use the recipient in each authorised portal',()=>{const app=fs.readFileSync('SchoolShield/app.js','utf8');const ctx=vm.createContext({});vm.runInContext(app.slice(app.indexOf('function chatLabel('),app.indexOf('function nav()')),ctx);for(const [id,role,label]of [['sgb-chat','sgb','Principal Chat'],['sgb-chat','principal','SGB Chat'],['sgb-security-chat','sgb','Security Chat'],['sgb-security-chat','security','SGB Chat'],['teacher-chat','teacher','Principal Chat'],['teacher-chat','principal','Teacher Chat'],['teacher-chat','deputy','Teacher Chat'],['parent-chat','parent','Teacher Chat'],['parent-chat','teacher','Parent Chat']])assert.equal(ctx.chatLabel(id,role),label);});

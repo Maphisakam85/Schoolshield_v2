@@ -3,3 +3,7 @@ project_id = "schoolshield"
 [functions.school-branding]
 verify_jwt = true
 static_files = ["./functions/school-branding/vendor/*.wasm"]
+
+[functions.push-dispatch]
+# Independent server-to-server secret checked inside this scheduled function.
+verify_jwt = false

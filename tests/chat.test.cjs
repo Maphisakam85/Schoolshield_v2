@@ -155,16 +155,17 @@ test('teacher to principal chat clears the composer before the draft-preserving 
 
 test('new replies stay after received messages even when device clocks disagree', () => {
   const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
-    param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
+    collectingChatInbox:false,chatLabel:()=>'',param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
     chatSender: message => message.sender, chatTimestamp: () => '',
     generic: (title, eyebrow, description, body) => body,
   });
-  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function chatLayout('), app.indexOf('function legacyChatLayout(')), context);
+  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function chatLayout('), app.indexOf('/* Principal',app.indexOf('function chatLayout('))), context);
   const html = context.chatLayout('Chat', '', '', [{ id: 'Principal', messages: [
     { sender: 'Principal', text: 'Received first', sentAt: '2026-09-30T12:30:00Z' },
     { sender: 'Teacher', text: 'My new reply', sentAt: '2026-09-30T12:20:00Z' },
   ] }], 'teacherChat');
-  assert.ok(html.indexOf('Received first') < html.indexOf('My new reply'));
+  const transcript=html.slice(html.indexOf('id="messages"'),html.indexOf('class="chat-compose"'));
+  assert.ok(transcript.indexOf('Received first') < transcript.indexOf('My new reply'));
 });
 
 function pollingHarness() {

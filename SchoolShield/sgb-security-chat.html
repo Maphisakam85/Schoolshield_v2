@@ -10,13 +10,24 @@
 <body data-page="sgb-security-chat">
   <div id="app"><div class="page-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><p>Loading your school workspace...</p></div></div>
 <template id="directChatTemplate">
-<section class="panel direct-chat"><h1>SGB–Security Chat</h1><p>Private messages with individual members of your school.</p>
-<label for="directChatPeer">Contact</label><select class="select" id="directChatPeer"><option value="">Loading contacts…</option></select>
-<div class="action-row"><button type="button" class="btn" id="directChatRefresh">Refresh</button><button type="button" class="btn" id="directChatOlder" hidden>Load older messages</button></div>
-<p id="directChatStatus" role="status" aria-live="polite"></p>
-<div id="directChatMessages" role="log" aria-label="Conversation" aria-live="polite"></div>
-<form id="directChatForm"><label for="directChatInput">Message</label><textarea class="input" id="directChatInput" maxlength="4000" rows="3" placeholder="Type a message" required disabled></textarea><button class="btn primary" id="directChatSend" type="submit" disabled>Send</button></form>
-</section></template>
+<section class="direct-chat" id="directChatWorkspace" data-view="list" aria-label="Private school conversations">
+  <aside class="direct-chat-list" aria-label="Conversations">
+    <header class="direct-chat-list-head"><div><h1 id="directChatTitle">Chat</h1></div><button type="button" class="btn small" id="directChatRefresh">Refresh</button></header>
+    <p id="directChatDescription" hidden></p>
+    <label class="chat-sr-only" for="directChatSearch">Search conversations</label><input class="input" id="directChatSearch" type="search" placeholder="Search by name or message" autocomplete="off">
+    <span id="directChatCount" class="chat-sr-only"></span>
+    <nav id="directChatContacts" aria-label="People you can message"><p class="direct-chat-empty">Loading conversations...</p></nav>
+  </aside>
+  <section class="direct-chat-thread" aria-label="Selected conversation">
+    <header class="direct-chat-thread-head"><button type="button" class="btn small direct-chat-back" id="directChatBack" aria-expanded="true" title="Show or hide conversations">Chats</button><span class="avatar" id="directChatAvatar" aria-hidden="true">SS</span><div><h2 id="directChatName">Your conversations</h2><p id="directChatPeerInfo">Private messages within your school</p></div></header>
+    <p id="directChatStatus" role="status" aria-live="polite"></p>
+    <div class="direct-chat-history"><button type="button" class="btn small" id="directChatOlder" hidden>Load older messages</button></div>
+    <div id="directChatMessages" role="log" aria-label="Conversation messages" aria-live="polite"></div>
+    <p id="directChatEmpty" class="direct-chat-empty" hidden>No messages yet. Say hello below.</p>
+    <form id="directChatForm"><label class="direct-chat-input-label" for="directChatInput">Message</label><textarea class="input" id="directChatInput" maxlength="4000" rows="1" placeholder="Write a secure message..." required disabled></textarea><button class="btn primary" id="directChatSend" type="submit" disabled>Send</button></form>
+  </section>
+</section>
+</template>
 <link rel="stylesheet" href="sgb-security-chat.css">
 <script src="sgb-security-chat.js"></script>
   <script src="ui-feedback.js"></script>
@@ -24,6 +35,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="supabase-client.js"></script>
   <script src="chat-mobile.js"></script>
+  <script src="chat-navigation.js"></script>
   <script src="school-branding.js"></script>
     <script src="app.js"></script>
 </body>
