@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+  <title>SchoolShield — SGB–Security Chat</title>
+  <link rel="stylesheet" href="styles.css">
+<script defer src="analytics.js"></script>
+</head>
+<body data-page="sgb-security-chat">
+  <div id="app"><div class="page-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><p>Loading your school workspace...</p></div></div>
+<template id="directChatTemplate">
+<section class="panel direct-chat"><h1>SGB–Security Chat</h1><p>Private messages with individual members of your school.</p>
+<label for="directChatPeer">Contact</label><select class="select" id="directChatPeer"><option value="">Loading contacts…</option></select>
+<div class="action-row"><button type="button" class="btn" id="directChatRefresh">Refresh</button><button type="button" class="btn" id="directChatOlder" hidden>Load older messages</button></div>
+<p id="directChatStatus" role="status" aria-live="polite"></p>
+<div id="directChatMessages" role="log" aria-label="Conversation" aria-live="polite"></div>
+<form id="directChatForm"><label for="directChatInput">Message</label><textarea class="input" id="directChatInput" maxlength="4000" rows="3" placeholder="Type a message" required disabled></textarea><button class="btn primary" id="directChatSend" type="submit" disabled>Send</button></form>
+</section></template>
+<link rel="stylesheet" href="sgb-security-chat.css">
+<script src="sgb-security-chat.js"></script>
+  <script src="ui-feedback.js"></script>
+    <script src="supabase-config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="chat-mobile.js"></script>
+  <script src="school-branding.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

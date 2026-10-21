@@ -230,8 +230,9 @@ const ACCESS = {
     "test-scores",
     "teacher-chat",
   ],
-  sgb: ["dashboard", "visitors", "incidents", "announcements", "sgb-chat"],
+  sgb: ["dashboard", "visitors", "incidents", "announcements", "sgb-chat", "sgb-security-chat"],
   security: [
+    "sgb-security-chat",
     "dashboard",
     "visitors",
     "incidents",
@@ -327,6 +328,7 @@ const NAV = [
     "security-officers.html",
     "shield",
   ],
+  ["sgb-security-chat", "SGB–Security Chat", "sgb-security-chat.html", "chat"],
   ["sgb-chat", "SGB Chat", "sgb-chat.html", "chat"],
   ["settings", "Settings", "settings.html", "settings"],
 ];
@@ -369,6 +371,7 @@ const NAV_GROUPS = [
       "teacher-chat",
       "parent-chat",
       "sgb-chat",
+      "sgb-security-chat",
     ],
   },
   { label: "Administration", ids: ["settings", "user-management", "school-records"] },
@@ -6513,6 +6516,7 @@ function render() {
     }
   }
   const p = page();
+  if (p === "sgb-security-chat" && document.getElementById("directChatForm")) return;
   let html;
   if (p === "dashboard") html = dashboard();
   else if (p === "incidents") html = incidents();
@@ -6545,6 +6549,7 @@ function render() {
   else if (p === "attendance-register") html = dailyAttendanceRegister();
   else if (p === "teacher-chat") html = teacherChat();
   else if (p === "parent-chat") html = parentChat();
+  else if (p === "sgb-security-chat") html = shell(document.getElementById("directChatTemplate").innerHTML, "SGB–Security Chat");
   else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
   if (patchLiveChat(html)) return;
@@ -6868,6 +6873,7 @@ function toggleNotificationCenter() {
   bindNotificationFilters(drawer);
 }
 function bind() {
+  if (page() === "sgb-security-chat") window.SchoolShieldDirectChat.bind();
   bindLearnerHistory();
   bindLearnerSubjectTeachers();
   if (page()==="notifications") bindNotificationFilters(document);
