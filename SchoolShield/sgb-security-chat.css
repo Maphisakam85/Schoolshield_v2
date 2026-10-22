@@ -1,0 +1,41 @@
+body[data-page="sgb-security-chat"]{height:100dvh;overflow:hidden}
+body[data-page="sgb-security-chat"] #app{position:fixed;inset-inline:0;top:var(--chat-viewport-top,0px);height:var(--chat-viewport-height,100dvh);overflow:hidden}
+body[data-page="sgb-security-chat"] :is(.app-shell,.main){height:100%;min-height:0;overflow:hidden}
+body[data-page="sgb-security-chat"] .main{display:flex;flex-direction:column}
+body[data-page="sgb-security-chat"] .topbar{position:relative;flex:none}
+body[data-page="sgb-security-chat"] .content{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;padding:0;gap:0}
+body[data-page="sgb-security-chat"] .content>.notice{flex:none;margin:0}
+.direct-chat{display:grid;grid-template-columns:minmax(245px,32%) minmax(0,1fr);flex:1;min-height:0;overflow:hidden;background:#fff;border:0;border-radius:0;box-shadow:none}
+.direct-chat-list{display:flex;flex-direction:column;min-height:0;min-width:0;border-right:1px solid #dce7e7;background:#fff}
+.direct-chat-list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 18px 8px}
+.direct-chat-list-head h1{margin:3px 0;font-size:22px;line-height:1.25;color:#103d43}
+.direct-chat-eyebrow{margin:0;font-size:10px;text-transform:uppercase;letter-spacing:.09em;font-weight:700;color:#087f6c}
+.direct-chat-description{margin:0;padding:0 18px 14px;color:#647c83;font-size:12px;line-height:1.5}
+.direct-chat-search-label{margin:0 18px 6px;font-size:11px;color:#506d75}
+#directChatSearch{width:calc(100% - 36px);margin:0 18px;padding:11px 13px;background:#f4f8f7;border-radius:10px;font-size:13px;font-weight:400}
+.direct-chat-list-caption{display:flex;justify-content:space-between;margin:18px 18px 8px;color:#607980;font-size:11px;font-weight:600}
+#directChatContacts{display:flex;flex:1;min-height:0;flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:0 8px 10px;overscroll-behavior:contain}
+.direct-chat-contact{display:flex;align-items:center;gap:12px;border:0;border-radius:10px;background:transparent;padding:14px 10px;text-align:left;cursor:pointer;width:100%;min-width:0;flex:none;color:#183d45;font:inherit}
+.direct-chat-contact:hover{background:#f2f8f6}.direct-chat-contact[aria-pressed="true"]{background:#e5f3ef;box-shadow:inset 3px 0 #089575}
+.direct-chat-contact .avatar{width:42px;height:42px;flex:none;background:#dff1eb;color:#087f6c;font-size:13px}
+.direct-chat-contact-copy{flex:1;min-width:0}.direct-chat-contact-line{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.direct-chat-contact strong{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.direct-chat-contact time{flex:none;font-size:10px;color:#72858a}.direct-chat-preview{display:block;margin-top:5px;font-size:12px;color:#6c8187;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.direct-chat-thread{display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;background:#f1f6f4}
+.direct-chat-thread-head{display:flex;align-items:center;gap:12px;background:#fff;border-bottom:1px solid #dce7e7;padding:17px 22px;flex:none;min-width:0}
+.direct-chat-thread-head>div{flex:1;min-width:0}.direct-chat-thread-head h2{margin:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.direct-chat-thread-head p{margin:5px 0 0;font-size:11px;color:#6c8187}.direct-chat-private{color:#087f6c;background:#e7f5ef;border-radius:20px;padding:5px 10px;font-size:10px}
+#directChatStatus{flex:none;margin:0;padding:10px 20px;font-size:12px;background:#fff8e8;color:#6a5630;overflow-wrap:anywhere}#directChatStatus:empty{display:none}
+.direct-chat-history{flex:none;text-align:center}.direct-chat-history:has(button[hidden]){display:none}.direct-chat-history button{margin:10px}
+#directChatMessages{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:24px 28px 18px;overscroll-behavior:contain;overflow-anchor:none;scroll-behavior:auto}
+.direct-message{align-self:flex-start;max-width:min(82%,560px);padding:11px 14px 8px;border-radius:3px 14px 14px;background:#fff;color:#21444a;box-shadow:0 1px 2px #12343b0d;overflow-wrap:anywhere;line-height:1.55;font-size:13px;flex:none}
+.direct-message.mine{align-self:flex-end;background:#d9f0e5;border-radius:14px 3px 14px 14px}.direct-message>span{white-space:pre-wrap}.direct-message time{display:block;font-size:10px;color:#6b8381;margin-top:6px;text-align:right}
+.direct-chat-empty{margin:auto;padding:24px;text-align:center;font-size:13px;line-height:1.6;color:#71888b}.direct-chat-thread>#directChatEmpty{position:absolute;inset:40% 15% auto;pointer-events:none;background:#f1f6f4}
+#directChatForm{flex:none;display:flex;align-items:flex-end;gap:12px;padding:14px 20px max(14px,env(safe-area-inset-bottom));border-top:1px solid #dce7e7;background:#fff;margin:0}
+#directChatInput{flex:1;min-width:0;font-size:16px;font-weight:400;resize:none;min-height:44px;max-height:120px;overflow-y:auto;margin:0;border-radius:12px;padding:11px 14px;background:#f7faf9;line-height:1.4}
+#directChatSend{flex:none;min-height:44px;padding:10px 22px;border-radius:10px}.direct-chat-input-label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.direct-chat-back{display:none}.direct-chat :is(button,input,textarea):focus-visible{outline:3px solid #087f6c;outline-offset:2px}.direct-chat [hidden]{display:none!important}
+@media(max-width:700px){body[data-page="sgb-security-chat"] .content{padding:0;gap:0}.direct-chat{display:flex;border-radius:0}.direct-chat-list,.direct-chat-thread{width:100%;flex:1}.direct-chat-list{border:0}.direct-chat[data-view="list"] .direct-chat-thread{display:none}.direct-chat[data-view="thread"] .direct-chat-list{display:none}.direct-chat-back{display:inline-flex;flex:none}.direct-chat-private{display:none}.direct-chat-thread-head{padding:12px;gap:10px}.direct-chat-thread-head .avatar{width:34px;height:34px;font-size:12px}#directChatMessages{padding:18px 12px 12px}.direct-message{max-width:88%}#directChatForm{padding:10px 10px max(10px,env(safe-area-inset-bottom));gap:8px}#directChatSend{padding:10px 16px}body[data-page="sgb-security-chat"].chat-keyboard-open .content>.notice{display:none}}
+/* Cross-channel entries use the same inbox row styling. */
+#directChatContacts a.direct-chat-contact{text-decoration:none}#directChatContacts a.direct-chat-contact>div{flex:1;min-width:0}#directChatContacts a.direct-chat-contact b{display:block;font-size:13px;font-weight:600}#directChatContacts a.direct-chat-contact small{display:block;margin-top:5px;color:#6c8187;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.direct-chat .direct-chat-back{display:inline-flex;flex:none}
+@media(min-width:701px){.direct-chat[data-inbox-collapsed="true"]{grid-template-columns:minmax(0,1fr)}.direct-chat[data-inbox-collapsed="true"] .direct-chat-list{display:none}}

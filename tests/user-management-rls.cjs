@@ -34,6 +34,7 @@ try {
 
  await db.exec(fs.readFileSync('supabase/migrations/20261014110000_managed_auth_profile_recovery.sql','utf8'));
  await db.exec(fs.readFileSync('supabase/migrations/20261014160000_prevent_duplicate_staff_accounts.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/20261021150000_email_approval_optional_phone.sql','utf8'));
  const login=async role=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[role==='other'?id(30):id(10+roles.indexOf(role))]);await db.exec('set role authenticated');};
  const begin=async(action,target,fields={},operation=id(200+checks))=>(await db.query('select begin_user_management($1,$2,$3,$4) as op',[operation,action,target,JSON.stringify(fields)])).rows[0].op;
  const fields={first_name:'Real',last_name:'Teacher',email:'real@school.test',phone:'+27821234567',role:'teacher',school_id:school,account_status:'Active',employee_id:'TEST1'};
@@ -74,6 +75,8 @@ try {
  await db.exec('reset role');await db.query('update auth.users set banned_until=null where id=$1',[id(100)]);await finish(id(303));
  equal((await db.query('select count(*)::int as n from user_management_audit where user_id=$1',[id(100)])).rows[0].n,4);
  await login('other');equal((await db.query('select * from user_management_audit')).rows.length,0);equal((await db.query('select list_school_users() as d')).rows[0].d.users.some(u=>u.id===id(100)),false);
+ await login('principal');const emailOnly=await begin('create',id(401),{...fields,email:'email-only@school.test',phone:'',employee_id:'EMAIL-ONLY'},id(501));equal(emailOnly.fields.phone,'');
+ await db.exec('reset role');await db.query('insert into auth.users(id,email,raw_app_meta_data) values($1,$2,$3)',[id(401),'email-only@school.test',JSON.stringify({school_code:'SCHOOL',role:'teacher',onboarding_required:true})]);await db.query('select ensure_managed_auth_profile($1)',[id(501)]);equal((await finish(id(501))).phone,'');
  console.log(checks+' user management SQL/RLS assertions passed');
 
 }finally{await db.close();}})().catch(e=>{console.error(e);process.exit(1)});

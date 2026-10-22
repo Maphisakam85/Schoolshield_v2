@@ -107,7 +107,7 @@ function sendHarness({ reject = false } = {}) {
   const calls = [];
   let refreshed = false;
   let error = '';
-  const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
+  const context = vm.createContext({ deferWorkspaceSnapshot: () => false, crypto: require("node:crypto"),
     window: { schoolshieldFunctionRequest: async (name, body) => {
       calls.push({ name, body });
       return { ok: !reject, json: async () => reject ? { error: 'Invalid session' } : { ok: true } };
@@ -155,16 +155,17 @@ test('teacher to principal chat clears the composer before the draft-preserving 
 
 test('new replies stay after received messages even when device clocks disagree', () => {
   const context = vm.createContext({ deferWorkspaceSnapshot: () => false,
-    param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
+    collectingChatInbox:false,chatLabel:()=>'',param: () => null, page: () => 'teacher-chat', userName: () => 'Teacher',
     chatSender: message => message.sender, chatTimestamp: () => '',
     generic: (title, eyebrow, description, body) => body,
   });
-  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function chatLayout('), app.indexOf('function legacyChatLayout(')), context);
+  vm.runInContext(require('./helpers/html-safety.cjs') + app.slice(app.indexOf('function chatLayout('), app.indexOf('/* Principal',app.indexOf('function chatLayout('))), context);
   const html = context.chatLayout('Chat', '', '', [{ id: 'Principal', messages: [
     { sender: 'Principal', text: 'Received first', sentAt: '2026-09-30T12:30:00Z' },
     { sender: 'Teacher', text: 'My new reply', sentAt: '2026-09-30T12:20:00Z' },
   ] }], 'teacherChat');
-  assert.ok(html.indexOf('Received first') < html.indexOf('My new reply'));
+  const transcript=html.slice(html.indexOf('id="messages"'),html.indexOf('class="chat-compose"'));
+  assert.ok(transcript.indexOf('Received first') < transcript.indexOf('My new reply'));
 });
 
 function pollingHarness() {
@@ -260,4 +261,19 @@ test('parent loading failure redraws its error and recovery redraws unchanged da
   await h.timers.shift().callback();
   assert.equal(h.context.window.schoolshieldParentWorkspaceError, '');
   assert.equal(h.renders(), 3);
+});
+test('send feedback starts immediately and parent confirmation does not wait for workspace refresh', async()=>{
+ const h=sendHarness();let confirm;
+ h.context.window.schoolshieldFunctionRequest=()=>new Promise(resolve=>{confirm=resolve;});
+ h.context.refreshCloudWorkspace=()=>new Promise(()=>{});
+ const sending=h.context.sendMessage('parentChat');assert.equal(h.button.textContent,'Sending...');assert.equal(h.button.disabled,true);assert.equal(h.input.value,'hello parent');
+ confirm({ok:true,json:async()=>({ok:true})});await sending;assert.equal(h.button.disabled,false);assert.equal(h.button.textContent,'Send');assert.equal(h.input.value,'');
+});
+test('workspace sends wait for persistence and retry one stable message after failure',async()=>{
+ const h=sendHarness(),state={teacherChat:[{messages:[]}]};let confirm,renders=0;
+ h.context.getState=()=>state;h.context.userName=()=> 'Teacher';h.context.todayLabel=()=> 'Today';h.context.persist=mutate=>mutate(state);h.context.render=()=>renders++;
+ h.context.window.schoolshieldWorkspaceSaveQueue=new Promise(resolve=>{confirm=resolve;});
+ const sending=h.context.sendMessage('teacherChat');assert.equal(h.button.disabled,true);assert.equal(h.input.value,'hello parent');assert.equal(renders,0);confirm(false);await sending;
+ assert.equal(h.input.value,'hello parent');assert.equal(state.teacherChat[0].messages.length,1);const id=state.teacherChat[0].messages[0].id;assert.equal(h.context.window.schoolshieldChatDelivery[id],'Not sent');
+ h.context.window.schoolshieldWorkspaceSaveQueue=Promise.resolve(true);await h.context.sendMessage('teacherChat');assert.equal(state.teacherChat[0].messages.length,1);assert.equal(state.teacherChat[0].messages[0].id,id);assert.equal(h.input.value,'');assert.equal(renders,1);
 });

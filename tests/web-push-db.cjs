@@ -1,0 +1,34 @@
+﻿const {PGlite}=require(process.env.PGLITE_MODULE||'@electric-sql/pglite');const fs=require('fs'),assert=require('node:assert/strict');
+(async()=>{const db=new PGlite();const uuid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');try{
+ await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;
+ create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema auth to authenticated,service_role;grant execute on function auth.uid() to authenticated,service_role;
+ create table schools(id uuid primary key,suspended boolean default false);create table profiles(id uuid primary key,school_id uuid,account_status text,role text);
+ create table school_workspaces(school_id uuid primary key,payload jsonb);create table account_request_notifications(id uuid primary key,school_id uuid,recipient_id uuid,notification_type text,created_at timestamptz default now());
+ create table sgb_security_messages(id uuid primary key,school_id uuid,sender_id uuid,recipient_id uuid);create table notification_reads(school_id uuid,user_id uuid,notification_id text);
+ create function current_school_id() returns uuid language sql stable security definer as $$select school_id from profiles where id=auth.uid()$$;
+ create function assert_account_access() returns void language plpgsql security definer as $$begin if not exists(select 1 from profiles p join schools s on s.id=p.school_id where p.id=auth.uid() and p.account_status='Active' and not s.suspended) then raise exception 'Denied';end if;end $$;
+ create function notification_is_visible(key text) returns boolean language sql stable security definer as $$select exists(select 1 from school_workspaces w,jsonb_array_elements(w.payload->'notifications') n where w.school_id=current_school_id() and n->>'id'=key and n->'allowed' ? auth.uid()::text) or exists(select 1 from account_request_notifications where recipient_id=auth.uid() and school_id=current_school_id() and key='account-request:'||id::text)$$;
+ create function sgb_security_chat_private(peer uuid) returns void language plpgsql security definer as $$begin if not exists(select 1 from profiles p join profiles other on other.id=peer and other.school_id=p.school_id where p.id=auth.uid() and p.role in('sgb','security') and other.role in('sgb','security') and p.role<>other.role)then raise exception 'Denied';end if;end $$;`);
+ await db.exec(fs.readFileSync('supabase/migrations/20261021140000_web_push_notifications.sql','utf8'));
+ await db.query('insert into schools(id)values($1),($2)',[uuid(100),uuid(200)]);
+ for(const [id,school,role]of[[1,100,'sgb'],[2,100,'security'],[3,200,'sgb']])await db.query("insert into profiles values($1,$2,'Active',$3)",[uuid(id),uuid(school),role]);
+ await db.query("insert into school_workspaces values($1,'{\"notifications\":[]}'),($2,'{\"notifications\":[] }')",[uuid(100),uuid(200)]);
+ const as=async id=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uuid(id)]);await db.exec('set role authenticated');};
+ const sub=n=>({endpoint:'https://fcm.googleapis.com/push/'+n,keys:{auth:'a'.repeat(22),p256dh:'b'.repeat(87)}});
+ for(const n of[1,2,3]){await as(n);await db.query('select register_web_push($1)',[sub(n)]);}
+ await as(2);await assert.rejects(()=>db.query('select register_web_push($1)',[sub(1)]),/another account/);
+ await assert.rejects(()=>db.query('select register_web_push($1)',[{...sub(5),endpoint:'https://localhost/secret'}]),/Invalid/);
+ await assert.rejects(()=>db.query('select * from web_push_subscriptions'),/permission denied/);await assert.rejects(()=>db.query('select claim_web_push()'),/permission denied/);await assert.rejects(()=>db.query("select queue_web_push($1,'fake',null,$2)",[uuid(100),uuid(2)]),/permission denied/);
+ await db.query('select unregister_web_push($1)',[sub(1).endpoint]);await db.exec('reset role');assert.equal((await db.query('select count(*) from web_push_subscriptions')).rows[0].count,3);
+ const notice={id:'N1',allowed:[uuid(1)]};await db.query('update school_workspaces set payload=$1 where school_id=$2',[{notifications:[notice]},uuid(100)]);
+ let queued=(await db.query('select * from web_push_outbox')).rows;assert.equal(queued.length,1);assert.equal(queued[0].user_id,uuid(1));
+ await db.query('update school_workspaces set payload=$1 where school_id=$2',[{notifications:[notice]},uuid(100)]);assert.equal((await db.query('select count(*) from web_push_outbox')).rows[0].count,1);
+ await db.query('update school_workspaces set payload=$1 where school_id=$2',[{notifications:[notice,{id:'N2',allowed:[uuid(1)]}]},uuid(100)]);assert.equal((await db.query('select count(*) from web_push_outbox')).rows[0].count,2);
+ await db.exec('set role service_role');const claimed=(await db.query('select claim_web_push() data')).rows[0].data;assert.equal(claimed.length,2);assert.equal((await db.query('select claim_web_push() data')).rows[0].data.length,0);await db.exec('reset role');
+ await db.query("insert into sgb_security_messages values($1,$2,$3,$4)",[uuid(500),uuid(100),uuid(1),uuid(2)]);assert.equal((await db.query("select count(*) from web_push_outbox where user_id=$1",[uuid(2)])).rows[0].count,1);
+ await db.query("update profiles set role='parent' where id=$1",[uuid(2)]);await db.exec('set role service_role');assert.equal((await db.query('select claim_web_push() data')).rows[0].data.length,0);await db.exec('reset role');
+ await db.query("update web_push_outbox set attempts=5,status='sending',available_at=now()-interval '1 minute'");await db.exec('set role service_role');await db.query('select claim_web_push()');await db.exec('reset role');assert.equal((await db.query("select count(*) from web_push_outbox where status='failed'")).rows[0].count,3);
+ await db.query('update schools set suspended=true where id=$1',[uuid(100)]);await as(1);await assert.rejects(()=>db.query('select register_web_push($1)',[sub(1)]),/Denied/);
+ console.log('PASS push migration: consent registration, endpoint validation, device ownership, RLS, server-only queue, audience/school isolation, idempotency, leases, role revalidation, exhausted retry and suspension');
+ }finally{await db.close();}})().catch(e=>{console.error(e);process.exit(1)});

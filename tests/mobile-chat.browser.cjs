@@ -17,7 +17,7 @@ const server = http.createServer((request, response) => {
   const browser = await chromium.launch({ headless: true, executablePath: process.env.CHAT_BROWSER_EXECUTABLE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe' });
   let count = 0;
   try {
-    for (const [width,height] of [[360,800],[390,844],[412,915]]) {
+    for (const [width,height] of [[360,800],[390,844],[412,915],[1366,900]]) {
       for (const chatPage of ['parent-chat','teacher-chat','sgb-chat']) {
         const context = await browser.newContext({ viewport: { width,height }, isMobile: true, hasTouch: true });
         const page = await context.newPage();
@@ -46,6 +46,20 @@ const server = http.createServer((request, response) => {
           render();
           window.originalInput = document.getElementById('chatInput');
         });
+        await page.evaluate(()=>bindChatPaneControls());
+        if(width<700){
+          await page.locator('#chatBack').click();
+          await page.locator('#chatSearch').fill('does not exist');
+          assert.ok(await page.locator('#chatSearchEmpty').isVisible());
+          await page.locator('#chatSearch').fill('Recipient');
+          assert.ok(await page.locator('[data-chat-contact]').isVisible());
+          assert.match(await page.locator('[data-chat-contact]').getAttribute('href'),/chat=0/);
+          await page.evaluate(()=>document.querySelector('.chat-layout').dataset.view='thread');
+        }else{
+          assert.ok(await page.locator('.chat-list').isVisible());
+          assert.ok(await page.locator('.chat-window').isVisible());await page.locator('#chatBack').click();assert.equal(await page.locator('.chat-list').isVisible(),false);assert.equal(await page.locator('#chatBack').getAttribute('aria-expanded'),'false');await page.locator('#chatBack').click();assert.ok(await page.locator('.chat-list').isVisible());
+        }
+        await page.screenshot({path:process.env.TEMP+'/schoolshield-shared-'+chatPage+'-'+width+'.png'});
         await page.locator('#chatInput').fill('Draft text while a reply arrives');
         await page.locator('#chatInput').focus();
         await page.evaluate(() => document.getElementById('chatInput').setSelectionRange(6,10));

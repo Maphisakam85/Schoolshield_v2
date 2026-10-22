@@ -230,8 +230,9 @@ const ACCESS = {
     "test-scores",
     "teacher-chat",
   ],
-  sgb: ["dashboard", "visitors", "incidents", "announcements", "sgb-chat"],
+  sgb: ["dashboard", "visitors", "incidents", "announcements", "sgb-chat", "sgb-security-chat"],
   security: [
+    "sgb-security-chat",
     "dashboard",
     "visitors",
     "incidents",
@@ -327,6 +328,7 @@ const NAV = [
     "security-officers.html",
     "shield",
   ],
+  ["sgb-security-chat", "SGB–Security Chat", "sgb-security-chat.html", "chat"],
   ["sgb-chat", "SGB Chat", "sgb-chat.html", "chat"],
   ["settings", "Settings", "settings.html", "settings"],
 ];
@@ -369,6 +371,7 @@ const NAV_GROUPS = [
       "teacher-chat",
       "parent-chat",
       "sgb-chat",
+      "sgb-security-chat",
     ],
   },
   { label: "Administration", ids: ["settings", "user-management", "school-records"] },
@@ -1254,6 +1257,16 @@ function navHasNewUpdates(id) {
   }
   return false;
 }
+function chatLabel(id, viewer = role()) {
+  const labels = {
+    'sgb-chat': {sgb:'Principal Chat',principal:'SGB Chat'},
+    'sgb-security-chat': {sgb:'Security Chat',security:'SGB Chat'},
+    'teacher-chat': {teacher:'Principal Chat',principal:'Teacher Chat',deputy:'Teacher Chat'},
+    'parent-chat': {parent:'Teacher Chat',teacher:'Parent Chat'},
+  };
+  return labels[id]?.[viewer] || '';
+}
+const CHAT_PAGES = ['parent-chat','teacher-chat','sgb-chat','sgb-security-chat'];
 function nav() {
   const dashboardLink = NAV.find((item) => item[0] === "dashboard");
   const dashboard =
@@ -1268,24 +1281,30 @@ function nav() {
     NAV_GROUPS.filter((group) => role() !== "security" || group.label !== "Learning").map((group) => {
       const links = group.ids
         .map((id) => NAV.find((item) => item[0] === id))
-        .filter((item) => item && allowed(item[0]));
+        .filter((item) => item && allowed(item[0]))
+        .filter(item => !CHAT_PAGES.includes(item[0]) || item[0] === NAV.find(n => CHAT_PAGES.includes(n[0]) && allowed(n[0]))?.[0]);
       if (!links.length) return "";
-      const isCurrentGroup = links.some(([id]) => page() === id);
+      const isCurrentGroup = links.some(([id]) => page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page())));
       const open = isCurrentGroup;
       return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary>${escapeHtml(group.label)}<span>⌄</span></summary>${links
-        .map(([id, label, url, ic]) => {
-          const hasUpdates = navHasNewUpdates(id);
-          return `<a href="${escapeHtml(url)}" class="nav-item ${escapeHtml(page() === id ? "active" : "")} ${escapeHtml(hasUpdates ? "has-updates" : "")}" title="${escapeHtml(hasUpdates ? label + ": new updates" : label)}" aria-label="${escapeHtml(hasUpdates ? label + ", new updates" : label)}">${icon(ic)}<span>${escapeHtml(label)}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
+        .map(([id, originalLabel, url, ic]) => {
+          const label = CHAT_PAGES.includes(id) ? "Chats" : originalLabel;
+          const hasUpdates = CHAT_PAGES.includes(id) ? CHAT_PAGES.some(channel => allowed(channel) && navHasNewUpdates(channel)) : navHasNewUpdates(id);
+          return `<a href="${escapeHtml(url)}" class="nav-item ${escapeHtml((page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page()))) ? "active" : "")} ${escapeHtml(hasUpdates ? "has-updates" : "")}" title="${escapeHtml(hasUpdates ? label + ": new updates" : label)}" aria-label="${escapeHtml(hasUpdates ? label + ", new updates" : label)}">${icon(ic)}<span>${escapeHtml(label)}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
         })
         .join("")}</details>`;
     }).join("")
   );
 }
 function schoolModeNotice() {
+  if (CHAT_PAGES.includes(page())) return "";
   const mode = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").schoolMode;
   return mode === "demo" || mode === "qa" ? `<div class="notice" role="status"><b>${escapeHtml(mode === "demo" ? "DEMO SCHOOL" : "QA SCHOOL")}</b><p>This school contains demonstration or test data. Live schools use separate records.</p></div>` : "";
 }
 function shell(body, title) {
+  const chatMode = CHAT_PAGES.includes(page()) && ["demo","qa"].includes(JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").schoolMode);
+  title = CHAT_PAGES.includes(page()) ? "Chats" : title;
+  if (chatLabel(page())) document.title = 'SchoolShield - ' + title;
   const r = role();
   const scope =
     r === "sgb"
@@ -1293,7 +1312,7 @@ function shell(body, title) {
       : isLeadership()
         ? "Class-level oversight"
         : "Role-based access";
-  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(ROLE_NAMES[r])}</b><small>${escapeHtml(scope)}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${escapeHtml(title)}</h2></div><div class="top-actions"><button class="icon-btn notification-toggle" id="globalBell" title="Open notifications" aria-label="Open notifications">🔔</button><div class="profile"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(userName())}</b><small>${escapeHtml(SCHOOL.name)}</small></div></div></div></header>${alertToast()}<section class="content">${schoolModeNotice()}${body}</section></main></div>`;
+  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(ROLE_NAMES[r])}</b><small>${escapeHtml(scope)}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${escapeHtml(title)}${chatMode ? ' <span class="chat-mode-badge" title="This school contains demonstration or test data">Demo / QA school</span>' : ""}</h2></div><div class="top-actions"><button class="icon-btn notification-toggle" id="globalBell" title="Open notifications" aria-label="Open notifications">🔔</button><div class="profile"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(userName())}</b><small>${escapeHtml(SCHOOL.name)}</small></div></div></div></header>${alertToast()}<section class="content">${schoolModeNotice()}${body}</section></main></div>`;
 }
 function stat(label, value, sub) {
   return `<div class="stat-card"><div class="stat-icon">▦</div><div><div class="stat-value">${escapeHtml(value)}</div><div class="stat-label">${escapeHtml(label)}</div><small>${escapeHtml(sub)}</small></div></div>`;
@@ -1305,6 +1324,7 @@ function searchBar(id, placeholder = "Search...") {
   return `<div class="toolbar"><div class="search"><span>⌕</span><input id="${escapeHtml(id)}" placeholder="${escapeHtml(placeholder)}"></div><button class="btn ghost" data-action="filter">Filters</button></div>`;
 }
 function generic(title, eyebrow, desc, content, actions = "") {
+  title = chatLabel(page()) || title;
   return shell(
     `<div class="page-intro"><div><span class="pill">${escapeHtml(eyebrow)}</span><h1>${escapeHtml(title)}</h1><p>${escapeHtml(desc)}</p></div><div>${actions}</div></div>${content}`,
     title,
@@ -1516,9 +1536,10 @@ function quickForRole(r) {
     .filter(x => !["announcements.html", "appointments.html"].includes(x[1]) || window.schoolshieldFeatureAccess?.[x[1].replace('.html','')] !== false)
     .map((x, index) => {
       const navItem = NAV.find((item) => item[2] === x[1]);
+      const label = chatLabel(navItem?.[0],r) || x[0];
       const description = descriptions[x[1]] || 'Open ' + x[0] + '.';
       const tooltipId = `quick-description-${r}-${index}`;
-      return `<button class="quick" type="button" aria-label="${escapeHtml(x[0])}" data-quick-url="${escapeHtml(x[1])}" aria-describedby="${escapeHtml(tooltipId)}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(x[0])}</span><b aria-hidden="true">→</b><span class="quick-description" id="${escapeHtml(tooltipId)}" role="tooltip">${escapeHtml(description)}</span></button>`;
+      return `<button class="quick" type="button" aria-label="${escapeHtml(label)}" data-quick-url="${escapeHtml(x[1])}" aria-describedby="${escapeHtml(tooltipId)}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(label)}</span><b aria-hidden="true">→</b><span class="quick-description" id="${escapeHtml(tooltipId)}" role="tooltip">${escapeHtml(description)}</span></button>`;
     })
     .join("");
 }
@@ -2519,6 +2540,51 @@ function chatSender(message, conversation, legacySide) {
   return message.from === legacySide ? userName() : conversation.id;
 }
 
+// A single inbox combines permitted channels; each conversation keeps its original backend.
+let chatInboxRevision = 0;
+async function decorateChatInbox() {
+  const box = document.querySelector('.chat-contacts') || document.getElementById('directChatContacts');
+  if (!box) return;
+  const revision = ++chatInboxRevision;
+  box.querySelectorAll('[data-unified-contact]').forEach(n=>n.remove());
+  const direct = page()==='sgb-security-chat';
+  const heading = document.querySelector('.chat-inbox-head h1') || document.getElementById('directChatTitle');
+  if(heading) heading.textContent='Chats';
+  const rows=[];
+  collectingChatInbox=true;
+  try {
+    for(const [id,renderer] of [['teacher-chat',teacherChat],['parent-chat',parentChat],['sgb-chat',sgbChat]]) {
+      if(id===page() || !allowed(id)) continue;
+      const collected=renderer();
+      for(const [index,c] of (collected.conversations||[]).entries()) rows.push({name:c.id,initials:c.initials,preview:c.messages?.at(-1)?.text||'Start a conversation',channel:chatLabel(id),url:id+'.html?chat='+index});
+    }
+  } finally { collectingChatInbox=false; }
+  if(!direct && allowed('sgb-security-chat') && window.schoolshieldSupabase) {
+    try {
+      const {data,error}=await window.schoolshieldSupabase.rpc('sgb_security_chat',{});
+      if(error) throw error;
+      for(const c of data?.contacts||[])rows.push({name:c.name,initials:initials(c.name),preview:c.last_message?.body||'Start a conversation',channel:chatLabel('sgb-security-chat'),url:'sgb-security-chat.html?peer='+encodeURIComponent(c.id)});
+    } catch {
+      rows.push({name:chatLabel('sgb-security-chat'),initials:'!',preview:'Could not load conversations. Open to retry.',channel:'Chat service',url:'sgb-security-chat.html'});
+    }
+  }
+  if(revision!==chatInboxRevision || !box.isConnected) return;
+  for(const c of rows) {
+    const a=document.createElement('a');a.href=c.url;a.dataset.unifiedContact='';a.dataset.chatContact='';a.className=direct?'direct-chat-contact':'chat-person';
+    const avatar=document.createElement('span');avatar.className='avatar';avatar.textContent=c.initials;
+    const copy=document.createElement('div'),name=document.createElement('b'),preview=document.createElement('small');
+    name.textContent=c.name;preview.textContent=c.channel+' - '+c.preview;copy.append(name,preview);a.append(avatar,copy);box.append(a);
+    const query=(document.getElementById(direct?'directChatSearch':'chatSearch')?.value||'').toLowerCase();
+    if(!a.textContent.toLowerCase().includes(query))a.style.display='none';
+  }
+  const visible=Array.from(box.querySelectorAll('a,button')).filter(n=>n.style.display!=='none');
+  if(direct){
+    const count=document.getElementById('directChatCount');if(count)count.textContent=String(visible.length);
+    box.querySelectorAll('.direct-chat-empty').forEach(n=>n.hidden=visible.length>0);
+  }else {const empty=document.getElementById('chatSearchEmpty');if(empty)empty.hidden=visible.length>0;}
+}
+window.SchoolShieldChatInbox={decorate:decorateChatInbox};
+let collectingChatInbox = false;
 function chatLayout(
   title,
   eyebrow,
@@ -2527,12 +2593,13 @@ function chatLayout(
   storeKey,
   ownStoredSide = "me",
 ) {
+  if (collectingChatInbox) return {conversations,storeKey};
   if (!conversations.length)
     return generic(
       title,
       eyebrow,
       desc,
-      '<section class="panel"><p class="muted">No conversations available.</p></section>',
+      `<div class="chat-layout chat-empty-layout"><aside class="panel chat-list"><header class="chat-inbox-head"><h1>${escapeHtml(chatLabel(page())||title)}</h1><p>No conversations available. Contacts will appear when they are linked to your account.</p></header></aside><section class="panel chat-window"><p class="muted" style="margin:auto;padding:24px">Your private school conversations will appear here.</p></section></div>`,
     );
   const selected = Math.max(
     0,
@@ -2540,18 +2607,10 @@ function chatLayout(
   );
   const active = conversations[selected];
   const storageIndex = active.storeIndex ?? selected;
-  const people = conversations
-    .map(
-      (contact, index) =>
-        `<a href="${escapeHtml(page())}.html?chat=${escapeHtml(index)}" data-chat-contact class="chat-person ${escapeHtml(index === selected ? "active" : "")}"><div class="avatar">${escapeHtml(contact.initials)}</div><div><b>${escapeHtml(contact.id)}</b><small>${escapeHtml(contact.role)}</small></div><span class="dot success"></span></a>`,
-    )
-    .join("");
-  const contacts = conversations
-    .map(
-      (contact, index) =>
-        `<button data-chat-contact class="chat-person chat-contact-button" data-action="open-chat" data-url="${escapeHtml(page())}.html?chat=${escapeHtml(index)}"><div class="avatar">${escapeHtml(contact.initials)}</div><div><b>${escapeHtml(contact.id)}</b><small>${escapeHtml(contact.role)}</small></div><span class="chat-contact-action">Chat -></span></button>`,
-    )
-    .join("");
+  const people = conversations.map((contact,index)=>{
+    const last=contact.messages?.at(-1);
+    return `<a href="${escapeHtml(page())}.html?chat=${index}" data-chat-contact class="chat-person ${index===selected?'active':''}" ${index===selected?'aria-current="true"':''}><span class="avatar">${escapeHtml(contact.initials)}</span><div><b>${escapeHtml(contact.id)}</b><small>${escapeHtml(last?.text||'Start a conversation')}</small></div></a>`;
+  }).join('');
   // The persisted conversation is append-only. Device clocks and legacy date
   // strings can disagree; sorting those timestamps moved replies above receipts.
   const ordered = (active.messages || []).map((message) => ({ message }));
@@ -2563,7 +2622,7 @@ function chatLayout(
         const mine = sender === userName();
         const grouped = sender === previousSender;
         previousSender = sender;
-        return `<div class="chat-message ${escapeHtml(mine ? "outgoing" : "incoming")} ${escapeHtml(grouped ? "grouped" : "")}"><div class="msg ${escapeHtml(mine ? "mine" : "other")}">${mine || grouped ? "" : `<b class="message-sender">${escapeHtml(sender)}</b>`}<span>${escapeHtml(message.text)}</span><small>${escapeHtml(chatTimestamp(message))}${mine ? " <em>sent</em>" : ""}</small></div></div>`;
+        return `<div class="chat-message ${escapeHtml(mine ? "outgoing" : "incoming")} ${escapeHtml(grouped ? "grouped" : "")}"><div class="msg ${escapeHtml(mine ? "mine" : "other")}">${mine || grouped ? "" : `<b class="message-sender">${escapeHtml(sender)}</b>`}<span>${escapeHtml(message.text)}</span><small>${escapeHtml(chatTimestamp(message))}${mine ? ` <em>${escapeHtml((typeof window!=="undefined"&&window.schoolshieldChatDelivery?.[message.id])||"sent")}</em>` : ""}</small></div></div>`;
       })
       .join("") ||
     '<p class="muted">No messages yet. Start the conversation below.</p>';
@@ -2571,56 +2630,7 @@ function chatLayout(
     title,
     eyebrow,
     desc,
-    `<section class="panel chat-start"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div class="chat-contact-grid">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${escapeHtml(encodeURIComponent(storeKey + ":" + active.id))}"><div class="chat-head"><b>${escapeHtml(active.id)}</b><small>${escapeHtml(active.role)}</small></div><div class="messages" id="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${escapeHtml(storeKey)}" data-chat="${escapeHtml(storageIndex)}" data-sender="me">Send</button></div></section></div>`,
-  );
-}
-
-function legacyChatLayout(
-  title,
-  eyebrow,
-  desc,
-  conversations,
-  storeKey,
-  ownStoredSide = "me",
-) {
-  if (!conversations.length)
-    return generic(
-      title,
-      eyebrow,
-      desc,
-      '<section class="panel"><p class="muted">No conversations available.</p></section>',
-    );
-  const selected = Math.max(
-    0,
-    Math.min(conversations.length - 1, Number(param("chat")) || 0),
-  );
-  const active = conversations[selected];
-  const storageIndex = active.storeIndex ?? selected;
-  const people = conversations
-    .map(
-      (c, i) =>
-        `<a href="${escapeHtml(page())}.html?chat=${escapeHtml(i)}" data-chat-contact class="chat-person ${escapeHtml(i === selected ? "active" : "")}"><div class="avatar">${escapeHtml(c.initials)}</div><div><b>${escapeHtml(c.id)}</b><small>${escapeHtml(c.role)}</small></div><span class="dot success"></span></a>`,
-    )
-    .join("");
-  const contacts = conversations
-    .map(
-      (c, i) =>
-        `<button data-chat-contact class="chat-person" data-action="open-chat" data-url="${escapeHtml(page())}.html?chat=${escapeHtml(i)}" style="border:1px solid #dce6e8;background:#fff;border-radius:10px;text-align:left;cursor:pointer"><div class="avatar">${escapeHtml(c.initials)}</div><div><b>${escapeHtml(c.id)}</b><small>${escapeHtml(c.role)}</small></div><span style="margin-left:auto;color:#087550;font-weight:700;font-size:12px">Chat →</span></button>`,
-    )
-    .join("");
-  const messages =
-    (active.messages || [])
-      .map((m) => {
-        const mine = m.from === ownStoredSide;
-        return `<div class="chat-message ${escapeHtml(mine ? "outgoing" : "incoming")}"><div class="msg ${escapeHtml(mine ? "mine" : "other")}"><span>${escapeHtml(m.text)}</span><small>${escapeHtml(m.date || "Now")}${escapeHtml(mine ? " ✓✓" : "")}</small></div></div>`;
-      })
-      .join("") ||
-    '<p class="muted">No messages yet — start the conversation below.</p>';
-  return generic(
-    title,
-    eyebrow,
-    desc,
-    `<section class="panel" style="margin-bottom:16px"><div class="panel-head"><div><h3>Start a conversation</h3><p>Choose a person you are authorised to contact.</p></div></div><input class="input" id="chatSearch" placeholder="Search people you can contact..." style="margin:0 0 11px"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:9px;max-height:205px;overflow:auto;padding-right:4px">${contacts}</div></section><div class="chat-layout"><section class="panel chat-list">${people}</section><section class="panel chat-window" data-conversation="${escapeHtml(encodeURIComponent(storeKey + ":" + active.id))}"><div class="chat-head"><b>${escapeHtml(active.id)}</b><small>${escapeHtml(active.role)}</small></div><div class="messages">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" placeholder="Write a secure message..."><button class="btn primary" data-action="send-message" data-store="${escapeHtml(storeKey)}" data-chat="${escapeHtml(storageIndex)}" data-sender="${escapeHtml(ownStoredSide)}">Send</button></div></section></div>`,
+    `<div class="chat-layout" data-view="thread"><aside class="panel chat-list"><header class="chat-inbox-head"><h1>${escapeHtml(chatLabel(page())||title)}</h1><label class="chat-sr-only" for="chatSearch">Search conversations</label><input class="input" type="search" id="chatSearch" placeholder="Search by name or message" autocomplete="off"></header><nav class="chat-contacts" aria-label="Conversations">${people}<p id="chatSearchEmpty" hidden>No conversations match your search.</p></nav></aside><section class="panel chat-window" data-conversation="${escapeHtml(encodeURIComponent(storeKey+':'+active.id))}"><header class="chat-head"><button type="button" class="btn small chat-back" id="chatBack" aria-expanded="true" title="Show or hide conversations">Chats</button><span class="avatar">${escapeHtml(active.initials)}</span><div><b>${escapeHtml(active.id)}</b><small>${escapeHtml(active.role)}</small></div></header><div class="messages" id="messages" role="log" aria-label="Conversation messages" aria-live="polite">${messages}</div><div class="chat-compose"><input class="input" id="chatInput" aria-label="Message" placeholder="Write a secure message..." autocomplete="off"><button class="btn primary" data-action="send-message" data-store="${escapeHtml(storeKey)}" data-chat="${escapeHtml(storageIndex)}" data-sender="me">Send</button></div></section></div>`,
   );
 }
 
@@ -2643,6 +2653,7 @@ function teacherChat() {
     (conversation) => conversation.teacherId === accountId,
   );
   if (storedIndex < 0) {
+    if (collectingChatInbox) return {conversations:[]};
     persist((state) => {
       state.teacherChat = state.teacherChat || [];
       state.teacherChat.push({
@@ -2708,6 +2719,7 @@ function sgbChat() {
     (conversation) => conversation.sgbMemberId === accountId,
   );
   if (storedIndex < 0) {
+    if (collectingChatInbox) return {conversations:[]};
     persist((state) => {
       state.sgbPrincipalChat = state.sgbPrincipalChat || [];
       state.sgbPrincipalChat.push({
@@ -4323,6 +4335,8 @@ function downloadIncidentReport() {
 
 /* -------------------------------- actions -------------------------------- */
 function action(type, el) {
+  if(type==='review-alert-later'){reviewAlertLater(el.dataset.notification);return;}
+
   if (window.schoolshieldSupabase && ["principal", "deputy", "clerk"].includes(role()) && ["add-learner", "add-staff"].includes(type)) {
     return go(`school-records.html?type=${type === "add-learner" ? "learners" : "staff"}&new=1`);
   }
@@ -4549,11 +4563,14 @@ function action(type, el) {
       '<p class="muted">This action is available in your role workspace.</p>',
     );
 }
+function deferredChatAlerts(){try{return JSON.parse(sessionStorage.getItem('schoolshield:later:'+currentProfileId())||'[]');}catch{return [];}}
+function reviewAlertLater(id){const ids=deferredChatAlerts();if(!ids.includes(id))ids.push(id);sessionStorage.setItem('schoolshield:later:'+currentProfileId(),JSON.stringify(ids));document.querySelector('.chat-alert-row')?.remove();}
 function alertToast() {
   const latest = notificationsForRole().find(
-    (notice) => !notice.read && ["Critical", "High"].includes(notice.priority),
+    (notice) => !notice.read && ["Critical", "High"].includes(notice.priority) && (!CHAT_PAGES.includes(page()) || !deferredChatAlerts().includes(notice.id)),
   );
   if (!latest) return "";
+  if (CHAT_PAGES.includes(page())) return `<div class="chat-alert-row"><button class="incident-toast chat-alert-compact" data-action="view-notification" data-notification="${escapeHtml(latest.id)}" title="${escapeHtml(latest.description)}"><span aria-hidden="true">!</span><b>${escapeHtml(latest.title)}</b><span class="chat-alert-action">View alert</span></button><button type="button" class="chat-review-later" data-action="review-alert-later" data-notification="${escapeHtml(latest.id)}" title="Hide this banner for this session; keep the notification unread">Review later</button></div>`;
   return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${escapeHtml(latest.id)}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${escapeHtml(latest.title)}</b><small style="display:block;margin-top:2px">${escapeHtml(latest.description)}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
 }
 function relatedLearnerRecord(record) {
@@ -6359,74 +6376,42 @@ async function sendAnnouncement() {
 }
 
 async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
-  const input = $("#chatInput");
-  if (!input || !input.value.trim() || window.schoolshieldChatSending) return;
-  const text = input.value.trim();
-  if (["parent", "teacher"].includes(role()) && storeKey === "parentChat") {
-    const child =
-      role() === "parent"
-        ? parentLearner()
-        : getState().parentChat?.[Number(chatIndex) || 0] &&
-          learnerById(getState().parentChat[Number(chatIndex) || 0].learnerId);
-    const button = $("[data-action='send-message']");
-    window.schoolshieldChatSending = true;
-    if (button) button.disabled = true;
-    try {
-      if (!child?.id) throw new Error("This conversation is not linked to a learner. Refresh the page and select the parent again.");
-      if (text.length > 2000) throw new Error("Keep your message under 2,000 characters.");
-      // Finish queued staff changes before the endpoint appends to the workspace.
-      if (window.schoolshieldWorkspaceSaveQueue) await window.schoolshieldWorkspaceSaveQueue;
-      const response = await window.schoolshieldFunctionRequest("parent-chat", { learner_id: child.id, text });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "The message could not be saved. Please try again.");
-      if (input.value.trim() === text) input.value = "";
-      const currentInput = $("#chatInput");
-      if (currentInput?.value.trim() === text) currentInput.value = "";
-      try {
-        await refreshCloudWorkspace(true);
-      } catch (error) {
-        modal("Message sent", '<p class="muted">Your message was saved. Refresh the conversation to load the latest messages.</p>');
-      }
-    } catch (error) {
-      const message = String(error.message || "Check your connection and try again.")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      modal("Message not sent", `<p class="muted">${escapeHtml(message)}</p>`);
-    } finally {
-      window.schoolshieldChatSending = false;
-      if (button) button.disabled = false;
-      const currentButton = $("[data-action='send-message']");
-      if (currentButton) currentButton.disabled = false;
-    }
-    return;
-  }
-  if (Array.isArray(getState()[storeKey])) {
-    persist((state) => {
-      const conversation =
-        state[storeKey][Number(chatIndex)] || state[storeKey][0];
-      if (conversation)
-        conversation.messages.push({
-          from: sender,
-          sender: userName(),
-          text,
-          date: todayLabel(),
-          sentAt: new Date().toISOString(),
-        });
-    });
-  } else {
-    persist((state) => {
-      state.chatExtras = state.chatExtras || {};
-      state.chatExtras[storeKey] = state.chatExtras[storeKey] || [];
-      state.chatExtras[storeKey].push({
-        from: sender,
-        sender: userName(),
-        text,
-        date: todayLabel(),
-        sentAt: new Date().toISOString(),
+  const input=$("#chatInput");if(!input||!input.value.trim()||window.schoolshieldChatSending)return;
+  const text=input.value.trim(),parentChannel=['parent','teacher'].includes(role())&&storeKey==='parentChat';
+  const button=$("[data-action='send-message']"),label=button?.textContent||'Send';
+  let pending,stamp,empty,confirmed=false,attempt;
+  window.schoolshieldChatSending=true;
+  if(button){button.disabled=true;button.textContent='Sending...';button.setAttribute?.('aria-busy','true');}
+  // Visible immediately, but never presented as a confirmed server message.
+  const pane=typeof document!=='undefined'?document.querySelector?.('.messages'):null;
+  if(pane&&document.createElement){empty=pane.querySelector?.('.muted');if(empty)empty.hidden=true;pending=document.createElement('div');pending.className='chat-message outgoing chat-pending';
+    const bubble=document.createElement('div'),body=document.createElement('span');bubble.className='msg mine';body.textContent=text;stamp=document.createElement('small');stamp.textContent='Sending...';bubble.append(body,stamp);pending.append(bubble);pane.append(pending);pane.scrollTop=pane.scrollHeight;}
+  try{
+    if(parentChannel){
+      const child=role()==='parent'?parentLearner():learnerById(getState().parentChat?.[Number(chatIndex)||0]?.learnerId);
+      if(!child?.id)throw Error('This conversation is not linked to a learner. Refresh and select the parent again.');
+      if(text.length>2000)throw Error('Keep your message under 2,000 characters.');
+      if(window.schoolshieldWorkspaceSaveQueue&&await window.schoolshieldWorkspaceSaveQueue===false)throw Error('A previous save is still pending. Retry that save before sending.');
+      const response=await window.schoolshieldFunctionRequest('parent-chat',{learner_id:child.id,text});
+      const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'The message could not be saved. Please try again.');
+    }else{
+      const signature=JSON.stringify([storeKey,chatIndex,text]);
+      attempt=window.schoolshieldChatRetry?.signature===signature?window.schoolshieldChatRetry:{signature,message:{id:crypto.randomUUID(),from:sender,sender:userName(),text,date:todayLabel(),sentAt:new Date().toISOString()}};
+      window.schoolshieldChatRetry=attempt;window.schoolshieldChatDelivery=window.schoolshieldChatDelivery||{};window.schoolshieldChatDelivery[attempt.message.id]='Sending...';
+      persist(state=>{
+        let messages;if(Array.isArray(state[storeKey])){const conversation=state[storeKey][Number(chatIndex)]||state[storeKey][0];if(!conversation)throw Error('Conversation unavailable. Refresh and try again.');messages=conversation.messages=conversation.messages||[];}
+        else{state.chatExtras=state.chatExtras||{};messages=state.chatExtras[storeKey]=state.chatExtras[storeKey]||[];}
+        if(!messages.some(m=>m.id===attempt.message.id))messages.push(attempt.message);
       });
-    });
-  }
-  input.value = "";
-  render();
+      if(await(window.schoolshieldWorkspaceSaveQueue||Promise.resolve(true))===false)throw Error(window.schoolshieldLastSyncError||'The message has not been confirmed. Your draft is kept.');
+      delete window.schoolshieldChatDelivery[attempt.message.id];window.schoolshieldChatRetry=null;
+    }
+    confirmed=true;if(stamp)stamp.textContent='Sent';pending?.classList.remove('chat-pending');
+    if(input.value.trim()===text)input.value='';
+    // The server has already confirmed the send. Do not block the composer on a full refresh.
+    if(parentChannel)Promise.resolve(refreshCloudWorkspace(true)).catch(()=>{if(stamp?.isConnected)stamp.textContent='Sent. Refresh to load the latest conversation.';});
+  }catch(error){pending?.remove();if(empty)empty.hidden=false;if(attempt)window.schoolshieldChatDelivery[attempt.message.id]='Not sent';modal('Message not sent','<p class="muted">'+escapeHtml(error.message||'Check your connection and try again.')+'</p>');}
+  finally{window.schoolshieldChatSending=false;if(button){button.disabled=false;button.textContent=label;button.removeAttribute?.('aria-busy');}if(confirmed&&!parentChannel)render();}
 }
 
 function exportCsv() {
@@ -6485,11 +6470,18 @@ function patchLiveChat(html) {
     messages.innerHTML = nextMessages.innerHTML;
     messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
   }
+  const contacts=$(".chat-contacts [data-chat-contact]");
+  const nextContacts=template.content.querySelectorAll(".chat-contacts [data-chat-contact]");
+  if(contacts.length===nextContacts.length)contacts.forEach((contact,index)=>{
+    const preview=contact.querySelector("small"),next=nextContacts[index].querySelector("small");
+    if(preview&&next&&preview.textContent!==next.textContent)preview.textContent=next.textContent;
+  });
   // Never replace the composer, input or their ancestors. Focus, selection,
   // IME composition and browser keyboard state therefore remain untouched.
   return true;
 }
 function render() {
+  if(window.schoolshieldChatSwitching||window.schoolshieldChatSending)return;
   initWorkspaceDraftProtection();
   if (workspaceHasDraft() && (!workspaceIsChat() || workspaceHasOpenEditor())) { showWorkspaceUpdates(); return; }
   // Keep selected File objects and the original form mounted until its upload
@@ -6513,6 +6505,7 @@ function render() {
     }
   }
   const p = page();
+  if (p === "sgb-security-chat" && document.getElementById("directChatForm")) return;
   let html;
   if (p === "dashboard") html = dashboard();
   else if (p === "incidents") html = incidents();
@@ -6545,9 +6538,10 @@ function render() {
   else if (p === "attendance-register") html = dailyAttendanceRegister();
   else if (p === "teacher-chat") html = teacherChat();
   else if (p === "parent-chat") html = parentChat();
+  else if (p === "sgb-security-chat") html = shell(document.getElementById("directChatTemplate").innerHTML, "SGB–Security Chat");
   else if (p === "sgb-chat") html = sgbChat();
   else html = dashboard();
-  if (patchLiveChat(html)) return;
+  if (patchLiveChat(html)) { decorateChatInbox(); return; }
   if (workspaceHasDraft()) { showWorkspaceUpdates(); return; }
   $("#app").innerHTML = html;
   bind();
@@ -6662,7 +6656,7 @@ async function approveAccountRequest(id, delivery = "preferred") {
   );
   const result = await response.json().catch(() => ({}));
   if (!response.ok)
-    return alert(result.error || "Could not approve this account.");
+    return modal("Account not approved", "<p>" + escapeHtml(result.error || "Could not approve this account.") + "</p>");
   if (delivery === "setup_link" && result.setup_link) {
     const link = String(result.setup_link);
     let trustedLink = "";
@@ -6686,7 +6680,7 @@ async function approveAccountRequest(id, delivery = "preferred") {
   } else {
     modal(
       "Account approved",
-      `<p><b>The account has been approved.</b> ${escapeHtml(result.message === "Account approved. The SMS provider accepted the invitation for delivery." ? "The SMS provider accepted the invitation for delivery." : "An invitation email has been sent.")}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
+      `<p><b>The account has been approved.</b> ${escapeHtml(result.message || "The account approval was confirmed.")}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
     );
   }
   loadAccountRequests();
@@ -6727,24 +6721,43 @@ async function rejectAccountRequest(id) {
 }
 
 function initSidebarAccordion(sidebar) {
-  const groups = Array.from(sidebar.querySelectorAll('details.nav-group'));
-  // Native grouped details plus a fallback for browsers without name support.
-  groups.forEach(group => {
-    const summary = group.querySelector('summary');
-    if (summary) summary.onclick = () => {
-      if (!group.open) groups.forEach(other => { if (other !== group) other.open = false; });
-    };
-    group.ontoggle = () => {
-      if (group.open) groups.forEach(other => { if (other !== group) other.open = false; });
-    };
-  });
+  const groups = () => Array.from(sidebar.querySelectorAll('details.nav-group'));
+  const closeOthers = keep => groups().forEach(group => { if (group !== keep && group.open) group.open = false; });
+  const normalise = preferred => {
+    const opened = groups().filter(group => group.open);
+    if (opened.length > 1) closeOthers(preferred?.open ? preferred : opened.find(group => group.querySelector('.nav-item.active')) || opened[0]);
+  };
+  normalise();
+  if (sidebar.dataset.accordionBound === 'true') return;
+  sidebar.dataset.accordionBound = 'true';
+  // Handle activation synchronously, including keyboard-generated clicks.
+  // Delegation also covers menus replaced by a portal refresh.
+  sidebar.addEventListener('click', event => {
+    const summary = event.target.closest('summary');
+    const group = summary?.parentElement;
+    if (!group?.matches('details.nav-group') || !sidebar.contains(group)) return;
+    event.preventDefault();
+    const opening = !group.open;
+    closeOthers(group);
+    group.open = opening;
+  }, true);
+  sidebar.addEventListener('toggle', event => {
+    if (event.target.matches('details.nav-group') && event.target.open) closeOthers(event.target);
+  }, true);
+  if (typeof MutationObserver !== 'undefined') {
+    const observer = new MutationObserver(records => {
+      const latest = records.filter(record => record.type === 'attributes' && record.target.open).at(-1)?.target;
+      normalise(latest);
+    });
+    observer.observe(sidebar, {subtree:true,childList:true,attributes:true,attributeFilter:['open']});
+  }
 }
 function initWorkspaceChrome() {
   const sidebar = $(".sidebar");
+  if (sidebar) initSidebarAccordion(sidebar);
   const main = $(".main");
   const topActions = $(".top-actions");
   if (!sidebar || !main || !topActions) return;
-  initSidebarAccordion(sidebar);
   if (!$("#refreshWorkspace")) {
     const refresh = document.createElement("button");
     refresh.id = "refreshWorkspace";
@@ -6867,11 +6880,39 @@ function toggleNotificationCenter() {
   };
   bindNotificationFilters(drawer);
 }
+function bindChatPaneControls(){
+  const input=$("#chatInput");if(!input||input.dataset.chatBound)return;input.dataset.chatBound='true';
+  $("#chatBack")?.addEventListener("click",()=>{
+    const layout=$(".chat-layout"),button=$("#chatBack");
+    if(window.innerWidth<=700){layout.dataset.view="list";button.setAttribute("aria-expanded","true");$("#chatSearch").focus({preventScroll:true});}
+    else {const collapsed=layout.dataset.inboxCollapsed!=="true";layout.dataset.inboxCollapsed=String(collapsed);button.setAttribute("aria-expanded",String(!collapsed));}
+  });
+  $("#chatSearch")?.addEventListener("input", (event) => {
+    const query = event.target.value.toLowerCase();
+    $$("[data-chat-contact]").forEach(
+      (contact) =>
+        (contact.style.display = contact.innerText.toLowerCase().includes(query)
+          ? ""
+          : "none"),
+    );
+    const empty = $("#chatSearchEmpty");
+    if (empty) empty.hidden = $$("[data-chat-contact]").some(contact => contact.style.display !== "none");
+  });
+
+  const send=$("[data-action='send-message']");if(send)send.onclick=()=>action('send-message',send);
+  input.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();send?.click();}};
+  const messages=$('.messages');if(messages)requestAnimationFrame(()=>{if(messages.isConnected)messages.scrollTop=messages.scrollHeight;});
+}
+window.SchoolShieldChatView={allowed:id=>allowed(id),render:id=>({'teacher-chat':teacherChat,'parent-chat':parentChat,'sgb-chat':sgbChat}[id])(),bind:bindChatPaneControls,decorate:decorateChatInbox};
+async function prepareWebPush(){if(!window.SchoolShieldPush)await import('./web-push.js');return window.SchoolShieldPush;}
 function bind() {
+  if (page() === "sgb-security-chat") window.SchoolShieldDirectChat.bind();
+  if (CHAT_PAGES.includes(page())) decorateChatInbox();
   bindLearnerHistory();
   bindLearnerSubjectTeachers();
-  if (page()==="notifications") bindNotificationFilters(document);
+  if (page()==="notifications") {bindNotificationFilters(document);window.SchoolShieldPush?.bind();}
   initWorkspaceChrome();
+  window.SchoolShieldChatNavigation?.bind();
   window.SchoolShieldBranding?.apply();
   updateTeachingAssignmentBadge();
   if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
@@ -6907,6 +6948,7 @@ function bind() {
     notice.innerHTML = '<span class="loading-spinner" aria-hidden="true"></span><p>Signing you out...</p>';
     document.body.appendChild(notice);
     try {
+    await prepareWebPush().then(push=>push.stop()).catch(()=>{});
     const result = await window.schoolshieldSupabase?.auth.signOut();
     if (result?.error) throw result.error;
     window.SchoolShieldBranding?.clear();
@@ -6966,33 +7008,13 @@ function bind() {
     const dateInput = document.getElementById(id);
     if (dateInput) dateInput.max = todayIso();
   });
-  $("#chatSearch")?.addEventListener("input", (event) => {
-    const query = event.target.value.toLowerCase();
-    $$("[data-chat-contact]").forEach(
-      (contact) =>
-        (contact.style.display = contact.innerText.toLowerCase().includes(query)
-          ? ""
-          : "none"),
-    );
-  });
+  bindChatPaneControls();
   $("#exportCsv")?.addEventListener("click", exportCsv);
   $("#audienceSelect")?.addEventListener("change", (e) => {
     const opt = e.target.options[e.target.selectedIndex];
     const count = $("#audienceCount");
     if (count) count.textContent = opt.dataset.count || "0";
   });
-  $("#chatInput")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
-      e.preventDefault();
-      const sendButton = $("[data-action='send-message']");
-      if (sendButton) action("send-message", sendButton);
-    }
-  });
-  const messagePane = $(".messages");
-  if (messagePane)
-    requestAnimationFrame(() => {
-      messagePane.scrollTop = messagePane.scrollHeight;
-    });
   setTimeout(showPendingSickNoticePopup, 0);
   setTimeout(showClerkAssessmentPopup, 0);
   setTimeout(showTeacherCriticalMarkPopup, 0);

@@ -6,12 +6,15 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>SchoolShield â€” Notifications</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.webmanifest">
 <script defer src="analytics.js"></script>
 <script type="module" src="speed-insights-init.js"></script>
 </head>
 
 <body data-page="notifications">
     <div id="app"><div class="page-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><p>Loading your school workspace...</p></div></div>
+    <template id="pushSettingsTemplate"><section class="panel" id="pushSettings" aria-labelledby="pushHeading"><h3 id="pushHeading">Device notifications</h3><p id="pushStatus" role="status" aria-live="polite">Checking this device...</p><div class="action-row"><button type="button" class="btn primary" id="enablePush">Enable notifications</button><button type="button" class="btn" id="disablePush" disabled>Disable on this device</button></div></section></template>
+    <script src="web-push.js"></script>
     <script src="ui-feedback.js"></script>
     <script src="supabase-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>

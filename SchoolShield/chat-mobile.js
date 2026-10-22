@@ -1,6 +1,6 @@
 /* Keep the chat inside the visible viewport without scrolling/focusing the page. */
 (function () {
-  if (!['parent-chat', 'teacher-chat', 'sgb-chat'].includes(document.body.dataset.page)) return;
+  if (!['parent-chat', 'teacher-chat', 'sgb-chat', 'sgb-security-chat'].includes(document.body.dataset.page)) return;
   const root = document.documentElement;
   const viewport = window.visualViewport;
   let frame = 0;
