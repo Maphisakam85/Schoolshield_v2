@@ -18,3 +18,22 @@ body[data-platform-page] [role=status]{overflow-wrap:anywhere;min-height:24px}
 
 .school-logo-preview{width:200px;height:150px;max-width:100%;object-fit:contain;background:#f7faf9;border:1px solid var(--line);border-radius:8px;padding:12px}
 body[data-platform-page] :is(button,a,input,select,textarea):focus-visible{outline:3px solid #08786a;outline-offset:3px}
+
+body[data-platform-page="login"] .auth-brand small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.platform-signin-form{display:grid;gap:18px;margin-top:28px}
+.platform-signin-form label{display:grid;gap:7px}
+.platform-signin-form .input{width:100%;min-height:46px;font-size:14px}
+.platform-signin-form button[type="submit"]{width:100%;min-height:46px;margin-top:6px}
+.platform-signin-back{display:block;text-align:center;font-size:13px;margin-top:12px}
+body[data-platform-page="login"] #platformStatus{font-size:13px;color:#b42318}
+
+.theme-editor{display:grid;grid-template-columns:minmax(240px,1fr) minmax(300px,1.4fr);gap:32px;margin-top:20px}
+.theme-editor label{display:grid;gap:8px;margin-bottom:18px}.theme-editor output{font-family:monospace;font-size:12px;color:var(--muted)}
+.theme-colours{display:flex;gap:24px;margin-top:20px}.theme-colours input{width:80px;height:44px;padding:3px;border:1px solid var(--line);border-radius:8px;background:white;cursor:pointer}
+.school-theme-preview{display:grid;grid-template-columns:130px 1fr;min-height:270px;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0;background:#f5f7f8}
+.school-theme-preview aside{background:var(--navy);color:var(--school-nav-ink);padding:20px 10px;display:flex;flex-direction:column;gap:18px;font-size:11px}
+.school-theme-preview aside strong{font-size:12px;overflow-wrap:anywhere}.school-theme-preview aside span{padding:8px}
+.school-theme-preview .theme-preview-active{background:var(--green);color:var(--school-primary-ink);border-radius:6px}
+.school-theme-preview>div{padding:20px 16px}.theme-preview-card{background:white;padding:18px;border-radius:10px;border:1px solid var(--line);font-size:12px;margin-top:22px}
+.theme-preview-button{display:inline-block;padding:9px 12px;border-radius:6px;background:var(--green);color:var(--school-primary-ink)}
+@media(max-width:760px){.theme-editor{grid-template-columns:1fr}.school-theme-preview{grid-template-columns:110px 1fr}.theme-colours{gap:16px}}

@@ -11,9 +11,11 @@
   $('currentLogo').dataset.objectUrl=data.object_path?source:'';if(old)URL.revokeObjectURL(old);
   $('currentLogo').onerror=()=>{$('currentLogo').onerror=null;$('currentLogo').src='assets/schoolshield-logo.png';report('Saved logo could not be displayed. Using the SchoolShield fallback.');};
   branding=data;$('currentLogoStatus').textContent=data.object_path?'Saved school logo · revision '+data.revision:'SchoolShield fallback (no custom logo)';
+  if(!window.SchoolShieldPlatformDrafts?.has('themeForm')) await window.SchoolShieldThemePage.load({client,school,status:report});
   document.querySelector('[data-school-management]').href='super-admin-school.html?school='+encodeURIComponent(school.id);
  }
  function bind(){
+  window.SchoolShieldThemePage.bind();
   $('logoFile').onchange=async()=>{
    revoke();operation=null;$('logoPreview').hidden=true;const file=$('logoFile').files[0];if(!file)return;
    try{

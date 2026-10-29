@@ -10,17 +10,26 @@
    img.style.objectFit='contain';img.onerror=()=>{img.onerror=null;img.src=fallback;};
   });
  }
- function clear(){generation++;identity=null;current=null;refreshing=null;apply();}
+ function clear(){window.SchoolShieldTheme?.clear(document.documentElement);generation++;identity=null;current=null;refreshing=null;apply();}
  async function refresh(){
   if(!client||!identity)return;
   if(refreshing)return refreshing;
   const ticket=generation,own=identity;
   const task=(async()=>{
-   const {data,error}=await bounded(()=>client.rpc('get_my_school_branding'));
+   const [{data,error},themeResult]=await Promise.all([
+    bounded(()=>client.rpc('get_my_school_branding')),
+    bounded(()=>client.rpc('get_my_school_theme')).catch(()=>({error:true}))
+   ]);
    if(ticket!==generation)return;
    if(data?.school_id && data.school_id!==own.schoolId){clear();throw Error('School branding did not match the authenticated school.');}
    if(error){if(error.code==='42501')clear();throw Error('School branding could not be verified.');}
    if(!data)throw Error('School branding could not be verified.');
+   if(!themeResult.error){
+    if(themeResult.data?.school_id!==own.schoolId){clear();throw Error('School colours did not match the authenticated school.');}
+    const defaults=window.SchoolShieldTheme?.defaults;
+    if(themeResult.data.primary_color===defaults?.primary_color&&themeResult.data.navigation_color===defaults?.navigation_color) window.SchoolShieldTheme?.clear(document.documentElement);
+    else window.SchoolShieldTheme?.apply(document.documentElement,themeResult.data);
+   }
    if(!data.object_path){current=null;apply();return;}
    if(current?.revision===data.revision&&current.schoolId===own.schoolId)return;
    const downloaded=await bounded(()=>client.storage.from('school-branding').download(data.object_path));

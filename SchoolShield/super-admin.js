@@ -189,14 +189,19 @@
     if (kind === 'login') {
       $('platformLogin').onsubmit = event => {
         event.preventDefault(); const form = event.currentTarget;
-        busy(form.querySelector('button'), 'Signing in...', async () => {
+        busy(form.querySelector('[type=submit]'), 'Signing in...', async () => {
           const result = await bounded(() => client.auth.signInWithPassword({email:form.elements.email.value.trim(),password:form.elements.password.value}));
           form.elements.password.value = '';
           if (result.error) throw Error('Sign in failed. Check your credentials.');
-          try { await rpc('platform_admin_context'); }
+          try {
+            const gate=await rpc('authorize_platform_login',{p_access_code:form.elements.accessCode.value.trim()});
+            form.elements.accessCode.value='';
+            if(!gate?.platform_admin || !gate.authorized) throw Error('Platform access denied.');
+            await rpc('platform_admin_context');
+          }
           catch (_) {
             try { await bounded(() => client.auth.signOut({scope:'local'})); } catch { /* The gate remains closed if sign-out is unconfirmed. */ }
-            throw Error('Platform access denied. An ordinary school role does not grant platform access.');
+            throw Error('Platform access denied. Check your admin access code and credentials. After five incorrect codes, wait 15 minutes.');
           }
           location.replace('super-admin.html');
         });
@@ -220,7 +225,7 @@
     status('Confirmed platform records loaded.');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
-      if (['brandingForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
+      if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});
   }
