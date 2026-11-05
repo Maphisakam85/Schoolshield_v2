@@ -7,7 +7,7 @@
   <title>SchoolShield — Sign in</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="auth.css">
-<script defer src="analytics.js"></script>
+  <script defer src="analytics.js"></script>
 <script type="module" src="speed-insights-init.js"></script>
 </head>
 
@@ -65,7 +65,22 @@
             placeholder="Repeat your new password"></label><button class="btn primary" type="submit">Reset
           password</button>
       </form>
-      <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px"></div>
+      <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px">
+      </div>
+
+
+      <!-- SchoolShield Login Page Panic Button -->
+      <div class="login-panic-section">
+        <p class="login-panic-warning">
+          Experiencing an emergency? Request immediate attention.
+        </p>
+
+        <button type="button" id="loginPanicButton" class="login-panic-button">
+          🚨 EMERGENCY SOS
+        </button>
+      </div>
+
+
     </main>
   </div>
   <div class="auth-modal" id="requestSuccessModal" hidden role="dialog" aria-modal="true"

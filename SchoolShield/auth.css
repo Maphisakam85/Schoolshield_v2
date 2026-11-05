@@ -375,16 +375,113 @@
 
 /* Laptop browser chrome can leave only 600px of usable height. */
 @media (max-height: 680px) {
-    .auth { padding: 16px 24px; }
-    .auth-brand { margin-bottom: 10px; }
-    .auth-brand img { width: 34px; height: 34px; }
-    .auth h1 { font-size: 24px; line-height: 1.2; margin-bottom: 6px; }
-    .auth p { margin-bottom: 8px; line-height: 1.4; }
-    .auth-tabs { margin: 10px 0; }
-    .auth label { margin: 8px 0 4px; }
-    .auth .input { min-height: 40px; padding: 8px 12px; margin-top: 4px; }
-    .auth .btn { min-height: 40px; padding: 8px; }
-    .auth form>.btn { margin-top: 10px; }
-    .auth .password-field { margin-top: 4px; }
-    .auth .password-field .input { margin-top: 0; }
+    .auth {
+        padding: 16px 24px;
+    }
+
+    .auth-brand {
+        margin-bottom: 10px;
+    }
+
+    .auth-brand img {
+        width: 34px;
+        height: 34px;
+    }
+
+    .auth h1 {
+        font-size: 24px;
+        line-height: 1.2;
+        margin-bottom: 6px;
+    }
+
+    .auth p {
+        margin-bottom: 8px;
+        line-height: 1.4;
+    }
+
+    .auth-tabs {
+        margin: 10px 0;
+    }
+
+    .auth label {
+        margin: 8px 0 4px;
+    }
+
+    .auth .input {
+        min-height: 40px;
+        padding: 8px 12px;
+        margin-top: 4px;
+    }
+
+    .auth .btn {
+        min-height: 40px;
+        padding: 8px;
+    }
+
+    .auth form>.btn {
+        margin-top: 10px;
+    }
+
+    .auth .password-field {
+        margin-top: 4px;
+    }
+
+    .auth .password-field .input {
+        margin-top: 0;
+    }
+}
+
+
+/* Login page Panic / SOS button */
+.login-panic-section {
+    margin-top: 28px;
+    padding-top: 18px;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+}
+
+.login-panic-warning {
+    color: #64748b;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.login-panic-button {
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    border-radius: 8px;
+    background-color: #dc2626;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.login-panic-button:hover {
+    background-color: #b91c1c;
+}
+
+.login-panic-button:focus-visible {
+    outline: 3px solid #fca5a5;
+    outline-offset: 3px;
+}
+
+
+/* Match the Security Dashboard SOS pulse animation */
+@media (prefers-reduced-motion: no-preference) {
+    .login-panic-button {
+        animation: sosPulse 2s infinite;
+    }
+
+    @keyframes sosPulse {
+        0% {
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+        }
+
+        70%,
+        100% {
+            box-shadow: 0 0 0 12px rgba(220, 38, 38, 0);
+        }
+    }
 }
