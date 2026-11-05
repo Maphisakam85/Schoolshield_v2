@@ -7,7 +7,7 @@
   <title>SchoolShield — Sign in</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="auth.css">
-<script defer src="analytics.js"></script>
+  <script defer src="analytics.js"></script>
 </head>
 
 <body class="auth-page">
@@ -31,22 +31,27 @@
       <div class="auth-tabs"><button class="btn small primary" id="showLogin" type="button">Sign in</button><button
           class="btn small ghost" id="showRequest" type="button">Create account</button></div>
       <div class="auth-primary-forms">
-      <form id="loginForm"><label>School code<input class="input" id="schoolCode" required autocomplete="organization"
-            placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
-            type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
-            class="input" id="password" autocomplete="current-password" type="password" required
-            placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button><button
-          class="btn ghost" id="showForgotPassword" type="button">Forgot password?</button></form>
-      <form id="requestForm" hidden><label>Choose your school<select class="input" id="requestSchoolCode" required>
-            <option value="">Loading schools…</option>
-          </select></label><label>Full name<input class="input" id="requestName" required autocomplete="name"
-            placeholder="Your full name"></label><label>Email address<input class="input" id="requestEmail" type="email"
-            required autocomplete="email" placeholder="Your email address"></label><label>Account type<select
-            class="input" id="requestRole">
-            <option value="parent">Parent / Guardian</option>
-            <option value="teacher">Teacher</option>
-            <option value="security">Security Officer</option>
-          </select></label><label>Preferred invitation method<select class="input" id="requestDelivery"><option value="email">Email</option><option value="sms">SMS</option></select></label><label id="requestPhoneLabel" hidden>Cellphone number<input class="input" id="requestPhone" type="tel" autocomplete="tel" placeholder="082 123 4567 or +27 82 123 4567"></label><button class="btn primary" type="submit">Request account approval</button></form>
+        <form id="loginForm"><label>School code<input class="input" id="schoolCode" required autocomplete="organization"
+              placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
+              type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
+              class="input" id="password" autocomplete="current-password" type="password" required
+              placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button><button
+            class="btn ghost" id="showForgotPassword" type="button">Forgot password?</button></form>
+        <form id="requestForm" hidden><label>Choose your school<select class="input" id="requestSchoolCode" required>
+              <option value="">Loading schools…</option>
+            </select></label><label>Full name<input class="input" id="requestName" required autocomplete="name"
+              placeholder="Your full name"></label><label>Email address<input class="input" id="requestEmail"
+              type="email" required autocomplete="email" placeholder="Your email address"></label><label>Account
+            type<select class="input" id="requestRole">
+              <option value="parent">Parent / Guardian</option>
+              <option value="teacher">Teacher</option>
+              <option value="security">Security Officer</option>
+            </select></label><label>Preferred invitation method<select class="input" id="requestDelivery">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select></label><label id="requestPhoneLabel" hidden>Cellphone number<input class="input" id="requestPhone"
+              type="tel" autocomplete="tel" placeholder="082 123 4567 or +27 82 123 4567"></label><button
+            class="btn primary" type="submit">Request account approval</button></form>
       </div>
       <form id="inviteForm" hidden>
         <p class="demo"><b>Your account has been approved.</b> Complete your details and choose a password to finish
@@ -73,7 +78,22 @@
             placeholder="Repeat your new password"></label><button class="btn primary" type="submit">Reset
           password</button>
       </form>
-      <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px"></div>
+      <div id="loginError" style="display:none;color:#b42318;font-size:12px;margin-top:10px">
+      </div>
+
+
+      <!-- SchoolShield Login Page Panic Button -->
+      <div class="login-panic-section">
+        <p class="login-panic-warning">
+          Experiencing an emergency? Request immediate attention.
+        </p>
+
+        <button type="button" id="loginPanicButton" class="login-panic-button">
+          🚨 EMERGENCY SOS
+        </button>
+      </div>
+
+
     </main>
   </div>
   <div class="auth-modal" id="requestSuccessModal" hidden role="dialog" aria-modal="true"
