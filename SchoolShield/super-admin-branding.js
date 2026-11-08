@@ -11,9 +11,27 @@
   $('currentLogo').dataset.objectUrl=data.object_path?source:'';if(old)URL.revokeObjectURL(old);
   $('currentLogo').onerror=()=>{$('currentLogo').onerror=null;$('currentLogo').src='assets/schoolshield-logo.png';report('Saved logo could not be displayed. Using the SchoolShield fallback.');};
   branding=data;$('currentLogoStatus').textContent=data.object_path?'Saved school logo · revision '+data.revision:'SchoolShield fallback (no custom logo)';
-  document.querySelector('[data-school-management]').href='super-admin-school.html?school='+encodeURIComponent(school.id);
+  document.querySelectorAll('[data-school-management]').forEach(a=>a.href='super-admin-school.html?school='+encodeURIComponent(school.id));
+  if(!window.SchoolShieldPlatformDrafts?.has('colourForm')){ $('primaryColour').value=data.primary_colour||'#0a8f62';$('sidebarColour').value=data.sidebar_colour||'#082c36'; previewColours(); }
+ }
+ function contrast(hex){const v=hex.slice(1).match(/../g).map(x=>parseInt(x,16)/255).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4);return .2126*v[0]+.7152*v[1]+.0722*v[2]>.179?'#000000':'#ffffff';}
+ function previewColours(){
+  $('colourPreview').style.background=$('sidebarColour').value;$('colourPreview').style.color=contrast($('sidebarColour').value);
+  $('previewPrimary').style.background=$('primaryColour').value;$('previewPrimary').style.color=contrast($('primaryColour').value);
  }
  function bind(){
+  $('previewColours').onclick=previewColours;
+  $('cancelLogo').onclick=()=>{if(working||window.SchoolShieldPlatformDrafts?.discard('brandingForm')===false)return;revoke();$('brandingForm').reset();$('logoPreview').hidden=true;operation=null;report('Unsaved logo change cancelled.');};
+  $('cancelBranding').onclick=()=>{if(working||window.SchoolShieldPlatformDrafts?.discard('colourForm')===false)return;$('colourForm').reset();$('primaryColour').value=branding.primary_colour||'#0a8f62';$('sidebarColour').value=branding.sidebar_colour||'#082c36';previewColours();report('Unsaved colour changes cancelled.');};
+  $('colourForm').onsubmit=async event=>{
+   event.preventDefault();if(working||!$('colourForm').reportValidity())return;
+   const reason=$('colourReason').value.trim();if(reason.length<5){report('Enter a reason of at least 5 characters.');return;}
+   working=true;const button=$('colourForm').querySelector('[type=submit]');button.disabled=true;report('Saving portal colours...');
+   try {const {data,error}=await client.rpc('platform_admin_save_colours',{p_school:school.id,p_revision:branding.revision,p_primary:$('primaryColour').value,p_sidebar:$('sidebarColour').value,p_reason:reason});if(error)throw error;if(data.school_id!==school.id)throw Error('School response did not match');branding=data;window.SchoolShieldPlatformDrafts?.clear('colourForm');$('colourReason').value='';previewColours();report('Portal colours saved. School users will receive the updated colours on refresh.');}
+   catch(error){report(window.SchoolShieldPlatformError(error)+' Your colour selections are retained.');}
+   finally{working=false;button.disabled=false;}
+  };
+
   $('logoFile').onchange=async()=>{
    revoke();operation=null;$('logoPreview').hidden=true;const file=$('logoFile').files[0];if(!file)return;
    try{

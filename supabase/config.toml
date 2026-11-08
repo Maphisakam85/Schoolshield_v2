@@ -18,3 +18,15 @@ verify_jwt = false
 
 [functions.provision-school]
 verify_jwt = false
+
+[functions.report-problem]
+# getUser and the school-profile RPC enforce authorization inside the handler.
+verify_jwt = false
+
+[auth.email.template.invite]
+subject = "Your SchoolShield account is approved — complete setup"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Your secure SchoolShield account access link"
+content_path = "./supabase/templates/recovery.html"

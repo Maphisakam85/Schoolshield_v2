@@ -6470,7 +6470,7 @@ function patchLiveChat(html) {
     messages.innerHTML = nextMessages.innerHTML;
     messages.scrollTop = atBottom ? messages.scrollHeight : scrollTop;
   }
-  const contacts=$(".chat-contacts [data-chat-contact]");
+  const contacts=$$(".chat-contacts [data-chat-contact]");
   const nextContacts=template.content.querySelectorAll(".chat-contacts [data-chat-contact]");
   if(contacts.length===nextContacts.length)contacts.forEach((contact,index)=>{
     const preview=contact.querySelector("small"),next=nextContacts[index].querySelector("small");

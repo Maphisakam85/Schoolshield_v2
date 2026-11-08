@@ -83,7 +83,7 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
       const authUser=checked(await admin.auth.admin.getUserById(op.target_id)).user;
       const type=resetting || authUser.email_confirmed_at?'recovery':'invite';
       if(delivery==='email') {
-        if(type==='invite') checked(await admin.auth.admin.inviteUserByEmail(profile.email,{redirectTo:redirect,data:{display_name:profile.display_name}}));
+        if(type==='invite') checked(await admin.auth.admin.inviteUserByEmail(profile.email,{redirectTo:redirect,data:{display_name:profile.display_name,school_name:school.name,school_code:school.code,school_role:profile.role||fields.role}}));
         else checked(await admin.auth.resetPasswordForEmail(profile.email,{redirectTo:redirect}));
       } else {
         const generated=checked(await admin.auth.admin.generateLink({type,email:profile.email,options:{redirectTo:redirect}}));

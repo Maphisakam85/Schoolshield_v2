@@ -28,7 +28,7 @@
   function openTicket(ticket) {
     editing=ticket||{id:crypto.randomUUID(),revision:0};ticketOp=null;$('supportForm').reset();
     if(ticket)for(const key of ['title','category','priority','status','description','internal_notes'])$('supportForm').elements[key].value=ticket[key];
-    $('ticketSchool').textContent=ctx.school.name+' ('+ctx.school.code+')';$('ticketStatus').textContent='';$('supportDialog').showModal();
+    $('ticketSchool').textContent=ctx.school.name+' ('+ctx.school.code+')'+(ticket?' · '+ticket.origin+' · Page: '+(ticket.page_path||'—')+' · Email: '+(ticket.email_status||'Not requested'):'');$('ticketStatus').textContent='';$('supportDialog').showModal();
   }
   async function history() {
     if(filtering)return;filtering=true;
