@@ -5,9 +5,16 @@ project_id = "schoolshield"
 verify_jwt = false
 
 [functions.school-branding]
-verify_jwt = true
+# Auth identity and platform membership are verified inside the handler.
+verify_jwt = false
 static_files = ["./functions/school-branding/vendor/*.wasm"]
 
 [functions.push-dispatch]
 # Independent server-to-server secret checked inside this scheduled function.
+verify_jwt = false
+
+[functions.manage-users]
+verify_jwt = false
+
+[functions.provision-school]
 verify_jwt = false

@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const actor='00000000-0000-4000-8000-000000000080',operation='00000000-0000-4000-8000-000000009100';
-const fields={name:'Fictional QA School',code:'QA-FICTIONAL',purpose:'qa',principal_first_name:'QA',principal_last_name:'Principal',principal_email:'principal@fictional.example.test',principal_phone:'0821234567'};
+const fields={name:'Fictional QA School',code:'QAF-001',purpose:'qa',principal_first_name:'QA',principal_last_name:'Principal',principal_email:'principal@fictional.example.test',principal_phone:'0821234567'};
 async function serviceHarness(failAt) {
  const {provisionPlatformSchool}=await import('../supabase/functions/provision-school/platform-service.mjs');
  const calls=[],users=new Map();let failed=false;

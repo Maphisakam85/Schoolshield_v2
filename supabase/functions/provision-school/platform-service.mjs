@@ -10,6 +10,7 @@ export async function provisionPlatformSchool({admin,actorId,body,env}) {
  if(!['live','demo','qa'].includes(fields.purpose))throw Error('Select a valid school mode');
  if(fields.purpose!=='live' && env('SCHOOLSHIELD_ALLOW_QA_PROVISIONING')!=='true')throw Error('Demo/QA provisioning is disabled. Enable it explicitly in a development project.');
  if(fields.purpose==='live' && /\.test$/i.test(fields.principal_email))throw Error('Use verified real Principal details for live schools, or fictional details in QA mode.');
+ if(!/^[A-Z]{3}-[0-9]{3}$/.test(fields.code))throw Error('School code must use CCC-000 format, for example SMM-001');
  const redirect=setupUrl(env('SCHOOLSHIELD_ACCOUNT_SETUP_URL'));
  let op,stage='School reservation';
  try {

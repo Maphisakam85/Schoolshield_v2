@@ -32,7 +32,7 @@
           class="btn small ghost" id="showRequest" type="button">Create account</button></div>
       <div class="auth-primary-forms">
       <form id="loginForm"><label>School code<input class="input" id="schoolCode" required autocomplete="organization"
-            placeholder="e.g. SMM-001" value="SMM-001"></label><label>Email address<input class="input" id="email"
+            placeholder="e.g. SMM-001" autocapitalize="characters" spellcheck="false"></label><label>Email address<input class="input" id="email"
             type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
             class="input" id="password" autocomplete="current-password" type="password" required
             placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button><button
@@ -72,7 +72,7 @@
     <div class="auth-modal-card">
       <h2 id="requestSuccessTitle">Request submitted</h2>
       <p>Your chosen school’s principal or clerk will review your request. If approved, you will receive an invitation
-        at the email address you provided.</p><button class="btn primary" id="closeRequestSuccess" type="button">Back to
+        using your selected Email or SMS method. Open the invitation, complete your profile and create your password before signing in.</p><button class="btn primary" id="closeRequestSuccess" type="button">Back to
         sign in</button>
     </div>
   </div>
@@ -93,8 +93,27 @@
     const show = form => { document.getElementById("authTitle").textContent = form === requestForm ? "Join your school" : form === forgotPasswordForm ? "Reset your password" : form === resetPasswordForm ? "Choose a password" : "Welcome back"; document.querySelectorAll(".auth-tabs button").forEach(button => button.classList.remove("ghost"));[loginForm, requestForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
     document.getElementById('showLogin').onclick = () => show(loginForm); document.getElementById('showRequest').onclick = () => show(requestForm);
     const showError = (message, ok = false) => { errorBox.style.color = ok ? '#087443' : '#b42318'; errorBox.textContent = message; errorBox.style.display = 'block' };
-    async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,code,name,data_mode)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); if (profile.account_status === 'Inactive') throw new Error('This account is inactive. Contact your school administrator.'); if (profile.requires_setup && !profile.onboarding_completed_at) throw new Error('Complete account setup using your invitation before signing in.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, schoolMode: school.data_mode || 'live', role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
-    loginForm.onsubmit = async event => { event.preventDefault(); if (!client) return showError('Supabase configuration is not available.'); try { const schoolCode = document.getElementById('schoolCode').value.trim().toUpperCase(), { data, error } = await client.auth.signInWithPassword({ email: document.getElementById('email').value.trim().toLowerCase(), password: document.getElementById('password').value }); if (error?.code === 'user_banned') throw new Error('This account is inactive. Contact your school administrator.'); if (error || !data.user) throw new Error(error?.message || 'Sign-in failed.'); await createSession(data.user, schoolCode); location.href = 'dashboard.html' } catch (err) { await client.auth.signOut(); sessionStorage.removeItem('schoolshieldSession'); showError(err.message || 'We could not sign you in.') } };
+    async function createSession(user, schoolCode) {
+      const {data: session, error} = await client.rpc('school_login_context', {p_school_code: schoolCode});
+      if (error) throw Error(error.code === 'PGRST202' ? 'School sign-in needs a backend update. Contact your administrator.' : error.message);
+      if (!session || session.userId !== user.id) throw Error('Your school profile could not be verified. Contact your administrator; do not create another account.');
+      sessionStorage.setItem('schoolshieldSession', JSON.stringify({...session, email:user.email}));
+      sessionStorage.setItem('schoolshieldRole', session.role);
+    }
+    loginForm.onsubmit = async event => {
+      event.preventDefault(); if (!client) return showError('Supabase configuration is not available.');
+      const button=loginForm.querySelector('[type="submit"]'); if(button.disabled)return; button.disabled=true;
+      try {
+        const schoolCode=document.getElementById('schoolCode').value.trim().toUpperCase();
+        const {data,error}=await client.auth.signInWithPassword({email:document.getElementById('email').value.trim().toLowerCase(),password:document.getElementById('password').value});
+        if(error?.code==='user_banned')throw Error('This account is inactive. Contact your school administrator.');
+        if(error||!data.user)throw Error(error?.code==='invalid_credentials' ? 'Email or password was not accepted. If your account already exists, use Forgot password or ask the administrator to resend your setup invitation.' : error?.message||'Sign-in failed.');
+        await createSession(data.user,schoolCode); location.href='dashboard.html';
+      } catch(error) {
+        try { await client.auth.signOut({scope:'local'}); } catch {}
+        sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');showError(error.message||'We could not sign you in.');
+      } finally {button.disabled=false;}
+    };
     document.getElementById('showForgotPassword').onclick = () => show(forgotPasswordForm); document.getElementById('cancelForgotPassword').onclick = () => show(loginForm);
     forgotPasswordForm.onsubmit = async event => {
       event.preventDefault(); if (!client) return showError('Supabase configuration is not available.');

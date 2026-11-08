@@ -103,14 +103,18 @@ test('approval respects SMS preference and does not expose bearer links in SMS r
 
 test('first login reads trusted role and school and rejects the wrong school code', async () => {
   const source = fs.readFileSync('SchoolShield/login.html','utf8');
-  const fn = source.match(/async function createSession\(user, schoolCode\) \{[^\n]+/)[0];
+  const fn = source.slice(source.indexOf('async function createSession('),source.indexOf('    loginForm.onsubmit'));
   const stored = {};
-  const sandbox = vm.createContext({ client: { from: () => ({ select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'parent', display_name: 'Parent', school: { id: 'school-1', code: 'SCHOOL-1', name: 'School One' } } }) }) }) }) }, sessionStorage: { setItem: (key, value) => stored[key] = value } });
-  vm.runInContext(fn, sandbox);
-  await sandbox.createSession({ id: 'new-user', email: 'parent@example.test' }, 'SCHOOL-1');
-  assert.equal(JSON.parse(stored.schoolshieldSession).role, 'parent');
-  assert.equal(JSON.parse(stored.schoolshieldSession).schoolId, 'school-1');
-  await assert.rejects(sandbox.createSession({ id: 'new-user' }, 'OTHER'), /not approved/);
+  const sandbox = vm.createContext({client:{rpc:async(name,args)=> {
+    assert.equal(name,'school_login_context');
+    return args.p_school_code==='SMM-001' ? {data:{userId:'new-user',role:'parent',schoolId:'school-1'}} : {error:{message:'The school code does not match your approved account.'}};
+  }},sessionStorage:{setItem:(key,value)=>stored[key]=value}});
+  vm.runInContext(fn,sandbox);
+  await sandbox.createSession({id:'new-user',email:'parent@example.test'},'SMM-001');
+  assert.equal(JSON.parse(stored.schoolshieldSession).role,'parent');
+  assert.equal(JSON.parse(stored.schoolshieldSession).schoolId,'school-1');
+  await assert.rejects(sandbox.createSession({id:'new-user'},'OTHER'),/does not match/);
+  await assert.rejects(sandbox.createSession({id:'different-user'},'SMM-001'),/could not be verified/);
 });
 
 test('recovery rejects malformed, mixed-purpose and provider-error links before Auth calls', async () => {

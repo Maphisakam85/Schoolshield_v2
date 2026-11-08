@@ -34,9 +34,7 @@
   $('accountDeliveryLabel').hidden=!['create','invite','reset'].includes(next);$('accountFormStatus').textContent='';$('accountDialog').showModal();
  }
  async function send(body){
-  const {data:own,error}=await client.auth.getSession();if(error||!own.session)throw Error('Sign in again.');const config=window.SCHOOLSHIELD_SUPABASE_CONFIG;
-  const response=await fetch(config.url+'/functions/v1/manage-users',{method:'POST',headers:{apikey:config.publishableKey,Authorization:'Bearer '+own.session.access_token,'Content-Type':'application/json'},body:JSON.stringify({...body,platform:true,school_id:school.id}),signal:AbortSignal.timeout(20000)});
-  const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'The account request was not confirmed.');return result;
+  return window.SchoolShieldPlatformRequest('manage-users',{...body,platform:true,school_id:school.id});
  }
  async function perform(body){
   if(working)return;working=true;$('accountSubmit').disabled=true;$('accountClose').disabled=true;$('accountFormStatus').textContent='Saving account for '+school.name+'...';

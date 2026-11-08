@@ -29,11 +29,8 @@
    if(!operation||operation.action!==action||operation.reason!==reason)operation={id:crypto.randomUUID(),action,reason};
    working=true;const buttons=Array.from($('brandingForm').querySelectorAll('button'));buttons.forEach(b=>b.disabled=true);report('Saving branding for '+school.name+'...');
    try{
-    const {data:own,error}=await client.auth.getSession();if(error||!own.session)throw Error('Sign in again.');
     const form=new FormData();for(const[k,v]of Object.entries({school_id:school.id,operation_id:operation.id,revision:branding.revision,action,reason}))form.set(k,String(v));if(action==='replace')form.set('file',$('logoFile').files[0]);
-    const config=window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response=await fetch(config.url+'/functions/v1/school-branding',{method:'POST',headers:{apikey:config.publishableKey,Authorization:'Bearer '+own.session.access_token},body:form,signal:AbortSignal.timeout(20000)});
-    const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Branding was not confirmed.');
+    const result=await window.SchoolShieldPlatformRequest('school-branding',form);
     if(result.branding.school_id!==school.id)throw Error('Unexpected school in save response.');
     operation=null;window.SchoolShieldPlatformDrafts?.clear('brandingForm');
     revoke();$('brandingForm').reset();$('logoPreview').hidden=true;

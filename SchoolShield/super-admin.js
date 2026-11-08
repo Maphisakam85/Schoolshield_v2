@@ -14,6 +14,27 @@
     if (/school.*match|another school|selected school/i.test(value)) return 'The request does not match the selected school. Return to the directory.';
     return 'The request could not be confirmed. Check access and backend configuration, then retry the original operation.';
   };
+  // Use the isolated platform client for function calls. Refresh only on 401;
+  // forbidden requests remain forbidden and keep their original operation IDs.
+  window.SchoolShieldPlatformRequest = async (name, body) => {
+    const own=await client.auth.getSession();
+    if(own.error||!own.data?.session)throw Error('Sign in again.');
+    let session=own.data.session;
+    const expected=session.user?.id;
+    const request=()=>fetch(window.SCHOOLSHIELD_SUPABASE_CONFIG.url+'/functions/v1/'+name,{
+      method:'POST',headers:{apikey:window.SCHOOLSHIELD_SUPABASE_CONFIG.publishableKey,Authorization:'Bearer '+session.access_token,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},
+      body:body instanceof FormData?body:JSON.stringify(body),signal:AbortSignal.timeout(20000)
+    });
+    let response=await request();
+    if(response.status===401){
+      const refreshed=await client.auth.refreshSession();
+      if(refreshed.error||!refreshed.data?.session||(expected&&refreshed.data.session.user?.id!==expected))throw Error('Sign in again. Your request is retained.');
+      session=refreshed.data.session;response=await request();
+    }
+    const result=await response.json().catch(()=>({error:'Server returned an unreadable response. Retry the same operation.'}));
+    if(!response.ok||!result.ok)throw Error(result.error||result.message||'The request was not confirmed.');
+    return result;
+  };
   const hasDraft = () => dirty || dirtyForms.size > 0;
   window.SchoolShieldPlatformDrafts = {
     has(id) { return dirtyForms.has(id); },
@@ -100,15 +121,7 @@
     }
   }
   async function provisionSchool(fields, operation) {
-    const {data: own, error} = await bounded(() => client.auth.getSession());
-    if (error || !own.session) throw Error('Sign in again before provisioning.');
-    const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
-    const response = await bounded(() => fetch(config.url + '/functions/v1/provision-school', {
-      method: 'POST', headers: {apikey: config.publishableKey, Authorization: 'Bearer ' + own.session.access_token, 'Content-Type':'application/json'},
-      body: JSON.stringify({action:'create',operation_id:operation,fields}), signal: AbortSignal.timeout(20000),
-    }));
-    const result = await response.json();
-    if (!response.ok || !result.ok) throw Error((result.error || 'Provisioning failed.') + ' Retry with the same details and operation; reserved records are retained.');
+    const result = await window.SchoolShieldPlatformRequest('provision-school',{action:'create',operation_id:operation,fields});
     if (!validId(result.school_id)) throw Error('Provisioning response did not identify the school.');
     return result;
   }
@@ -183,6 +196,7 @@
     }
   }
   async function start() {
+    document.querySelectorAll('[data-school-code]').forEach(input=>input.addEventListener('input',()=>{const raw=input.value.toUpperCase().replace(/[^A-Z0-9]/g,'');input.value=raw.slice(0,3)+(raw.length>3?'-'+raw.slice(3,6):'');}));
     const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
     if (!config?.url || !config.publishableKey || !window.supabase) throw Error('Supabase public configuration is unavailable.');
     client = window.supabase.createClient(config.url,config.publishableKey,{auth:{storageKey:'schoolshield-platform-auth',storage:sessionStorage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:'pkce'}});
@@ -210,19 +224,22 @@
     $('platformLogout').onclick = () => busy($('platformLogout'),'Signing you out...',async()=>{
       if (hasDraft() && !confirm('Sign out with unsaved form entries?')) return;
       const result = await bounded(() => client.auth.signOut({scope:'local'}));if(result.error)throw result.error;
+      sessionStorage.removeItem('schoolshield-platform-open:'+context.user_id);
       dirty = false; dirtyForms.clear(); location.replace('super-admin-login.html');
     });
     if (kind !== 'directory' && !validId(schoolId)) throw Error('Select a valid school from the directory.');
-    await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});
+    // Audit once per signed-in platform session, not on every navigation.
+    const auditKey='schoolshield-platform-open:'+context.user_id;
+    if(!sessionStorage.getItem(auditKey)){await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});sessionStorage.setItem(auditKey,'1');}
     await load(); bindForms();
     $('platformIdentity').textContent = context.email;
     $('platformContent').hidden = false; $('platformSignIn').hidden = true;
     status('Confirmed platform records loaded.');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
-      if (['brandingForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
+      if (['brandingForm','colourForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});
   }
-  start().catch(error => { status(window.SchoolShieldPlatformError(error)); });
+  start().catch(error => { status(window.SchoolShieldPlatformError(error)); if ($('platformSignIn')) $('platformSignIn').hidden = false; });
 })();
