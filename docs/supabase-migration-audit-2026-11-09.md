@@ -1,5 +1,7 @@
 ﻿# Supabase migration audit and installation guide
 
+> **Backend application update, 9 November 2026:** The three new migrations below have since been installed. The unapplied code-format file was corrected first to preserve the configured owner code. The remaining text records the earlier read-only audit; do not rerun the installed migrations. See [the application record](backend-migrations-applied-2026-11-09.md).
+
 Checked **9 November 2026 (Africa/Johannesburg)** against the linked project **kosidewowwfdvzqhzxau**, from branch `test`.
 
 This audit was read-only on Supabase. No migration, deployment, invitation, school access change or email/push delivery was performed. Local SQL installer files were prepared and tested separately.

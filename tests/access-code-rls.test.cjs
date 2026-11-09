@@ -6,7 +6,10 @@ test('database enforces new school codes while preserving established legacy cod
  create function auth.jwt() returns jsonb language sql stable as $$select '{"session_id":"00000000-0000-0000-0000-000000000090"}'::jsonb$$;
  create function platform_administrator_allowed(uuid) returns boolean language sql stable as $$select $1='00000000-0000-0000-0000-000000000080'::uuid$$;create function crypt(text,text) returns text language sql as $$select 'mock-digest/'||$1$$;create function gen_salt(text) returns text language sql as $$select 'mock-salt'$$;`);
  await db.exec(fs.readFileSync('supabase/migrations/20261029100000_platform_access_code.sql','utf8'));
+ await db.query('insert into platform_login_secret(singleton,code_hash) values(true,$1)',['mock-digest/OWNER-OLD']);
  await db.exec(fs.readFileSync('supabase/migrations/20261109110000_access_code_format.sql','utf8'));
+ assert.equal((await db.query('select code_hash from platform_login_secret')).rows[0].code_hash,'mock-digest/OWNER-OLD','school validation preserves the owner code');
+ await db.query('update platform_login_secret set code_hash=$1',['mock-digest/ADMIN']);
  await db.query('update schools set name=$1 where code=$2',['Preserved school','QA-LEGACY']);
  assert.equal((await db.query("select code from schools where name='Preserved school'")).rows[0].code,'QA-LEGACY');
  await db.query('insert into schools(code,name) values($1,$2)',[' abc-001 ','New QA school']);assert.equal((await db.query("select code from schools where name='New QA school'")).rows[0].code,'ABC-001');

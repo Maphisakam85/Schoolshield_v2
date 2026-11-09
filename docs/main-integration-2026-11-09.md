@@ -1,5 +1,7 @@
 # Main integration review — 9 November 2026
 
+> **Backend application update, 9 November 2026:** Subsequent backend work installed the three pending SQL migrations and removed the owner-code reset before installation. The outstanding-configuration section below records the earlier Git integration. See [the application record](backend-migrations-applied-2026-11-09.md).
+
 Source: `test`, including the recent login, access-code, required-field, branding,
 support reporting, Super Admin navigation and migration-audit updates. Baseline:
 `main` at `29368aa`; original test tip `5ddee0a`. Existing work was captured in

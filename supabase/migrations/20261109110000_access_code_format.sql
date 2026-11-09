@@ -16,15 +16,8 @@ revoke all on function public.enforce_school_access_code() from public,anon,auth
 create trigger enforce_school_access_code before insert or update of code on public.schools
 for each row execute function public.enforce_school_access_code();
 
--- ADMIN is the requested public owner access identifier, not an Auth password.
--- Existing verified-owner membership, password authentication, rate limiting and
--- server-side session checks in authorize_platform_login remain unchanged.
-do $$ begin
- perform set_config('search_path','public,extensions',true);
- insert into public.platform_login_secret(singleton,code_hash)
- values(true,crypt('ADMIN',gen_salt('bf')))
- on conflict(singleton) do update set code_hash=excluded.code_hash;
- insert into public.platform_admin_audit(action,reason)
- values('platform_access_code_format_updated','Owner access identifier set to ADMIN; verified owner and Auth requirements preserved');
-end $$;
+-- Owner identifiers are configured separately by a trusted operator. School-code
+-- validation must never rotate an existing owner's access-code hash.
+insert into public.platform_admin_audit(action,reason)
+values('school_access_code_validation_installed','CCC-000 validation installed; established school codes and owner access configuration preserved');
 notify pgrst,'reload schema';
