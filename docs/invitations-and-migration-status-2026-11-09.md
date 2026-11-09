@@ -1,5 +1,7 @@
 # Invitation email and migration status - 9 November 2026
 
+> **Later update:** Push delivery and migration-history cleanup are now configured; the eight obsolete scripts are archived and active/live migration ledgers match. See [the current completion record](push-dashboard-history-2026-11-09.md).
+
 ## Invitation changes
 
 New invitation and password-recovery HTML templates explain the school invitation,

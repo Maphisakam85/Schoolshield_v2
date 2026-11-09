@@ -1,0 +1,25 @@
+const fs=require('fs'),path=require('path'),assert=require('node:assert/strict');const{chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+(async()=>{const b=await chromium.launch({headless:true,executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'});try{for(const width of [1366,390]){
+ const c=await b.newContext({viewport:{width,height:844}});await c.addInitScript(()=>{
+ const school={id:'00000000-0000-4000-8000-000000000001',name:'Fictional QA School',code:'QAA-001',data_mode:'qa',lifecycle_status:'active'};
+ const ticket={id:'00000000-0000-4000-8000-000000000011',school_id:school.id,title:'QA colours problem',category:'Branding',description:'Full report: '+('Detailed QA description.\n'.repeat(40)),internal_notes:'Owner QA note',priority:'Urgent',status:'Open',origin:'School-reported',revision:1};
+ const event={id:'audit-qa',action:'school_problem_reported',school_id:school.id,target_id:ticket.id,actor_id:'qa-user',created_at:'2026-11-09T10:00:00Z'};
+ window.failMetrics=false;
+ const client={auth:{getUser:async()=>({data:{user:{id:'qa-owner'}}}),signOut:async()=>({})},rpc:async(name,args)=>{
+ if(name==='platform_admin_context')return{data:{user_id:'qa-owner',email:'owner@example.test'}};
+ if(name==='platform_admin_directory')return{data:{schools:[school],audit:[event]}};
+ if(name==='platform_admin_school')return{data:{school,provision:null,audit:[event]}};
+ if(name==='platform_admin_dashboard'){if(failMetrics)return{error:{message:'PRIVATE PROVIDER ERROR'}};return{data:{metrics:{schools_total:2,schools_active:1,reports_open:1,reports_urgent:1,accounts_total:3},reports:[{...ticket,school_name:school.name,school_code:school.code}],generated_at:'2026-11-09T10:00:00Z'}};}
+ if(name==='platform_admin_problem_notifications')return{data:{total:1,items:[{...ticket,school_name:school.name,school_code:school.code}]}};
+ if(name==='platform_admin_school_access')return{data:{school_id:school.id,status:'active',features:{announcements:true,appointments:true},revision:1}};
+ if(name==='platform_admin_support')return{data:{school_id:school.id,tickets:[ticket],diagnostics:{invitations:[],account_operations:[],provisioning:[]}}};
+ if(name==='platform_admin_audit_history')return{data:{events:[]}};
+ return{data:null};}};
+ window.supabase={createClient:()=>client};
+ });
+ await c.route('**/*',r=>{const u=new URL(r.request().url());if(u.origin!=='https://qa.example.test')return r.fulfill({body:''});const f=path.join('SchoolShield',u.pathname.slice(1));return fs.existsSync(f)?r.fulfill({contentType:f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/png',body:fs.readFileSync(f)}):r.fulfill({status:404});});
+ const p=await c.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto('https://qa.example.test/super-admin.html');await p.waitForFunction(()=>document.querySelector('[data-kpi=schools_total]').textContent==='2');assert.equal(await p.locator('.platform-kpi').count(),21);assert.match(await p.locator('#dashboardReports').textContent(),/Fictional QA School \(QAA-001\)/);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await p.evaluate(()=>window.failMetrics=true);await p.locator('#dashboardRefresh').click();await p.waitForFunction(()=>document.getElementById('dashboardStatus').textContent.includes('could not be refreshed'));assert.equal(await p.locator('[data-kpi=schools_total]').textContent(),'2');assert.doesNotMatch(await p.locator('#dashboardStatus').textContent(),/PRIVATE/);
+ await p.locator('[data-open-report]').click();await p.waitForSelector('#supportDialog[open]');assert.match(await p.locator('#ticketFullDescription').textContent(),/Detailed QA description/);assert.ok((await p.locator('#ticketFullDescription').textContent()).length>500);await p.locator('.ticket-full-details summary').click();assert.equal(await p.locator('#ticketFullDescription').isVisible(),false);await p.locator('.ticket-full-details summary').click();assert.equal(await p.locator('#ticketFullDescription').isVisible(),true);
+ await p.goto('https://qa.example.test/super-admin-school.html?school=00000000-0000-4000-8000-000000000001');await p.getByRole('button',{name:'Open report',exact:true}).click();await p.waitForSelector('#supportDialog[open]');assert.match(await p.locator('#ticketSchool').textContent(),/Fictional QA School \(QAA-001\)/);assert.deepEqual(errors,[]);await c.close();
+ }console.log('PASS desktop/mobile KPI cards, retained refresh failures, full expandable reports and audit-to-report navigation (mocked APIs).');}finally{await b.close();}})().catch(e=>{console.error(e);process.exit(1)});
