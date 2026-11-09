@@ -13,7 +13,7 @@
     <header class="platform-header"><img class="platform-logo" src="assets/schoolshield-logo.png" alt="SchoolShield">
         <div><strong>SchoolShield Super Admin</strong><small id="platformIdentity"></small></div><a
             href="super-admin.html">Schools</a><button class="btn" id="platformLogout" hidden>Sign out</button>
-    </header>
+    <details id="platformProblems" class="platform-problems" hidden><summary aria-label="School problem notifications">Reports <span id="platformProblemCount" class="platform-problem-count">…</span></summary><section class="platform-problem-menu" aria-label="Unresolved school reports"><h2>School problems</h2><p id="platformProblemStatus" role="status">Loading reports...</p><ul id="platformProblemList"></ul><div class="action-row"><button class="btn small" id="platformProblemPrevious" disabled>Previous</button><button class="btn small" id="platformProblemNext" disabled>Next</button><button class="btn small" id="platformProblemRefresh">Refresh</button></div></section></details></header>
     <main class="platform-main">
         <div id="platformLoading" class="platform-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading your workspace...</span></div><p id="platformStatus" role="status" aria-live="polite" hidden></p><a id="platformSignIn" hidden
             href="login.html">Platform sign in</a>
@@ -127,7 +127,7 @@
     </dialog>
     <script src="supabase-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="access-code.js"></script><script src="super-admin.js"></script>
-<script src="required-fields.js"></script></body>
+    <script src="access-code.js"></script><script src="super-admin-notifications.js"></script><script src="super-admin.js"></script>
+<script src="required-fields.js"></script><template id="platformProblemItem"><li><a><strong data-problem-school></strong><span data-problem-title></span><small data-problem-status></small></a></li></template></body>
 
 </html>

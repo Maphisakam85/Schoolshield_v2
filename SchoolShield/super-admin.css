@@ -1,6 +1,17 @@
 .platform-header{display:flex;align-items:center;gap:18px;padding:18px 24px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .platform-header small{display:block;color:var(--muted);overflow-wrap:anywhere}
 .platform-header a{margin-left:auto}
+.platform-problems{position:relative;margin-left:auto}
+.platform-problems>summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:9px;padding:9px 12px;white-space:nowrap}
+.platform-problems.has-problems>summary{border-color:#b42318;color:#9d2118;background:#fff1f2;font-weight:700}
+.platform-problem-count{display:inline-block;min-width:24px;text-align:center;border-radius:20px;background:#e8efed;margin-left:5px;padding:2px 6px}
+.has-problems .platform-problem-count{background:#b42318;color:#fff}
+.platform-problem-menu{position:absolute;right:0;top:calc(100% + 8px);z-index:1500;width:min(390px,calc(100vw - 28px));max-height:70dvh;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 8px 28px #12343b30}
+.platform-problem-menu h2{font-size:18px;margin:0}.platform-problem-menu ul{list-style:none;margin:12px 0;padding:0}
+.platform-problem-menu li+li{border-top:1px solid var(--line)}
+.platform-problem-menu li a{display:grid;gap:4px;margin:0;padding:12px 4px;overflow-wrap:anywhere;color:var(--text);text-decoration:none}
+.platform-problem-menu li a:hover{background:#edf7f2}.platform-problem-menu small{color:var(--muted)}
+@media(max-width:600px){.platform-problem-menu{position:fixed;top:100px;right:14px;left:14px;width:auto}}
 .platform-logo{width:42px;height:42px}
 .platform-main{max-width:1280px;margin:auto;padding:24px}
 .platform-main h1{font-size:26px}.platform-main h2{font-size:18px}

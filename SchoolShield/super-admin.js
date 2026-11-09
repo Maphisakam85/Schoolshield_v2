@@ -200,6 +200,7 @@
     $('platformLogout').onclick = () => busy($('platformLogout'),'Signing you out...',async()=>{
       if (hasDraft() && !confirm('Sign out with unsaved form entries?')) return;
       const result = await bounded(() => client.auth.signOut({scope:'local'}));if(result.error)throw result.error;
+      window.SchoolShieldPlatformNotifications?.stop();
       dirty = false; dirtyForms.clear(); sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');location.replace('login.html');
     });
     if (kind !== 'directory' && !validId(schoolId)) throw Error('Select a valid school from the directory.');
@@ -208,6 +209,7 @@
     $('platformIdentity').textContent = context.email;
     $('platformContent').hidden = false; $('platformSignIn').hidden = true;
     finishLoading();status('');
+    window.SchoolShieldPlatformNotifications?.start(client);
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
       if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);

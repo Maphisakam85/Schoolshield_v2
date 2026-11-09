@@ -55,7 +55,10 @@
   window.SchoolShieldOperationsPage={
     async load(value){ctx=value;$('schoolBack').href='super-admin-school.html?school='+encodeURIComponent(ctx.school.id);
       const {data,error}=await ctx.client.rpc('platform_admin_directory');if(error)throw Error(message);
-      const all=new Option('All schools','');$('auditSchool').replaceChildren(all);for(const s of data.schools)$('auditSchool').add(new Option(s.name+' ('+s.code+')',s.id));$('auditSchool').value=ctx.school.id;await refresh();},
+      const all=new Option('All schools','');$('auditSchool').replaceChildren(all);for(const s of data.schools)$('auditSchool').add(new Option(s.name+' ('+s.code+')',s.id));$('auditSchool').value=ctx.school.id;await refresh();
+      const target=new URLSearchParams(location.search).get('ticket');
+      if(target){const ticket=tickets.find(t=>t.id===target&&t.school_id===ctx.school.id);if(ticket)openTicket(ticket);else ctx.status('This report is unavailable for the selected school.');}
+    },
     bind(){
       $('supportSearch').oninput=renderTickets;$('newTicket').onclick=()=>openTicket();$('closeTicket').onclick=()=>{if(window.SchoolShieldPlatformDrafts?.discard('supportForm')!==false)$('supportDialog').close();};
       $('supportDialog').addEventListener('cancel',e=>{e.preventDefault();$('closeTicket').click();});
@@ -64,7 +67,7 @@
         const signature=JSON.stringify(values);if(accessOp?.signature!==signature)accessOp={signature,id:crypto.randomUUID()};
         busy(e.currentTarget.querySelector('[type=submit]'),async()=>{await rpc('platform_admin_set_school_access',{...values,p_operation:accessOp.id});window.SchoolShieldPlatformDrafts?.clear('accessForm');try{await refresh();ctx.status('Access controls saved and audited.');}catch{ctx.status('Access controls saved and audited. Refresh to load confirmed records.');}});};
       $('supportForm').onsubmit=e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));const signature=JSON.stringify(fields);if(ticketOp?.signature!==signature)ticketOp={signature,id:crypto.randomUUID()};
-        busy(e.currentTarget.querySelector('[type=submit]'),async()=>{const saved=await rpc('platform_admin_save_support',{p_school:ctx.school.id,p_id:editing.id,p_revision:editing.revision,p_fields:fields,p_operation:ticketOp.id});if(saved.school_id!==ctx.school.id)throw Error(message);window.SchoolShieldPlatformDrafts?.clear('supportForm');$('supportDialog').close();try{await refresh();ctx.status('Owner-created ticket saved and audited. No message sent.');}catch{ctx.status('Ticket saved and audited. Refresh to load confirmed records. No message sent.');}});};
+        busy(e.currentTarget.querySelector('[type=submit]'),async()=>{const saved=await rpc('platform_admin_save_support',{p_school:ctx.school.id,p_id:editing.id,p_revision:editing.revision,p_fields:fields,p_operation:ticketOp.id});if(saved.school_id!==ctx.school.id)throw Error(message);window.SchoolShieldPlatformDrafts?.clear('supportForm');$('supportDialog').close();window.dispatchEvent(new Event('platform-support-updated'));try{await refresh();ctx.status('Ticket saved and audited. No message sent.');}catch{ctx.status('Ticket saved and audited. Refresh to load confirmed records. No message sent.');}});};
       $('auditFilters').onsubmit=e=>{e.preventDefault();offset=0;busy(e.currentTarget.querySelector('button'),history);};
       $('auditPrevious').onclick=()=>{offset=Math.max(0,offset-100);busy($('auditPrevious'),history);};$('auditNext').onclick=()=>{offset+=100;busy($('auditNext'),history);};
     }
