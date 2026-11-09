@@ -29,6 +29,7 @@ test('Auth and profile commit precede actual email request and success; metadata
  const {manageUser}=await modulePromise;const h=harness();const result=await manageUser(h);assert.equal(result.ok,true);
  const names=h.calls.map(c=>c[0]);assert.ok(names.indexOf('begin_user_management')<names.indexOf('createAuth'));assert.ok(names.indexOf('finish_user_management')<names.indexOf('email'));
  const auth=h.calls.find(c=>c[0]==='createAuth')[1];assert.equal(auth.password,undefined);assert.equal(auth.app_metadata.role,'teacher');assert.equal(auth.app_metadata.school_code,'SCHOOL');assert.equal(h.calls.find(c=>c[0]==='email')[2].redirectTo,'https://school.test/SchoolShield/account-setup.html');
+ const context=h.calls.find(c=>c[0]==='email')[2].data;assert.equal(context.school_name,'School');assert.equal(context.school_code,'SCHOOL');assert.equal(context.school_role,'Teacher');assert.equal(context.display_name,'Thabo Mokoena');
 });
 test('unauthorized, inactive and incomplete management accounts never reach Auth',async()=>{
  const {manageUser}=await modulePromise;for(const patch of [{role:'teacher'},{role:'sgb'},{role:'parent'},{role:'security'},{account_status:'Inactive'},{requires_setup:true}]){const h=harness();h.actor={...actor,...patch};await assert.rejects(manageUser(h),/access denied/);assert.equal(h.calls.length,0);}
@@ -44,6 +45,7 @@ test('idempotent replay creates no duplicate Auth account or email; SMS without 
 test('manual links use real Auth tokens; confirmed unfinished users receive recovery invitation',async()=>{
  const {manageUser}=await modulePromise;const h=harness();h.body.delivery='setup_link';const result=await manageUser(h);assert.match(result.setup_link,/token_hash=secure-hash&type=invite/);assert.equal(h.calls.some(c=>c[0]==='email'),false);
  const recovery=harness({confirmed:true});await manageUser(recovery);assert.ok(recovery.calls.some(c=>c[0]==='recovery'));assert.equal(recovery.calls.some(c=>c[0]==='email'),false);
+ const metadata=recovery.calls.find(c=>c[0]==='updateAuth')[1];assert.equal(metadata.user_metadata.school_role,'Teacher');assert.equal(metadata.user_metadata.school_code,'SCHOOL');assert.equal(metadata.app_metadata,undefined);assert.ok(recovery.calls.findIndex(c=>c[0]==='updateAuth')<recovery.calls.findIndex(c=>c[0]==='recovery'));
 });
 test('email/manual invitations allow no phone, but SMS and supplied invalid numbers remain strict',async()=>{
  const {validateFields,manageUser}=await modulePromise;
