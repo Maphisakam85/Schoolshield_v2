@@ -7080,10 +7080,22 @@ function bind() {
 }
 
 /* Both live and optional demo schools use real Supabase authentication. */
+// SOS display initialization after dashboard navigation / rerenders.
+if (typeof MutationObserver !== "undefined") {
+  setInterval(() => { if (document.getElementById("schoolshieldPanicAlerts")) refreshSchoolshieldPanicAlerts().catch(()=>{}); }, 10000);
+  let sosTarget = null;
+  new MutationObserver(() => {
+    const next = document.getElementById("schoolshieldPanicAlerts");
+    if (next && next !== sosTarget) { sosTarget = next; refreshSchoolshieldPanicAlerts().catch(()=>{}); }
+    if (!next) sosTarget = null;
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
 async function workspaceStartupRequest(task,timeoutMs=15000){
   let timer;try{return await Promise.race([task(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Workspace startup timed out.')),timeoutMs);})]);}finally{clearTimeout(timer);}
 }
 async function startWorkspace() {
+  try {
   const client = window.schoolshieldSupabase;
   if(!client)throw new Error("Authentication configuration is unavailable.");
   if (client) {
@@ -7153,21 +7165,11 @@ async function startWorkspace() {
     return location.replace("login.html");
   render();
   showRetainedSchoolDraft();
+  } catch (_) {
+    const app=document.getElementById('app'),template=document.getElementById('workspaceStartupFailure');
+    if(!app||!template)return;
+    app.replaceChildren(template.content.cloneNode(true));
+    document.getElementById('workspaceStartupRetry').onclick=()=>location.reload();
+  }
 }
-startWorkspace().catch(()=>{
-  const app=document.getElementById('app'),template=document.getElementById('workspaceStartupFailure');
-  if(!app||!template)return;
-  app.replaceChildren(template.content.cloneNode(true));
-  document.getElementById('workspaceStartupRetry').onclick=()=>location.reload();
-});
-
-// SOS display initialization after dashboard navigation / rerenders.
-if (typeof MutationObserver !== "undefined") {
-  setInterval(() => { if (document.getElementById("schoolshieldPanicAlerts")) refreshSchoolshieldPanicAlerts().catch(()=>{}); }, 10000);
-  let sosTarget = null;
-  new MutationObserver(() => {
-    const next = document.getElementById("schoolshieldPanicAlerts");
-    if (next && next !== sosTarget) { sosTarget = next; refreshSchoolshieldPanicAlerts(); }
-    if (!next) sosTarget = null;
-  }).observe(document.body, { childList: true, subtree: true });
-}
+startWorkspace();

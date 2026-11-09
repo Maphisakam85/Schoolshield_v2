@@ -110,7 +110,7 @@ test('first login reads trusted role and school and rejects the wrong school cod
   await sandbox.createSession({ id: 'new-user', email: 'parent@example.test' }, 'SCHOOL-1');
   assert.equal(JSON.parse(stored.schoolshieldSession).role, 'parent');
   assert.equal(JSON.parse(stored.schoolshieldSession).schoolId, 'school-1');
-  await assert.rejects(sandbox.createSession({ id: 'new-user' }, 'OTHER'), /not approved/);
+  await assert.rejects(sandbox.createSession({ id: 'new-user' }, 'OTHER'), /different school code/);
 });
 
 test('recovery rejects malformed, mixed-purpose and provider-error links before Auth calls', async () => {
