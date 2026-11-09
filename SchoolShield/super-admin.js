@@ -59,6 +59,13 @@
         cell.textContent = key === 'created_at' ? date(item[key]) : item[key] || (key === 'actor_id' ? 'Trusted database operator' : '');
       });
       row.querySelector('[data-audit-detail]').hidden = !('previous_value' in item || 'new_value' in item);
+      const reportEvent=['school_problem_reported','support_created','support_updated'].includes(item.action);
+      if(reportEvent&&validId(item.target_id)&&validId(item.school_id||schoolId)){
+        const button=row.querySelector('[data-audit-detail]');button.hidden=false;button.textContent='Open report';
+        button.onclick=()=>location.assign('super-admin-operations.html?school='+encodeURIComponent(item.school_id||schoolId)+'&ticket='+encodeURIComponent(item.target_id));
+        const reason=row.querySelector('[data-cell="reason"]');if(reason)reason.textContent='Support report — open to view details and resolve.';
+        $('auditRows').append(row);continue;
+      }
       row.querySelector('[data-audit-detail]').onclick = () => {
         $('auditDetails').textContent = JSON.stringify({previous: item.previous_value, updated: item.new_value, reason: item.reason}, null, 2);
         $('auditDialog').showModal();
@@ -209,6 +216,7 @@
     $('platformIdentity').textContent = context.email;
     $('platformContent').hidden = false; $('platformSignIn').hidden = true;
     finishLoading();status('');
+    if(kind==='directory')window.SchoolShieldDashboard?.start(client);
     window.SchoolShieldPlatformNotifications?.start(client);
     document.addEventListener('input', event => {
       const form = event.target.closest('form');

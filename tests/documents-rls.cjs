@@ -30,7 +30,7 @@ const { PGlite } = require(process.env.PGLITE_MODULE || '@electric-sql/pglite');
       grant select,insert,delete on storage.objects to authenticated;
       grant select on public.sick_notice_attachments to authenticated;
     `);
-    await db.exec(fs.readFileSync('supabase/migrations/20261007130000_document_attachments.sql','utf8'));
+    await db.exec(fs.readFileSync('supabase/legacy-migrations/20261007130000_document_attachments.sql','utf8'));
     const school='11111111-1111-4111-8111-111111111111', other='22222222-2222-4222-8222-222222222222';
     const uid = n => `00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
     const users={security:uid(1),principal:uid(2),teacher:uid(3),parent:uid(4),sgb:uid(5),clerk:uid(6),other:uid(7)};

@@ -17,7 +17,7 @@ const {PGlite}=require(process.env.PGLITE_MODULE||'@electric-sql/pglite');
   const legacyActive={id:'old-active',officerId:'B',date:'2026-08-01',clockIn:'08:02',status:'Clocked In'};
   const payload={security:[{id:'A',name:'Officer A',shift:'06:00–14:00'},{id:'B',name:'Officer B'}],securityAttendance:[legacy,legacyActive],visitors:[{id:'untouched'}]};
   await db.query('insert into school_workspaces values ($1,$2,null),($3,$4,null)',[school,JSON.stringify(payload),other,JSON.stringify({security:[],securityAttendance:[]})]);
-  await db.exec(fs.readFileSync('supabase/migrations/20261007140000_security_shifts.sql','utf8'));
+  await db.exec(fs.readFileSync('supabase/legacy-migrations/20261007140000_security_shifts.sql','utf8'));
   assert.equal((await db.query('select payload from school_workspaces where school_id=$1',[school])).rows[0].payload.security[0].userId,uid(3));
   const login=async n=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[uid(n)]);await db.exec('set role authenticated');};
   const shift=async(id,action,date=null,start=null,end=null)=>(await db.query('select record_security_shift($1,$2,$3,$4,$5) as item',[id,action,date,start,end])).rows[0].item;

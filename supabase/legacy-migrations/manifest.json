@@ -1,0 +1,38 @@
+{
+  "archived": "2026-11-09",
+  "reason": "Superseded or duplicate-version scripts absent from the linked ledger; retained for reference and isolated historical tests, never replay into production.",
+  "files": [
+    {
+      "file": "20260928_realtime_workspace_sync.sql",
+      "sha256": "bf0988921ebff0fc460baf831001edce759cd6194c5c1a96c1905ae97b6f4cbe"
+    },
+    {
+      "file": "20261007_invitation_delivery.sql",
+      "sha256": "a441d5627b651d53305f9e0a2878bc13b4767df92c855f38af2c8ec3a5f3de4d"
+    },
+    {
+      "file": "20261007120000_announcement_publishing.sql",
+      "sha256": "2aee56d3c29a63ab8f06d6882bfd8bf8503d617a9ebcbe820212c0deefaf68bc"
+    },
+    {
+      "file": "20261007130000_document_attachments.sql",
+      "sha256": "edbe5b549c998c885424ac2fc8173eca119c335a93efdf1dec15643a5dd67079"
+    },
+    {
+      "file": "20261007140000_security_shifts.sql",
+      "sha256": "7bf53a584249795dad4572f313cf1d455cfc7a26e554e81d4ca1fb31cc46ca12"
+    },
+    {
+      "file": "20261007150000_backend_role_isolation.sql",
+      "sha256": "043a2c3eb6350b1cd2e6df66f5e39645c31b09cae8497fc0eedd49571bc78a4c"
+    },
+    {
+      "file": "20261007151000_record_storage_authorization.sql",
+      "sha256": "d2dd9fd07191103633378811d280e4817a58e9ec492f3e9e044cc350f4d3d488"
+    },
+    {
+      "file": "20261007152000_rpc_authorization_guards.sql",
+      "sha256": "35f449029d02cb849696e9b605f56d30dcbf731eb4087d096d79a582cbffd06b"
+    }
+  ]
+}

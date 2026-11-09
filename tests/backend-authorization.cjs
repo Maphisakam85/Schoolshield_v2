@@ -19,7 +19,7 @@ const {PGlite}=require(process.env.PGLITE_MODULE||'@electric-sql/pglite');
   const old=['20260920_schoolshield.sql','20260921_account_approval.sql','20260922_profile_self_read.sql',
     '20260923_storage_categories_and_signup_schools.sql','20260924_account_request_alerts.sql','20260925_profile_onboarding.sql',
     '20261007_invitation_delivery.sql','20261007120000_announcement_publishing.sql','20261007130000_document_attachments.sql','20261007140000_security_shifts.sql'];
-  for(const file of old) await db.exec(fs.readFileSync('supabase/migrations/'+file,'utf8').replace('create extension if not exists pgcrypto;',''));
+  for(const file of old) await db.exec(fs.readFileSync(require('./migration-path.cjs')(file),'utf8').replace('create extension if not exists pgcrypto;',''));
   // Model Supabase default table privileges so RLS (not absent grants) is tested.
   await db.exec('grant select,insert,update,delete on all tables in schema public to authenticated; alter table auth.users disable trigger auth_user_profile_created;');
   const uid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,school=uid(1),otherSchool=uid(2);
@@ -53,7 +53,7 @@ const {PGlite}=require(process.env.PGLITE_MODULE||'@electric-sql/pglite');
   await db.query('insert into sick_notice_attachments(school_id,sick_notice_id,storage_path,submitted_by) values($1,$2,$3,$4)',[school,notice3,legacyPath,uid(9)]);
   await db.query('insert into storage.objects(bucket_id,name,owner_id) values($1,$2,$3)',['school-documents',legacyPath,uid(9)]);
   await db.query('insert into storage.objects(bucket_id,name,owner_id) values($1,$2,$3)',['school-documents',`${school}/orphan.pdf`,uid(7)]);
-  for(const migration of ['20261007150000_backend_role_isolation.sql','20261007151000_record_storage_authorization.sql','20261007152000_rpc_authorization_guards.sql']) await db.exec(fs.readFileSync('supabase/migrations/'+migration,'utf8'));
+  for(const migration of ['20261007150000_backend_role_isolation.sql','20261007151000_record_storage_authorization.sql','20261007152000_rpc_authorization_guards.sql']) await db.exec(fs.readFileSync(require('./migration-path.cjs')(migration),'utf8'));
   const login=async key=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[key?uid(people[key][0]):'']);await db.exec(key?'set role authenticated':'set role anon');};
   const workspace=async()=>(await db.query('select get_authorised_workspace() as payload')).rows[0].payload;
   const save=(collection,records)=>db.query('select save_authorised_collection($1,$2)',[collection,JSON.stringify(records)]);

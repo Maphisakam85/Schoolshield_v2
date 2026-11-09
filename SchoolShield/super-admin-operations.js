@@ -28,6 +28,7 @@
   function openTicket(ticket) {
     editing=ticket||{id:crypto.randomUUID(),revision:0};ticketOp=null;$('supportForm').reset();
     if(ticket)for(const key of ['title','category','priority','status','description','internal_notes'])$('supportForm').elements[key].value=ticket[key];
+    $('ticketFullTitle').textContent=ticket?.title||'New owner-created ticket';$('ticketFullDescription').textContent=ticket?.description||'Enter the problem description below.';$('ticketMetadata').textContent=ticket?[ticket.origin,ticket.priority,ticket.status,'Created: '+date(ticket.created_at),'Updated: '+date(ticket.updated_at)].filter(Boolean).join(' · '):'';
     $('ticketSchool').textContent=ctx.school.name+' ('+ctx.school.code+')';$('ticketStatus').textContent='';$('supportDialog').showModal();
   }
   async function history() {
