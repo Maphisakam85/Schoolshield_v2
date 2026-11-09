@@ -485,3 +485,21 @@
         }
     }
 }
+/* Fit the normal login and SOS controls within common laptop viewports. */
+.auth .login-panic-section{margin-top:12px;padding-top:10px}
+.auth .login-panic-warning{margin-bottom:6px;font-size:11px;line-height:1.35}
+.auth .login-panic-button{padding:11px 16px;min-height:44px}
+@media(min-width:621px) and (max-height:800px){
+ .auth{padding:16px 24px}
+ .auth-brand{margin-bottom:10px}
+ .auth-brand img{width:34px;height:34px}
+ .auth h1{font-size:24px;line-height:1.2}
+ .auth-tabs{margin:10px 0}
+ .auth label{margin:8px 0 4px}
+ .auth .input{min-height:40px;padding:8px 12px;margin-top:4px}
+ .auth .btn{min-height:40px;padding:8px}
+ .auth form>.btn{margin-top:10px}
+ .auth .password-field{margin-top:4px}
+ .auth .password-field .input{margin-top:0}
+ .auth .login-panic-section{margin-top:8px;padding-top:8px}
+}

@@ -28,7 +28,8 @@ No service credential or setup token is persisted in the static source or audit.
 
 Entry points:
 
-- super-admin-login.html: separate owner authentication.
+- login.html: shared sign-in entry; use ADMIN for the platform owner. The backend still requires the verified owner Auth identity and password.
+- super-admin-login.html: redirect-only compatibility URL; no separate form or authentication logic.
 - super-admin.html: searchable school directory, provisioning and latest 100 audit events.
 - super-admin-school.html?school=UUID: canonical school's name/code/UUID prominently
   displayed, contact editing, school-specific history and provisioning recovery.
@@ -401,3 +402,25 @@ invitations.test.cjs; this document and the existing Vercel build syntax checks.
 Owner operations: [owner guide](super-admin-owner-guide.md). Final QA evidence,
 limitations and release checklist: [QA report](super-admin-qa.md). Review description:
 [draft PR](super-admin-pr.md).
+
+
+## Access codes and portal navigation (9 November 2026)
+
+New school codes must contain three uppercase letters, a hyphen and exactly three digits, e.g. ABC-001. The form inserts the separator and uppercases input. The database trigger rejects invalid inserts and prevents established codes from changing. Existing legacy school codes remain intact; the sign-in form accepts only legacy codes returned by the existing school directory, in addition to the new format. Failed/incomplete provisioning retries can still reference their established school code.
+
+Apply migration 20261109110000_access_code_format.sql after 20261029100000_platform_access_code.sql and before publishing the new sign-in rules. It configures the requested ADMIN identifier using the existing hashed-code mechanism and records a migration audit event. ADMIN is not a password or a grant of platform access. Membership, real Auth credentials, failed-attempt limits and backend platform-session checks still apply. No owner account or password is created or changed. Existing lockouts expire after the usual fifteen minutes.
+
+Authenticated platform pages initially show a neutral loading indicator with sign-in hidden. Content remains hidden until server authorization and school data loading succeed. Denied access reveals a link to login.html; successful access removes the loading/status placeholders. Logout waits for confirmed sign-out and returns to login.html. No browser-stored role skips authorization.
+
+Verified locally: access-code normalization and validation tests; an isolated PGlite test using the original platform authorization SQL (digest functions mocked) covering valid/invalid code inserts, legacy preservation, read-only established codes, owner authorization and ordinary-user denial; mocked Edge browser checks at 1366px and 390px for loading, navigation, code entry, logout and access denial. No real accounts, invitations or live database configuration were changed.
+
+
+## Shared login and access-control layout follow-up
+
+The old Super Admin login form and its password-authentication branch were removed. Its URL redirects to login.html so old bookmarks continue to work. All users, including the verified owner, authenticate through the shared sign-in workflow. Backend owner checks and the isolated platform Auth session are retained.
+
+Access-code input permits at most six characters plus a single separator and automatically uppercases/formats input. The owner and school patterns remain C0C-CCC and CCC-000; the existing ADMIN compatibility identifier is retained. Codes longer than six non-hyphen characters are no longer accepted in the entry field; established database records were not renamed. Any such legacy code needs a reviewed migration before enforcing this UI in a live school.
+
+SOS is visible on Sign in and hidden on Create account, password recovery and setup views, including a direct login.html?view=create link. The lifecycle form now orders lifecycle status and grouped feature choices first, then the required reason, confirmation and save/refresh controls. Checkbox sizing and label placement are scoped to that form. Existing backend confirmation, permission, revision and audit checks remain unchanged.
+
+Local verification: 16 focused access-code/login tests; mocked login checks across four laptop/mobile viewport sizes; redirect, direct-create SOS visibility and lifecycle layout/required-field checks at 1366px and 390px. No backend calls, access changes, real invitations or deployments were performed during layout QA.

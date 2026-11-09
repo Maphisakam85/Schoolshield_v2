@@ -4,12 +4,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SchoolShield — Sign in</title>
+  <title>SchoolShield | Sign in</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="auth.css">
   <script defer src="analytics.js"></script>
 <script type="module" src="speed-insights-init.js"></script>
-</head>
+<link rel="icon" type="image/png" href="assets/schoolshield-logo.png"></head>
 
 <body class="auth-page">
   <div class="auth-layout">
@@ -32,8 +32,8 @@
       <div class="auth-tabs"><button class="btn small primary" id="showLogin" type="button">Sign in</button><button
           class="btn small ghost" id="showRequest" type="button">Create account</button></div>
       <div class="auth-primary-forms">
-      <form id="loginForm"><label>School access code<input class="input" id="schoolCode" required autocomplete="off"
-            placeholder="Enter your access code"></label><label>Email address<input class="input" id="email"
+      <form id="loginForm"><label>School access code<input class="input" id="schoolCode" aria-describedby="schoolCodeError" data-school-code="login" required autocomplete="off" pattern="(?:[A-Z]{3}-[0-9]{3}|[A-Z][0-9][A-Z]-[A-Z]{3}|ADMIN)" maxlength="7" title="Six characters plus the hyphen: ABC-001 or A0A-ABC."
+            placeholder="School code access"><small id="schoolCodeError" data-access-code-error role="alert" hidden></small></label><label>Email address<input class="input" id="email"
             type="email" required autocomplete="email" placeholder="name@school.co.za"></label><label>Password<input
             class="input" id="password" autocomplete="current-password" type="password" required
             placeholder="Password"></label><button class="btn primary" type="submit">Sign in</button><button
@@ -104,23 +104,23 @@
   <script>window.schoolshieldManualInvitationExchange = true;</script>
   <script src="supabase-client.js"></script>
   <script src="invitation.js"></script>
-  <script src="login-routing.js"></script>
+  <script src="access-code.js"></script><script src="login-routing.js"></script>
   <script>
     const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), forgotPasswordForm = document.getElementById('forgotPasswordForm'), resetPasswordForm = document.getElementById('resetPasswordForm');
-    const show = form => { document.getElementById("authTitle").textContent = form === requestForm ? "Join your school" : form === forgotPasswordForm ? "Reset your password" : form === resetPasswordForm ? "Choose a password" : "Welcome back"; document.querySelectorAll(".auth-tabs button").forEach(button => button.classList.remove("ghost"));[loginForm, requestForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); errorBox.style.display = 'none' };
+    const show = form => { document.getElementById("authTitle").textContent = form === requestForm ? "Join your school" : form === forgotPasswordForm ? "Reset your password" : form === resetPasswordForm ? "Choose a password" : "Welcome back"; document.querySelectorAll(".auth-tabs button").forEach(button => button.classList.remove("ghost"));[loginForm, requestForm, forgotPasswordForm, resetPasswordForm].forEach(item => item.hidden = item !== form); document.getElementById('showLogin').classList.toggle('primary', form === loginForm); document.getElementById('showRequest').classList.toggle('primary', form === requestForm); document.querySelector('.login-panic-section').hidden = form !== loginForm; errorBox.style.display = 'none' };
     document.getElementById('showLogin').onclick = () => show(loginForm); document.getElementById('showRequest').onclick = () => show(requestForm);
     const showError = (message, ok = false) => { errorBox.style.color = ok ? '#087443' : '#b42318'; errorBox.textContent = message; errorBox.style.display = 'block' };
-    async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,code,name,data_mode)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error || !profile || !school || school.code !== schoolCode) throw new Error('This account is not approved for that school code.'); if (profile.account_status === 'Inactive') throw new Error('This account is inactive. Contact your school administrator.'); if (profile.requires_setup && !profile.onboarding_completed_at) throw new Error('Complete account setup using your invitation before signing in.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, schoolMode: school.data_mode || 'live', role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
+    async function createSession(user, schoolCode) { const { data: profile, error } = await client.from('profiles').select('role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,code,name,data_mode)').eq('id', user.id).single(); const school = Array.isArray(profile?.school) ? profile.school[0] : profile?.school; if (error) throw new Error('Your credentials were accepted, but school access could not be verified. Retry or contact your school administrator. Do not create another account.'); if (!profile || !school) throw new Error('Your account has no accessible school profile. Ask your school administrator to review your existing account.'); if (String(school.code).trim().toUpperCase() !== String(schoolCode).trim().toUpperCase()) throw new Error('This account belongs to a different school code. Use the code provided by your school administrator.'); if (profile.account_status === 'Inactive') throw new Error('This account is inactive. Contact your school administrator.'); if (profile.requires_setup && !profile.onboarding_completed_at) throw new Error('Complete account setup using your invitation before signing in.'); sessionStorage.setItem('schoolshieldSession', JSON.stringify({ userId: user.id, schoolId: school.id, schoolCode: school.code, schoolName: school.name, schoolMode: school.data_mode || 'live', role: profile.role, displayName: profile.display_name, email: user.email })); sessionStorage.setItem('schoolshieldRole', profile.role) }
     loginForm.onsubmit = async event => {
       event.preventDefault(); if (!client) return showError('Supabase configuration is not available.');
-      const button=loginForm.querySelector('[type="submit"]'); if(button.disabled)return;button.disabled=true;
+      const button=loginForm.querySelector('[type="submit"]'); if(button.disabled)return;const originalLabel=button.textContent;button.disabled=true;button.textContent='Signing in...';button.setAttribute('aria-busy','true');
       try {
         const destination=await SchoolShieldLogin.signIn({supabase:window.supabase,config:window.SCHOOLSHIELD_SUPABASE_CONFIG,
           schoolClient:client,storage:sessionStorage,email:document.getElementById('email').value.trim().toLowerCase(),
           password:document.getElementById('password').value,accessCode:document.getElementById('schoolCode').value.trim(),createSchoolSession:createSession});
         document.getElementById('password').value='';location.replace(destination);
       } catch(error) {showError(error.message || 'We could not sign you in.');}
-      finally {button.disabled=false;}
+      finally {button.disabled=false;button.textContent=originalLabel;button.removeAttribute('aria-busy');}
     };
     document.getElementById('showForgotPassword').onclick = () => show(forgotPasswordForm); document.getElementById('cancelForgotPassword').onclick = () => show(loginForm);
     forgotPasswordForm.onsubmit = async event => {
@@ -156,6 +156,7 @@
     client?.rpc('list_school_signup_options').then(({ data, error }) => {
       const select = document.getElementById('requestSchoolCode');
       select.replaceChildren(new Option(error || !data ? 'Schools are unavailable' : 'Select your school', ''));
+      if (!error && data) SchoolShieldAccessCode.setLegacyCodes(data.map(school=>school.code));
       if (!error && data) for (const school of data) {
         const option = document.createElement('option');
         option.value = String(school.code ?? '');
@@ -177,6 +178,6 @@
     if (new URLSearchParams(location.search).get('view') === 'create') show(requestForm);
     if (new URLSearchParams(location.search).get('setup') === 'complete') showError('Account setup is complete. Sign in with your email, password and school code.', true);
   </script>
-</body>
+<script src="required-fields.js"></script></body>
 
 </html>

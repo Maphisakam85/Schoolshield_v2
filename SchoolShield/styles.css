@@ -2705,3 +2705,18 @@ textarea[aria-invalid="true"] {
         }
     }
 }
+#problemReportDialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid var(--line, #dce5e8); border-radius: 16px; padding: 24px; color: var(--text, #173641); }
+#problemReportDialog::backdrop { background: #082c3680; }
+#problemReportForm label { display: grid; gap: 6px; margin: 12px 0; }
+#problemReportStatus { overflow-wrap: anywhere; }
+#reportProblem { white-space: nowrap; }
+@media(max-width:600px) { #reportProblem { font-size: 10px; padding: 7px; } }
+
+/* Keep the required marker inside the label caption, above the control. */
+[data-required-label]{display:inline!important;white-space:normal}
+[data-required-label] .required-mark{display:inline!important;margin:0 0 0 2px}
+
+.workspace-startup-failure{max-width:600px;margin:40px auto;padding:24px}
+
+[data-access-code-error]{display:block;margin-top:5px;color:#b42318;font-size:12px;line-height:1.4}
+[data-access-code-error][hidden]{display:none}

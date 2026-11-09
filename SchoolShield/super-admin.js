@@ -7,6 +7,9 @@
   const dirtyForms = new Set();
   window.SchoolShieldPlatformError = error => {
     const value = String(error?.message || error || '');
+    if (/schema cache|could not find.*function/i.test(value)) return 'Required backend migration is unavailable. Ask the platform owner to apply the portal migrations and reload the API schema.';
+    if (/timeout|timed out|aborted/i.test(value)) return 'The server did not confirm the save in time. Your entries are retained; retry the same operation.';
+    if (/valid colours|operation and reason/i.test(value)) return 'Choose valid colours and enter a reason of 5-500 characters.';
     if (/last active principal/i.test(value)) return 'Preserve the last active Principal before making this change.';
     if (/already exists|duplicate|already reserved/i.test(value)) return 'A matching record or reserved operation already exists. Refresh and resume the original request.';
     if (/changed|revision|stale/i.test(value)) return 'The record changed. Refresh confirmed records before retrying.';
@@ -23,7 +26,9 @@
       dirtyForms.delete(id); return true;
     },
   };
-  const status = message => { $('platformStatus').textContent = message; };
+  const status = message => { $('platformStatus').textContent = message; $('platformStatus').hidden=!message; };
+  let verified=false;
+  const finishLoading=()=>{if($('platformLoading'))$('platformLoading').hidden=true;};
   const schoolUrl = id => 'super-admin-school.html?school=' + encodeURIComponent(id);
   const validId = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
   const date = value => value ? new Date(value).toLocaleString('en-ZA') : '';
@@ -186,48 +191,28 @@
     const config = window.SCHOOLSHIELD_SUPABASE_CONFIG;
     if (!config?.url || !config.publishableKey || !window.supabase) throw Error('Supabase public configuration is unavailable.');
     client = window.supabase.createClient(config.url,config.publishableKey,{auth:{storageKey:'schoolshield-platform-auth',storage:sessionStorage,persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,flowType:'pkce'}});
-    if (kind === 'login') {
-      $('platformLogin').onsubmit = event => {
-        event.preventDefault(); const form = event.currentTarget;
-        busy(form.querySelector('[type=submit]'), 'Signing in...', async () => {
-          const result = await bounded(() => client.auth.signInWithPassword({email:form.elements.email.value.trim(),password:form.elements.password.value}));
-          form.elements.password.value = '';
-          if (result.error) throw Error('Sign in failed. Check your credentials.');
-          try {
-            const gate=await rpc('authorize_platform_login',{p_access_code:form.elements.accessCode.value.trim()});
-            form.elements.accessCode.value='';
-            if(!gate?.platform_admin || !gate.authorized) throw Error('Platform access denied.');
-            await rpc('platform_admin_context');
-          }
-          catch (_) {
-            try { await bounded(() => client.auth.signOut({scope:'local'})); } catch { /* The gate remains closed if sign-out is unconfirmed. */ }
-            throw Error('Platform access denied. Check your admin access code and credentials. After five incorrect codes, wait 15 minutes.');
-          }
-          location.replace('super-admin.html');
-        });
-      };return;
-    }
     const {data,error} = await bounded(() => client.auth.getUser());
     if (error || !data.user) throw Error('Sign in to the platform portal to continue.');
     context = await rpc('platform_admin_context');
     if (context.user_id !== data.user.id) throw Error('Platform identity verification failed.');
+    verified=true;
     $('platformLogout').hidden = false;
     $('platformLogout').onclick = () => busy($('platformLogout'),'Signing you out...',async()=>{
       if (hasDraft() && !confirm('Sign out with unsaved form entries?')) return;
       const result = await bounded(() => client.auth.signOut({scope:'local'}));if(result.error)throw result.error;
-      dirty = false; dirtyForms.clear(); location.replace('super-admin-login.html');
+      dirty = false; dirtyForms.clear(); sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');location.replace('login.html');
     });
     if (kind !== 'directory' && !validId(schoolId)) throw Error('Select a valid school from the directory.');
     await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});
     await load(); bindForms();
     $('platformIdentity').textContent = context.email;
     $('platformContent').hidden = false; $('platformSignIn').hidden = true;
-    status('Confirmed platform records loaded.');
+    finishLoading();status('');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
       if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});
   }
-  start().catch(error => { status(window.SchoolShieldPlatformError(error)); });
+  start().catch(error => { finishLoading();status(window.SchoolShieldPlatformError(error));if($('platformSignIn'))$('platformSignIn').hidden=verified; });
 })();

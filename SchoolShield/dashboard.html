@@ -4,11 +4,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>SchoolShield â€” Dashboard</title>
+    <title>SchoolShield | Dashboard</title>
     <link rel="stylesheet" href="styles.css">
 <script defer src="analytics.js"></script>
 <script type="module" src="speed-insights-init.js"></script>
-</head>
+<link rel="icon" type="image/png" href="assets/schoolshield-logo.png"></head>
 
 <body data-page="dashboard">
     <div id="app"><div class="page-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><p>Loading your school workspace...</p></div></div>
@@ -20,6 +20,7 @@
     <script src="button-feedback.js"></script>
   <script src="school-theme.js"></script><script src="school-branding.js"></script>
     <script src="app.js"></script>
-</body>
+<button type="button" id="reportProblem" class="btn small">Report problem</button>
+<dialog id="problemReportDialog" aria-labelledby="problemReportTitle"><h2 id="problemReportTitle">Report a problem</h2><p>Sent to the platform owner. Do not include passwords, learner, family or health information.</p><form id="problemReportForm"><label>Title *<input class="input" name="title" required minlength="3" maxlength="160"></label><label>Category *<select class="select" name="category" required><option>Other</option><option>Access</option><option>Invitations</option><option>Branding</option><option>Platform</option></select></label><label>Priority *<select class="select" name="priority" required><option>Normal</option><option>Low</option><option>High</option><option>Urgent</option></select></label><label>Description *<textarea class="textarea" name="description" required minlength="5" maxlength="3000"></textarea></label><p id="problemReportStatus" role="status"></p><button type="submit" class="btn primary">Send report</button><button type="button" class="btn" id="cancelProblemReport">Close</button></form></dialog><script src="report-problem.js"></script><script src="required-fields.js"></script><template id="workspaceStartupFailure"><section class="panel workspace-startup-failure" role="alert"><h1>Your workspace could not be loaded</h1><p>Check your connection and retry, or contact your school administrator if the problem continues.</p><button type="button" class="btn primary" id="workspaceStartupRetry">Retry loading</button> <a class="btn" href="login.html">Back to sign in</a><div data-startup-report></div></section></template></body>
 
 </html>

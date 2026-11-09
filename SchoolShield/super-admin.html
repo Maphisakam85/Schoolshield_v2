@@ -7,7 +7,7 @@
     <title>SchoolShield | Super Admin</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="super-admin.css">
-</head>
+<link rel="icon" type="image/png" href="assets/schoolshield-logo.png"></head>
 
 <body data-platform-page="directory">
     <header class="platform-header"><img class="platform-logo" src="assets/schoolshield-logo.png" alt="SchoolShield">
@@ -15,8 +15,8 @@
             href="super-admin.html">Schools</a><button class="btn" id="platformLogout" hidden>Sign out</button>
     </header>
     <main class="platform-main">
-        <p id="platformStatus" role="status" aria-live="polite">Verifying platform access...</p><a id="platformSignIn"
-            href="super-admin-login.html">Platform sign in</a>
+        <div id="platformLoading" class="platform-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><span>Loading your workspace...</span></div><p id="platformStatus" role="status" aria-live="polite" hidden></p><a id="platformSignIn" hidden
+            href="login.html">Platform sign in</a>
         <div id="platformContent" hidden>
             <section class="panel">
                 <div class="panel-head">
@@ -99,8 +99,8 @@
             manual setup link will be created only after confirmation.</p>
         <form id="provisionForm">
             <div class="form-grid"><label>School name<input class="input" name="name" required
-                        maxlength="120"></label><label>School code<input class="input" name="code" required
-                        pattern="[A-Za-z0-9][A-Za-z0-9-]{2,31}" maxlength="32"></label><label>Mode<select class="select"
+                        maxlength="120"></label><label>School code<input class="input" name="code" data-school-code="school" required
+                        pattern="[A-Z]{3}-[0-9]{3}" maxlength="7" placeholder="ABC-001" title="Three letters, a hyphen and three digits: ABC-001"></label><label>Mode<select class="select"
                         name="purpose">
                         <option value="live">Live school (empty)</option>
                         <option value="qa">Fictional QA school (configuration required)</option>
@@ -129,7 +129,7 @@
     </dialog>
     <script src="supabase-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-    <script src="super-admin.js"></script>
-</body>
+    <script src="access-code.js"></script><script src="super-admin.js"></script>
+<script src="required-fields.js"></script></body>
 
 </html>

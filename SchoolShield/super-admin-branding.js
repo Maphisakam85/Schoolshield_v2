@@ -16,6 +16,10 @@
  }
  function bind(){
   window.SchoolShieldThemePage.bind();
+  $('cancelLogo').onclick=()=>{
+   if(working||window.SchoolShieldPlatformDrafts?.discard('brandingForm')===false)return;
+   revoke();operation=null;$('brandingForm').reset();$('logoPreview').hidden=true;report('Logo changes cancelled. The saved logo is unchanged.');
+  };
   $('logoFile').onchange=async()=>{
    revoke();operation=null;$('logoPreview').hidden=true;const file=$('logoFile').files[0];if(!file)return;
    try{
