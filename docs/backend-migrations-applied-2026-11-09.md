@@ -44,3 +44,41 @@ were sent. Logo-upload function deployment is also separate from these SQL files
 The earlier audit and integration reports are historical snapshots; their claims
 that these three migrations are pending, and their owner-reset warning for the
 original code-format file, are superseded by this application record.
+
+## Follow-up hardening applied
+
+Migration `20261109120000_parent_notice_access_hardening.sql` was subsequently
+applied to the same linked project. It wraps the existing canonical parent-notice
+function with `assert_account_access()`, keeps the original function private,
+revokes anonymous execution, and removes anonymous/PUBLIC raw-workspace table and
+column privileges. It leaves school-role grants, Security Officer functions,
+school data and owner recovery unchanged. A server-written administrative audit
+event records the installation. This resolves the two hardening findings above.
+
+Live rollback-only checks passed: anonymous notices and workspace writes are
+denied, an authenticated request without an active account is denied, and browsers
+cannot call the private base function. The migration ledger and account-guard
+definition were verified. No live school records were modified for these checks.
+
+The full local build passed **179 tests, zero failed, one optional image-codec test
+skipped**. The new isolated PostgreSQL test executes the canonical notice function
+and lifecycle checks with two fictional schools; it covers allowed/idempotent
+parent submissions, cross-school and non-parent denial, inactive/setup-incomplete
+accounts, suspension/reactivation and anonymous table/column privilege removal.
+
+### What remains
+
+No further missing feature SQL was identified in the reviewed migration set.
+Eight historical file/ledger discrepancies remain, as listed in the original
+audit. They include the duplicate `20260928` version and superseded legacy
+invitation, announcement, attachment, shift and authorization implementations.
+They were not replayed or falsely marked applied. The real authorization gaps
+identified during that comparison are now addressed by the forward migration.
+Future bulk `db push` still requires a separate history/baseline reconciliation;
+do not use `--include-all` to force the old files onto the live schema.
+
+The remaining feature activation work is **not SQL migration work**: deploy and
+configure `school-branding`, `push-dispatch`, and `support-email-dispatch`; provide
+verified sender details, VAPID/dispatch secrets and schedules. Live notification
+delivery and logo uploads are not certified by these migration checks. No real
+messages, invitations or notifications were sent.
