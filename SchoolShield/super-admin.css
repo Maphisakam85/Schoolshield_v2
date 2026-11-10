@@ -44,6 +44,10 @@ body[data-platform-page] [role=status]{overflow-wrap:anywhere;min-height:24px}
 @media(max-width:600px){.platform-main{padding:12px}.platform-header{padding:14px;gap:12px}.platform-login{margin:24px 12px}.platform-header a{margin-left:0}.platform-table td{padding:10px}.platform-main .form-grid{grid-template-columns:1fr}}
 
 .school-logo-preview{width:200px;height:150px;max-width:100%;object-fit:contain;background:#f7faf9;border:1px solid var(--line);border-radius:8px;padding:12px}
+.logo-crop-controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;max-width:720px;margin-top:12px;align-items:end}
+.logo-crop-controls label{display:grid;gap:6px}
+.logo-crop-controls input{width:100%;min-width:0}
+#logoActionStatus:not(:empty){padding:10px 12px;background:#eff8f4;border:1px solid #b8dfd2;border-radius:8px;overflow-wrap:anywhere}
 body[data-platform-page] :is(button,a,input,select,textarea):focus-visible{outline:3px solid #08786a;outline-offset:3px}
 
 body[data-platform-page="login"] .auth-brand small{display:block;color:var(--muted);font-size:10px;margin-top:3px}

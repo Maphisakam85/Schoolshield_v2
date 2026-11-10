@@ -128,3 +128,12 @@ test('recovery supports code, token hash and legacy fragment without using a cac
 });
 
 test('a suspended school denies approval before any real account operation',async()=>{const {response,calls}=await approvalHarness({suspended:true});assert.equal(response.status,403);assert.equal(calls.some(c=>c.action==='create'),false);});
+
+test('password reset distinguishes provider limits, mail configuration and connection failures safely',async()=>{
+ const html=fs.readFileSync('SchoolShield/login.html','utf8'),handler=html.slice(html.indexOf('forgotPasswordForm.onsubmit ='),html.indexOf('resetPasswordForm.onsubmit ='));
+ for(const [error,expected] of [[{status:429,code:'over_email_send_rate_limit'},/Too many reset/],[{code:'unexpected_failure',message:'private provider detail'},/email provider configuration/],[{name:'TypeError'},/Could not connect/]]){
+ const messages=[],button={disabled:false},form={querySelector:()=>button};
+ const sandbox=vm.createContext({forgotPasswordForm:form,client:{},navigator:{onLine:true},window:{SCHOOLSHIELD_SUPABASE_CONFIG:{url:'https://api.example.test',publishableKey:'public',passwordResetUrl:'https://schoolshieldv2.vercel.app/login.html'},supabase:{createClient:()=>({auth:{resetPasswordForEmail:async()=>({error})}})}},SchoolShieldInvitation:context.SchoolShieldInvitation,document:{getElementById:()=>({value:'qa@example.test'})},showError:m=>messages.push(m)});
+ vm.runInContext(handler,sandbox);await form.onsubmit({preventDefault(){}});assert.match(messages[0],expected);assert.doesNotMatch(messages[0],/private provider detail/);assert.equal(button.disabled,false);
+ }
+});

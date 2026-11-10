@@ -1,8 +1,10 @@
 (() => {
- const $=id=>document.getElementById(id);let client,context,school,branding,report,preview,operation=null,working=false;
- function revoke(){if(preview)URL.revokeObjectURL(preview);preview=null;}
+ const $=id=>document.getElementById(id);let client,context,school,branding,report,statusSink,preview,operation=null,working=false,bitmap=null;
+ function revoke(){if(bitmap)bitmap.close();bitmap=null;if(preview)URL.revokeObjectURL(preview);preview=null;}
  async function load(options){
-  ({client,context,school,status:report}=options);
+  ({client,context,school}=options);
+  if(options.status!==report)statusSink=options.status;
+  report=message=>{statusSink(message);$("logoActionStatus").textContent=message;};
   const {data,error}=await client.rpc('platform_admin_branding',{p_school:school.id});if(error)throw error;
   if(data.school_id!==school.id)throw Error('Branding does not match the selected school.');
   let source='assets/schoolshield-logo.png';
@@ -14,18 +16,29 @@
   if(!window.SchoolShieldPlatformDrafts?.has('themeForm')) await window.SchoolShieldThemePage.load({client,school,status:report});
   document.querySelector('[data-school-management]').href='super-admin-school.html?school='+encodeURIComponent(school.id);
  }
+ function drawCrop(){
+  if(!bitmap)return;
+  const canvas=$('logoCropCanvas'),ctx=canvas.getContext('2d');
+  const scale=Math.min(canvas.width/bitmap.width,canvas.height/bitmap.height)*Number($('logoZoom').value);
+  const w=bitmap.width*scale,h=bitmap.height*scale;
+  const x=(canvas.width-w)/2+Number($('logoX').value)/100*(canvas.width+w)/2;
+  const y=(canvas.height-h)/2+Number($('logoY').value)/100*(canvas.height+h)/2;
+  ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,x,y,w,h);operation=null;
+ }
  function bind(){
+  for(const id of ['logoZoom','logoX','logoY'])$(id).oninput=()=>{drawCrop();report('Crop preview updated. Upload and save to apply.');};
+  $('logoFit').onclick=()=>{$('logoZoom').value=1;$('logoX').value=0;$('logoY').value=0;drawCrop();report('Whole image fitted to 400 � 300 pixels.');};
   window.SchoolShieldThemePage.bind();
   $('cancelLogo').onclick=()=>{
    if(working||window.SchoolShieldPlatformDrafts?.discard('brandingForm')===false)return;
    revoke();operation=null;$('brandingForm').reset();$('logoPreview').hidden=true;report('Logo changes cancelled. The saved logo is unchanged.');
   };
   $('logoFile').onchange=async()=>{
-   revoke();operation=null;$('logoPreview').hidden=true;const file=$('logoFile').files[0];if(!file)return;
+   revoke();operation=null;$('logoPreview').hidden=true;const file=$('logoFile').files[0];if(!file){report('No replacement selected. The saved logo is unchanged.');return;}report('Preparing logo crop preview...');
    try{
     if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>2*1024*1024)throw Error('Choose PNG, JPEG or WebP up to 2 MB.');
-    const bitmap=await createImageBitmap(file);const invalid=bitmap.width>2048||bitmap.height>2048;bitmap.close();if(invalid)throw Error('Maximum dimensions are 2048 × 2048.');
-    preview=URL.createObjectURL(file);$('previewLogo').src=preview;$('logoPreview').hidden=false;report('Preview ready. Upload and save to apply this logo.');
+    const decoded=await createImageBitmap(file);if(working||$('logoFile').files[0]!==file){decoded.close();return;}const invalid=decoded.width>2048||decoded.height>2048;if(invalid){decoded.close();}else{bitmap=decoded;}if(invalid)throw Error('Maximum dimensions are 2048 × 2048.');
+    $('logoZoom').value=1;$('logoX').value=0;$('logoY').value=0;drawCrop();preview=URL.createObjectURL(file);$('previewLogo').src=preview;$('logoPreview').hidden=false;report('Preview ready. Upload and save to apply this logo.');
    }catch(error){$('logoFile').value='';report(error.message||'The image contents could not be decoded.');}
   };
   async function mutate(action){
@@ -33,10 +46,10 @@
    if(action==='replace'&&!$('brandingForm').reportValidity())return;
    if(action==='remove'&&!confirm('Remove the logo for '+school.name+' ('+school.code+') and use the SchoolShield fallback?'))return;
    if(!operation||operation.action!==action||operation.reason!==reason)operation={id:crypto.randomUUID(),action,reason};
-   working=true;const buttons=Array.from($('brandingForm').querySelectorAll('button'));buttons.forEach(b=>b.disabled=true);report('Saving branding for '+school.name+'...');
+   working=true;const buttons=Array.from($('brandingForm').querySelectorAll('button,input,textarea'));buttons.forEach(b=>b.disabled=true);report('Saving branding for '+school.name+'...');
    try{
     const {data:own,error}=await client.auth.getSession();if(error||!own.session)throw Error('Sign in again.');
-    const form=new FormData();for(const[k,v]of Object.entries({school_id:school.id,operation_id:operation.id,revision:branding.revision,action,reason}))form.set(k,String(v));if(action==='replace')form.set('file',$('logoFile').files[0]);
+    const form=new FormData();for(const[k,v]of Object.entries({school_id:school.id,operation_id:operation.id,revision:branding.revision,action,reason}))form.set(k,String(v));if(action==='replace'){if(!bitmap)throw Error('Select a valid image before saving.');const blob=await new Promise(resolve=>$('logoCropCanvas').toBlob(resolve,'image/png'));if(!blob)throw Error('The cropped image could not be prepared.');form.set('file',blob,'school-logo.png');}
     const config=window.SCHOOLSHIELD_SUPABASE_CONFIG;
     const response=await fetch(config.url+'/functions/v1/school-branding',{method:'POST',headers:{apikey:config.publishableKey,Authorization:'Bearer '+own.session.access_token},body:form,signal:AbortSignal.timeout(20000)});
     const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Branding was not confirmed.');

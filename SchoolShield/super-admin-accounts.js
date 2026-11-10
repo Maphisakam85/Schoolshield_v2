@@ -15,7 +15,7 @@
    for(const[key,value]of Object.entries({name:user.display_name,email:user.email,phone:user.phone,employee:user.employee_id,role:roles[user.role],status:user.account_status,invitation:user.onboarding_completed_at?'Setup complete':(user.invitation?.status||'Not sent')+(user.invitation?.error?' — '+'Delivery not confirmed; see diagnostics':'')}))row.querySelector('[data-account-'+key+']').textContent=value||'';
    row.querySelector('[data-account-edit]').onclick=()=>open('edit',user);
    const access=row.querySelector('[data-account-access]');access.textContent=user.account_status==='Active'?'Deactivate':'Activate';access.onclick=()=>open('status',user);
-   const invite=row.querySelector('[data-account-invite]');invite.hidden=user.account_status!=='Active'||!user.requires_setup||Boolean(user.onboarding_completed_at);invite.onclick=()=>open('invite',user);
+   const invite=row.querySelector('[data-account-invite]');invite.hidden=user.account_status!=='Active'||Boolean(user.onboarding_completed_at);invite.textContent=user.invitation?'Resend invitation':'Send invitation';invite.onclick=()=>open('invite',user);
    const reset=row.querySelector('[data-account-reset]');reset.hidden=user.account_status!=='Active'||user.requires_setup||!user.onboarding_completed_at;reset.onclick=()=>open('reset',user);
    if(user.pending_operation)row.querySelectorAll('button').forEach(b=>b.disabled=true);
    $('accountRows').append(row);
@@ -25,7 +25,7 @@
  }
  function open(next,user){
   editing=user||null;action=next;requestId=crypto.randomUUID();const form=$('accountForm');form.reset();$('accountResult').hidden=true;$('accountSubmit').hidden=false;
-  $('accountDialogTitle').textContent=next==='create'?'Create account':next==='edit'?'Edit account':next==='status'?(user.account_status==='Active'?'Deactivate account':'Activate account'):next==='invite'?'Resend account invitation':'Send password reset';
+  $('accountDialogTitle').textContent=next==='create'?'Create account':next==='edit'?'Edit account':next==='status'?(user.account_status==='Active'?'Deactivate account':'Activate account'):next==='invite'?(user.invitation?'Resend account invitation':'Send account invitation'):'Send password reset';
   $('accountSchoolIdentity').textContent=school.name+' ('+school.code+') · '+(user?.display_name||'New account');
   const identity=['create','edit'].includes(next);$('accountIdentityFields').hidden=!identity;
   $('accountIdentityFields').querySelectorAll('input,select').forEach(input=>input.disabled=!identity);
@@ -42,7 +42,7 @@
   if(working)return;working=true;$('accountSubmit').disabled=true;$('accountClose').disabled=true;$('accountFormStatus').textContent='Saving account for '+school.name+'...';
   try{const result=await send(body);window.SchoolShieldPlatformDrafts?.clear('accountForm');$('accountResult').hidden=false;$('accountResultMessage').textContent=result.message;$('accountResultLink').value=result.setup_link||'';$('accountSubmit').hidden=true;$('accountFormStatus').textContent=result.message;
    try{await load({client,context,school,status:report});report(result.message);}catch{report('Account operation confirmed. Refresh to load current users.');}}
-  catch(error){const safe=window.SchoolShieldPlatformError(error)+' Any created account is retained. Refresh and resume the original request. Operation: '+body.operation_id;$('accountFormStatus').textContent=safe;report(safe);try{await load({client,context,school,status:report});}catch{}}
+  catch(error){const safe=window.SchoolShieldPlatformError(error)+(body.action==='create'?' Any created account is retained.':' Your entries are retained.')+' Refresh and resume the original request. Operation: '+body.operation_id;$('accountFormStatus').textContent=safe;report(safe);try{await load({client,context,school,status:report});}catch{}}
   finally{working=false;$('accountSubmit').disabled=false;$('accountClose').disabled=false;}
  }
  function resume(op){

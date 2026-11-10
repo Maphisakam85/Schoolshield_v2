@@ -2686,6 +2686,21 @@ textarea[aria-invalid="true"] {
     border-radius: 12px
 }
 
+.sidebar-resize {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 5
+}
+.sidebar-resize:hover,
+.sidebar-resize:focus-visible { background: #4dd4b077; outline: 2px solid #4dd4b0 }
+.sidebar.rail .sidebar-resize { display: none }
+@media(max-width:700px) { .sidebar-resize { display: none } }
+
 .chat-mode-badge {
     display: inline-block;
     padding: 4px 7px;

@@ -6908,15 +6908,45 @@ function initWorkspaceChrome() {
     const backdrop = $("#mobileNavBackdrop");
     if (backdrop) backdrop.hidden = true;
     sidebar.style.transform = "";
-    sidebar.style.width = rail ? "70px" : "252px";
+    const preferred = Number(sessionStorage.getItem('schoolshieldSidebarWidth')) || 252;
+    const expandedWidth = Math.max(220, Math.min(400, Math.floor(innerWidth * 0.4), preferred));
+    sidebar.style.width = rail ? "70px" : expandedWidth + "px";
     sidebar
       .querySelectorAll(
         ".brand div, .menu-title, .nav-item span:not(.icon):not(.nav-update), .role-card div:nth-child(2), .logout span",
       )
       .forEach((element) => (element.style.display = rail ? "none" : ""));
-    main.style.marginLeft = rail ? "70px" : "252px";
-    main.style.width = rail ? "calc(100% - 70px)" : "calc(100% - 252px)";
+    main.style.marginLeft = rail ? "70px" : expandedWidth + "px";
+    main.style.width = rail ? "calc(100% - 70px)" : `calc(100% - ${expandedWidth}px)`;
+    const resizeHandle = sidebar.querySelector('.sidebar-resize');
+    resizeHandle?.setAttribute('aria-valuenow', String(expandedWidth));
+    resizeHandle?.setAttribute('aria-valuemax', String(Math.min(400, Math.floor(innerWidth * 0.4))));
   };
+  if (!sidebar.querySelector('.sidebar-resize')) {
+    const handle = document.createElement('div');
+    handle.className = 'sidebar-resize'; handle.tabIndex = 0;
+    handle.setAttribute('role', 'separator'); handle.setAttribute('aria-orientation', 'vertical');
+    handle.setAttribute('aria-label', 'Resize navigation width');
+    handle.setAttribute('aria-valuemin', '220'); handle.setAttribute('aria-valuemax', '400');
+    const resizeTo = width => {
+      const bounded = Math.max(220, Math.min(400, Math.floor(innerWidth * 0.4), width));
+      sessionStorage.setItem('schoolshieldSidebarWidth', String(bounded));
+      setSidebarState(false);
+    };
+    handle.onpointerdown = event => {
+      if (innerWidth <= 700 || sidebar.dataset.compact === 'true') return;
+      event.preventDefault(); handle.setPointerCapture(event.pointerId);
+      handle.onpointermove = move => resizeTo(move.clientX - sidebar.getBoundingClientRect().left);
+    };
+    handle.onpointerup = handle.onpointercancel = () => { handle.onpointermove = null; };
+    handle.onkeydown = event => {
+      if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+        event.preventDefault();
+        resizeTo(event.key === 'Home' ? 220 : event.key === 'End' ? 400 : sidebar.getBoundingClientRect().width + (event.key === 'ArrowLeft' ? -10 : 10));
+      }
+    };
+    sidebar.append(handle);
+  }
   sidebar.__expandNavigation=()=>setSidebarState(false);
   if (!$("#mobileNavBackdrop")) {
     const backdrop = document.createElement("button");

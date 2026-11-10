@@ -135,7 +135,13 @@
         const {error}=await recoveryClient.auth.resetPasswordForEmail(document.getElementById('forgotPasswordEmail').value.trim().toLowerCase(),{redirectTo});
         if(error)throw error;
         forgotPasswordForm.reset();show(loginForm);showError('If that email belongs to an account, a password-reset link has been sent.',true);
-      }catch{showError('Password reset could not be requested. Check your connection and recovery configuration.');}
+      }catch(error){
+        const code=String(error?.code||'');
+        if(error?.status===429||/over_email_send_rate_limit|over_request_rate_limit/.test(code))showError('Too many reset requests. Wait a few minutes before trying again.');
+        else if(/email_provider_disabled|email_address_not_authorized|unexpected_failure/.test(code))showError('Password reset email is unavailable. The platform owner needs to check the email provider configuration.');
+        else if(error?.name==='TypeError'||navigator.onLine===false)showError('Could not connect to the sign-in service. Check your connection and try again.');
+        else showError('Password reset could not be requested. Contact the platform owner. Reference: '+(code.replace(/[^a-z0-9_]/gi,'').slice(0,60)||'recovery-request')+'.');
+      }
       finally{button.disabled=false;}
     };
     resetPasswordForm.onsubmit = async event => {

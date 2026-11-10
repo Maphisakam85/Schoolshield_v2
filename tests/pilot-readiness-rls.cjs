@@ -143,7 +143,7 @@ try {
 
  await db.exec('reset role');await db.query("update platform_administrators set active=true,reason='QA branding and account verification' where user_id=$1",[id(80)]);
  await db.exec("alter table storage.buckets add column name text;update schools set name=case when id='00000000-0000-4000-8000-000000000001' then 'Mmulakgoro QA (fictional)' else name end,data_mode='qa'");
- for(const migration of ['20261015120000_private_school_branding.sql','20261015130000_platform_school_accounts.sql'])await db.exec(fs.readFileSync('supabase/migrations/'+migration,'utf8'));
+ for(const migration of ['20261015120000_private_school_branding.sql','20261015130000_platform_school_accounts.sql','20261110100000_platform_pending_setup_invitations.sql'])await db.exec(fs.readFileSync('supabase/migrations/'+migration,'utf8'));
  const logoPath=school+'/'+id(9200)+'.png';await db.query("insert into storage.objects(bucket_id,name,metadata) values('school-branding',$1,$2)",[logoPath,{mimetype:'image/png'}]);
  await db.exec('set role service_role');const brand=(await db.query('select commit_school_branding($1,$2,0,$3,$4,48,24,$5) as b',[id(80),school,id(9200),logoPath,'Fictional QA logo upload'])).rows[0].b;equal(brand.school_id,school);equal(brand.revision,1);
  await assert.rejects(db.query('select commit_school_branding($1,$2,0,$3,$4,48,24,$5)',[id(80),other,id(9201),logoPath,'Wrong-school logo rejected']),/path/);checks++;
@@ -182,6 +182,9 @@ try {
  await db.exec('reset role');await db.query('update auth.users set raw_app_meta_data=raw_app_meta_data||$2::jsonb where id=$1',[id(550),{role:'clerk'}]);await db.exec('set role service_role');
  const roleUpdated=(await db.query('select finish_platform_account($1,$2) as p',[id(80),id(9308)])).rows[0].p;equal(roleUpdated.role,'clerk');equal(roleUpdated.display_name,'QA Edited Account Teacher');equal(roleUpdated.school_id,school);await db.query('select platform_account_result($1,$2,true)',[id(80),id(9308)]);
  await db.exec('reset role');equal((await db.query('select count(*)::int as n from teacher_class_subjects')).rows[0].n,countAssignments);
+ await db.query('update profiles set requires_setup=false,onboarding_completed_at=null where id=$1',[id(550)]);await db.exec('set role service_role');
+ await db.query('select begin_platform_account($1,$2,$3,$4,$5,$6,true,$7)',[id(80),school,id(9311),'invite',id(550),{_delivery:'email'},'QA invitation for legacy pending setup']);
+ const invited=(await db.query('select finish_platform_account($1,$2) as p',[id(80),id(9311)])).rows[0].p;equal(invited.requires_setup,true);equal(invited.school_id,school);await db.query('select platform_account_result($1,$2,true)',[id(80),id(9311)]);await db.exec('reset role');
  await db.query('update profiles set requires_setup=false,onboarding_completed_at=now() where id=$1',[id(550)]);await db.exec('set role service_role');await db.query('select begin_platform_account($1,$2,$3,$4,$5,$6,true,$7)',[id(80),school,id(9309),'reset',id(550),{_delivery:'email'},'QA secure password reset request']);await db.query('select finish_platform_account($1,$2)',[id(80),id(9309)]);await db.query('select platform_account_result($1,$2,true)',[id(80),id(9309)]);
  await assert.rejects(db.query('select begin_platform_account($1,$2,$3,$4,$5,$6,true,$7)',[id(80),school,id(9310),'status',id(80),{revision:1,account_status:'Inactive'},'Platform identity protected']),/managed separately/);checks++;
  await login(10);await assert.rejects(db.query('select begin_user_management($1,$2,$3,$4)',[id(9401),'status',id(80),{revision:1,account_status:'Inactive'}]),/managed separately/);checks++;
