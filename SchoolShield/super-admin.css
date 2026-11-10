@@ -27,6 +27,22 @@
 .platform-brand{display:flex;align-items:center;gap:10px;color:var(--text);flex-shrink:0}
 .platform-brand strong{display:block;font-size:19px;letter-spacing:-.4px}.platform-brand small{font-size:11px;line-height:1.4}
 .platform-header-actions{display:flex;align-items:center;gap:12px;min-width:0}
+.platform-sidebar nav{flex:1}
+.platform-sidebar .platform-sidebar-bottom{display:flex;flex-direction:column;align-items:stretch;gap:12px;margin-top:auto;padding:16px 6px 0;border-left:0;border-top:1px solid #ffffff20}
+.platform-sidebar .platform-owner-email{display:block;max-width:100%;font-size:11px;color:#a8cbc7}
+.platform-sidebar .platform-signout{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:8px;padding:10px 6px;background:transparent;color:#dce9e8;cursor:pointer;font:inherit;text-align:left}
+.platform-sidebar .platform-signout:hover{background:#15515a}
+.platform-sidebar .platform-signout svg{flex-shrink:0}
+.platform-nav-compact .platform-sidebar-bottom .platform-owner-email,.platform-nav-compact .platform-signout-label{display:none}
+.platform-nav-compact .platform-signout{justify-content:center;padding:10px 0}
+.platform-nav-compact .platform-signout[aria-busy=true]{font-size:0}
+.platform-nav-compact .platform-signout[aria-busy=true]::after{content:'...';font-size:16px}
+.platform-shell .platform-header-actions{width:auto;flex-shrink:0;gap:12px}
+.platform-problems>summary.platform-notification-bell{position:relative;display:flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border-radius:10px;background:#fff;color:#526f78;border-color:var(--line)}
+.platform-problems.has-problems>summary.platform-notification-bell{background:#fff;color:#526f78;border-color:var(--line)}
+.platform-notification-bell .platform-problem-count{position:absolute;top:-8px;right:-8px;min-width:20px;height:20px;padding:2px 5px;margin:0;font-size:11px;line-height:16px}
+.platform-problems:not(.has-problems) .platform-problem-count{display:none}
+@media(max-width:700px){.platform-shell .platform-header{flex-wrap:nowrap;padding:12px;gap:10px}.platform-shell .platform-brand{gap:7px}.platform-shell .platform-logo{width:32px;height:32px}.platform-shell .platform-brand strong{font-size:16px}.platform-shell .platform-header-actions{width:auto;gap:12px}.platform-sidebar #platformConnection{max-width:100%;font-size:11px}}
 .platform-directory{font-size:13px;color:#28534d;padding:10px;border-radius:8px}.platform-directory:hover{background:#edf7f2}
 .platform-owner{display:flex;align-items:center;gap:14px;border-left:1px solid var(--line);padding-left:16px}
 .platform-owner-email{max-width:215px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}

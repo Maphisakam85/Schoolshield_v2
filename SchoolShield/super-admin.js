@@ -75,10 +75,10 @@
   }
   async function busy(button, label, task) {
     if (button.disabled) return;
-    const text = button.textContent;
+    const markup = button.innerHTML;
     button.disabled = true; button.textContent = label; button.setAttribute('aria-busy', 'true');
     try { await task(); } catch (error) { status(window.SchoolShieldPlatformError(error)); }
-    finally { button.disabled = false; button.textContent = text; button.removeAttribute('aria-busy'); }
+    finally { button.disabled = false; button.innerHTML = markup; button.removeAttribute('aria-busy'); }
   }
   function auditRows(rows) {
     if(!$('auditRows'))return;
