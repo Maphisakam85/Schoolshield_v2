@@ -1273,7 +1273,7 @@ function nav() {
     dashboardLink && allowed("dashboard")
       ? (() => {
           const [id, label, url, ic] = dashboardLink;
-          return `<a href="${escapeHtml(url)}" class="nav-item dashboard-nav ${escapeHtml(page() === id ? "active" : "")}">${icon(ic)}<span>${escapeHtml(label)}</span></a>`;
+          return `<a href="${escapeHtml(url)}" class="nav-item dashboard-nav ${escapeHtml(page() === id ? "active" : "")}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icon(ic)}<span>${escapeHtml(label)}</span></a>`;
         })()
       : "";
   return (
@@ -1286,7 +1286,7 @@ function nav() {
       if (!links.length) return "";
       const isCurrentGroup = links.some(([id]) => page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page())));
       const open = isCurrentGroup;
-      return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary>${escapeHtml(group.label)}<span>⌄</span></summary>${links
+      return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary title="${escapeHtml(group.label)}" aria-label="${escapeHtml(group.label)}"><span class="nav-group-icon" aria-hidden="true">${icon(links[0][3])}</span><span class="nav-group-label">${escapeHtml(group.label)}</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>${links
         .map(([id, originalLabel, url, ic]) => {
           const label = CHAT_PAGES.includes(id) ? "Chats" : originalLabel;
           const hasUpdates = CHAT_PAGES.includes(id) ? CHAT_PAGES.some(channel => allowed(channel) && navHasNewUpdates(channel)) : navHasNewUpdates(id);
@@ -6796,7 +6796,9 @@ function initSidebarAccordion(sidebar) {
     const group = summary?.parentElement;
     if (!group?.matches('details.nav-group') || !sidebar.contains(group)) return;
     event.preventDefault();
-    const opening = !group.open;
+    const rail=sidebar.classList.contains('rail');
+    const opening = rail || !group.open;
+    if(rail)sidebar.__expandNavigation?.();
     closeOthers(group);
     group.open = opening;
   }, true);
@@ -6838,6 +6840,8 @@ function initWorkspaceChrome() {
     sidebar.dataset.compact = String(compact);
     setMobileNav();
     if (innerWidth <= 700) {
+      sidebar.classList.remove('rail');
+      sidebar.querySelectorAll('.brand div, .menu-title, .nav-item span:not(.icon):not(.nav-update), .role-card div:nth-child(2), .logout span').forEach(element=>element.style.display='');
       sidebar.style.transform = compact ? "translateX(-105%)" : "translateX(0)";
       sidebar.style.position = "fixed";
       sidebar.style.zIndex = "40";
@@ -6851,7 +6855,9 @@ function initWorkspaceChrome() {
       main.style.width = "100%";
       return;
     }
-    const rail = compact || innerWidth <= 980;
+    const rail = compact;
+    sidebar.classList.toggle("rail",rail);
+    $("#sidebarToggle")?.setAttribute("aria-expanded",String(!rail));
     sidebar.inert = false;
     sidebar.removeAttribute("aria-hidden");
     const backdrop = $("#mobileNavBackdrop");
@@ -6866,6 +6872,7 @@ function initWorkspaceChrome() {
     main.style.marginLeft = rail ? "70px" : "252px";
     main.style.width = rail ? "calc(100% - 70px)" : "calc(100% - 252px)";
   };
+  sidebar.__expandNavigation=()=>setSidebarState(false);
   if (!$("#mobileNavBackdrop")) {
     const backdrop = document.createElement("button");
     backdrop.id = "mobileNavBackdrop";
@@ -6899,7 +6906,7 @@ function initWorkspaceChrome() {
   } else if (sidebar.dataset.compact === "true") {
     setSidebarState(true);
   } else {
-    setSidebarState(false);
+    setSidebarState(innerWidth <= 980);
   }
   if (!window.__schoolshieldResponsiveChrome) {
     window.__schoolshieldResponsiveChrome = true;

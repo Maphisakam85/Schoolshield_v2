@@ -1767,12 +1767,12 @@ td small {
     display: none
 }
 
-.nav-group summary span {
+.nav-group summary .nav-group-chevron {
     font-size: 13px;
     transition: transform .18s
 }
 
-.nav-group[open] summary span {
+.nav-group[open] summary .nav-group-chevron {
     transform: rotate(180deg)
 }
 
@@ -1785,13 +1785,25 @@ td small {
     font-size: 0
 }
 
-.sidebar.rail .nav-group summary span {
-    font-size: 13px
+.sidebar.rail .nav-group summary .nav-group-icon {
+    display: inline-flex;
+    font-size: 16px
 }
 
 .sidebar.rail .nav-group {
     margin: 3px 4px
 }
+.nav-group-icon{display:none}
+.sidebar.rail{padding:18px 8px}
+.sidebar.rail .brand{justify-content:center;padding:5px 0 22px}
+.sidebar.rail .nav-group{margin:3px 0}
+.sidebar.rail .nav-group summary{padding:11px 8px;min-height:42px;border-radius:9px}
+.sidebar.rail .nav-group summary:hover,.sidebar.rail .nav-group summary:focus-visible{background:#ffffff12;color:#fff}
+.sidebar.rail .nav-group .nav-group-label,.sidebar.rail .nav-group .nav-group-chevron{display:none}
+.sidebar.rail .nav-item{justify-content:center;gap:0;padding:11px 8px}
+.sidebar.rail .icon{flex-shrink:0;font-size:15px}
+.sidebar.rail .role-card{justify-content:center;padding-inline:0}
+.sidebar.rail .logout{width:100%;text-align:center}
 
 /* Required operational fields are marked consistently in modal and page forms. */
 .required-mark {
