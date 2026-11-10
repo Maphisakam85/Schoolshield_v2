@@ -1362,7 +1362,21 @@ function localTimeGreeting(now = new Date()) {
 let schoolshieldPanicSending = false;
 function showPanicConfirmation() {
   if (role() !== "security") return;
-  modal("🚨 Emergency SOS", `<p><b>Confirm a real emergency.</b> This creates a school-wide emergency record visible to the principal, deputy and security officers. It does not call police or send an SMS.</p><div class="form-grid"><label class="full">Your emergency location<input class="input" id="panicLocation" maxlength="150" placeholder="e.g. Main gate" required></label></div><div class="modal-foot"><button type="button" class="btn ghost" data-action="close-modal">Cancel</button><button type="button" class="btn primary panic-confirm" data-action="confirm-panic">Confirm SOS</button></div>`);
+  modal("🚨 Emergency SOS", 
+    `<p>
+    <b>Confirm a real emergency.</b> 
+    This creates a school-wide emergency record visible to the principal, deputy and security officers. It does not call police or send an SMS.
+    </p>
+    <div class="form-grid">
+    <label class="full">Your emergency location
+    <input class="input" id="panicLocation" maxlength="150" placeholder="e.g. Main gate" required>
+    </label>
+    </div>
+    <div class="modal-foot">
+    <button type="button" class="btn ghost" data-action="close-modal">
+    Cancel
+    </button>
+    <button type="button" class="btn primary panic-confirm" data-action="confirm-panic">Confirm SOS</button></div>`);
 }
 async function sendPanicAlert(button) {
   if (role() !== "security" || schoolshieldPanicSending) return;
@@ -1472,12 +1486,12 @@ function dashboard() {
     })
     .join("");
 
-  const securityPanicButton = r === "security" ? `<section class="panic-section"><div><h2>🚨 Emergency assistance</h2><p>For an immediate security threat. If urgent, also contact emergency services directly.</p></div><button type="button" class="panic-button" data-action="trigger-panic">🚨 SOS PANIC BUTTON</button></section>` : "";
+ 
 
   const classPerformancePanel = r === "security" ? "" : `<section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section>`;
 
   return shell(
-    `<div class="hero"><div><span class="pill">${escapeHtml(heroLabel)}</span><h1>${escapeHtml(localTimeGreeting())}, ${escapeHtml(ROLE_NAMES[r])}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${escapeHtml(r === "security" ? "security-dashboard-stats" : "")}">${kpis.join("")}</div>${securityPanicButton}<div id="schoolshieldPanicAlerts"></div>${window.SchoolShieldTeacherDashboard?.renderHome() || ''}<div class="dashboard-grid ${escapeHtml(r === "security" ? "security-dashboard-panels" : "")}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
+    `<div class="hero"><div><span class="pill">${escapeHtml(heroLabel)}</span><h1>${escapeHtml(localTimeGreeting())}, ${escapeHtml(ROLE_NAMES[r])}</h1><p>One secure workspace for school safety, people, incidents and communication.</p></div><div class="hero-actions">${r !== "sgb" ? '<button class="btn primary" data-action="incident">Report incident</button>' : ""}<button class="btn ghost" data-nav="notifications">View alerts</button></div></div><div class="stats-grid ${escapeHtml(r === "security" ? "security-dashboard-stats" : "")}">${kpis.join("")}</div><div id="schoolshieldPanicAlerts"></div>${window.SchoolShieldTeacherDashboard?.renderHome() || ''}<div class="dashboard-grid ${escapeHtml(r === "security" ? "security-dashboard-panels" : "")}">${classPerformancePanel}<section class="panel"><div class="panel-head"><div><h3>Recent incidents</h3><p>Most recent reports</p></div><a class="text-link" href="incidents.html">View all →</a></div>${table(
       ["Incident", "Location", "Priority", "Status"],
       incidentsForRole()
         .slice(0, 4)

@@ -83,16 +83,25 @@
 
 
       <!-- SchoolShield Login Page Panic Button -->
+
+      <!-- SchoolShield Login Page Panic Button -->
       <div class="login-panic-section">
+
         <p class="login-panic-warning">
           Experiencing an emergency? Request immediate attention.
         </p>
 
-        <button type="button" id="loginPanicButton" class="login-panic-button">
-          🚨 EMERGENCY SOS
-        </button>
-      </div>
+        <button type="button" id="loginPanicButton" class="login-panic-button" aria-label="Emergency SOS"
+          title="Emergency SOS">
 
+          <div id="loginSirenAnimation" class="login-siren-animation" aria-hidden="true">
+          </div>
+
+        </button>
+
+        <p class="login-panic-label">EMERGENCY SOS</p>
+
+      </div>
 
     </main>
   </div>
@@ -115,6 +124,7 @@
     }
   </script>
   <script src="supabase-client.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@lordicon/element@3"></script>
   <script src="invitation.js"></script>
   <script>
     const client = window.schoolshieldSupabase, errorBox = document.getElementById('loginError'), loginForm = document.getElementById('loginForm'), requestForm = document.getElementById('requestForm'), inviteForm = document.getElementById('inviteForm'), forgotPasswordForm = document.getElementById('forgotPasswordForm'), resetPasswordForm = document.getElementById('resetPasswordForm');
@@ -137,6 +147,50 @@
     if (new URLSearchParams(location.search).get('view') === 'create') show(requestForm);
     if (new URLSearchParams(location.search).get('setup') === 'complete') showError('Account setup is complete. Sign in with your email, password and school code.', true);
   </script>
+
+  <!-- Lottie Animation Player -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.12.2/lottie.min.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+
+      const sirenContainer =
+        document.getElementById("loginSirenAnimation");
+
+      if (!sirenContainer) return;
+
+      lottie.loadAnimation({
+        container: sirenContainer,
+        renderer: "svg",
+        loop: true,
+        autoplay: true,
+        path: "./assets/icons/schoolshield-emergency-siren.json"
+      });
+
+    });
+  </script>
 </body>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const panicButton = document.getElementById('loginPanicButton');
+
+    if (!panicButton) return;
+
+    panicButton.addEventListener('click', async () => {
+
+      const senderName = prompt('Please enter your full name.');
+
+      if (senderName === null) return;
+
+      if (!senderName.trim()) {
+        alert('Please enter your full name before sending the emergency alert.');
+        return;
+      }
+
+      alert('Emergency SOS button clicked successfully. Sender: ' + senderName.trim());
+
+    });
+  });
+</script>
 
 </html>
