@@ -32,6 +32,8 @@
 .platform-owner-email{max-width:215px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted)}
 .platform-signout{white-space:nowrap;min-height:38px}.platform-problems{position:relative;margin-left:0}
 .platform-problems>summary{cursor:pointer;list-style:none;border:1px solid var(--line);border-radius:9px;padding:9px 12px;white-space:nowrap}
+.platform-problems>summary svg{vertical-align:middle}
+@media(max-width:900px){.platform-notification-label{display:none}}
 .platform-problems.has-problems>summary{border-color:#b8d8cb;color:#185449;background:#eff8f4;font-weight:600}
 .platform-problem-count{display:inline-block;min-width:24px;text-align:center;border-radius:20px;background:#e8efed;margin-left:5px;padding:2px 6px}
 .has-problems .platform-problem-count{background:#b42318;color:#fff}

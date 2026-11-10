@@ -10,7 +10,7 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
  if(name==='platform_admin_directory')return{data:{schools:[school],audit:[event]}};
  if(name==='platform_admin_school')return{data:{school,provision:null,audit:[event]}};
  if(name==='platform_admin_dashboard'){if(failMetrics)return{error:{message:'PRIVATE PROVIDER ERROR'}};return{data:{metrics:{schools_total:2,schools_active:1,reports_open:1,reports_urgent:1,accounts_total:3},reports:[{...ticket,school_name:school.name,school_code:school.code}],generated_at:'2026-11-09T10:00:00Z'}};}
- if(name==='platform_admin_problem_notifications')return{data:{total:1,items:[{...ticket,school_name:school.name,school_code:school.code}]}};
+ if((name==='platform_admin_problem_notifications'||name==='platform_admin_notifications'))return{data:{total:1,items:[{...ticket,school_name:school.name,school_code:school.code}]}};
  if(name==='platform_admin_school_access')return{data:{school_id:school.id,status:'active',features:{announcements:true,appointments:true},revision:1}};
  if(name==='platform_admin_support')return{data:{school_id:school.id,tickets:[ticket],diagnostics:{invitations:[],account_operations:[],provisioning:[]}}};
  if(name==='platform_admin_audit_history')return{data:{events:[{...event,school_name:school.name,school_code:school.code}]}};

@@ -6,7 +6,7 @@ const fs=require('fs'),path=require('path'),assert=require('node:assert/strict')
  async function init(){await p.addScriptTag({path:'SchoolShield/super-admin-notifications.js'});await p.evaluate(({school,ticket})=>{
   window.qaSchool={id:school,name:'Fictional QA School',code:'QAA-001',data_mode:'qa'};window.qaTicket={id:ticket,school_id:school,title:'Cannot save colours <script>',category:'Branding',description:'Fictional QA issue',internal_notes:'',priority:'High',status:'Open',revision:1};window.failNotifications=false;
   window.qaClient={rpc:async(name,args)=>{
-   if(name==='platform_admin_problem_notifications'){if(failNotifications)return{error:{message:'SECRET'}};const active=!['Resolved','Closed'].includes(qaTicket.status);return{data:{total:active?1:0,items:active?[{...qaTicket,school_name:qaSchool.name,school_code:qaSchool.code}]:[]}};}
+   if((name==='platform_admin_problem_notifications'||name==='platform_admin_notifications')){if(failNotifications)return{error:{message:'SECRET'}};const active=!['Resolved','Closed'].includes(qaTicket.status);return{data:{total:active?1:0,items:active?[{...qaTicket,school_name:qaSchool.name,school_code:qaSchool.code}]:[]}};}
    if(name==='platform_admin_directory')return{data:{schools:[qaSchool]}};
    if(name==='platform_admin_school_access')return{data:{school_id:school,status:'active',features:{announcements:true,appointments:true},revision:1}};
    if(name==='platform_admin_support')return{data:{school_id:school,tickets:[qaTicket],diagnostics:{invitations:[],account_operations:[],provisioning:[]}}};
