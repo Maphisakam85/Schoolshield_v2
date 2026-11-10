@@ -4871,7 +4871,7 @@ function updateTeachingAssignmentBadge() {
   bell.setAttribute("aria-label", `Open notifications (${unread} unread)`);
   if (document.querySelectorAll) {
     const notices=new Map(notificationsForRole().map(n=>[n.id,n]));
-    $$('[data-notification]').forEach(item=>{const notice=notices.get(item.dataset.notification);if(notice){item.classList.toggle('read',notice.read);if(notice.read&&item.classList.contains('incident-toast'))item.remove();}});
+    $$('[data-notification]').forEach(item=>{const notice=notices.get(item.dataset.notification);if(notice){item.classList.toggle('read',notice.read);if(notice.read&&item.classList.contains('incident-toast'))(item.closest('.chat-alert-row')||item).remove();}});
     for (const [href,count] of [['notifications.html',unread],['account-requests.html',window.schoolshieldPendingAccountAlerts||0]]) {
       const link=document.querySelector(`.nav-item[href="${href}"]`);
       if (link) {link.classList.toggle('has-updates',count>0);const dot=link.querySelector('.nav-update');if(!count)dot?.remove();else if(!dot){const mark=document.createElement('span');mark.className='nav-update';mark.setAttribute('aria-label','New updates');link.appendChild(mark);}}
@@ -5604,7 +5604,7 @@ async function resolveIncident(id) {
     });
 
   });
-  $(".incident-toast")?.remove();
+  $(".chat-alert-row")?.remove();
   if (!await markNotificationIdsRead(notificationsForRole().filter(n=>n.incidentId===id&&!n.read).map(n=>n.id))) return;
   finishForm();
 }

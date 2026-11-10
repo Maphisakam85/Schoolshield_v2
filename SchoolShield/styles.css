@@ -2723,6 +2723,10 @@ textarea[aria-invalid="true"] {
     display: flex;
     align-items: center;
     gap: 12px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    flex-shrink: 0;
     padding: 7px 24px;
     background: #fff0f1;
     border-bottom: 1px solid #f3c9ce
@@ -2743,6 +2747,9 @@ textarea[aria-invalid="true"] {
 }
 
 .chat-alert-compact b { overflow-wrap: anywhere; font-size: 13px }
+.chat-alert-compact > b { flex: 1; min-width: 0 }
+.chat-alert-compact > span { flex-shrink: 0 }
+.chat-review-later { flex-shrink: 0 }
 .chat-alert-action { margin-left: auto; white-space: nowrap; font-size: 11px }
 .chat-review-later { border: 0; background: transparent; color: #9f2430; cursor: pointer; white-space: nowrap; padding: 6px; text-decoration: underline }
 
