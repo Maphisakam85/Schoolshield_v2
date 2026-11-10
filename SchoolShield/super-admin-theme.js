@@ -36,5 +36,5 @@
    finally{saving=false;controls.forEach(el=>el.disabled=false);}
   };
  }
- window.SchoolShieldThemePage={load,bind};
+ window.SchoolShieldThemePage={load,bind,isBusy:()=>saving};
 })();

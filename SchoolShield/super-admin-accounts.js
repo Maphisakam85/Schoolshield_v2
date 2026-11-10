@@ -66,5 +66,5 @@
    perform({action,operation_id:requestId,user_id:editing?.id,fields,revision:editing?.management_revision,account_status:values.account_status,delivery:values.delivery,reason:values.reason,confirmed:form.elements.confirmed.checked});
   };
  }
- window.SchoolShieldAccountsPage={load,bind};
+ window.SchoolShieldAccountsPage={load,bind,isBusy:()=>working};
 })();

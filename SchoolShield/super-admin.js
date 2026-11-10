@@ -30,7 +30,34 @@
     },
   };
   const status = message => { $('platformStatus').textContent = message; $('platformStatus').hidden=!message; };
-  let verified=false;
+  let verified=false, formsBound=false, refreshing=false, starting=true, liveStarted=false;
+  function activatePortal(){
+    $('platformIdentity').textContent=context.email;
+    $('platformContent').hidden=false;$('platformSignIn').hidden=true;finishLoading();
+    window.dispatchEvent(new CustomEvent('platform-ready',{detail:{school}}));
+    if(!liveStarted){liveStarted=true;if(kind==='directory')window.SchoolShieldDashboard?.start(client);window.SchoolShieldPlatformNotifications?.start(client);}
+  }
+  async function refreshPage() {
+    if(!verified||starting||refreshing)return;
+    if(document.querySelector('button[aria-busy="true"]')||window.SchoolShieldAccountsPage?.isBusy?.()||window.SchoolShieldBrandingPage?.isBusy?.()||window.SchoolShieldThemePage?.isBusy?.()) {
+      status('Wait for the current operation to finish before refreshing.');return;
+    }
+    if(hasDraft()) { status('Unsaved entries are retained. Save or cancel the open form before refreshing.'); return; }
+    if(navigator.onLine===false){status('You are offline. Reconnect before refreshing. Your entries are retained.');return;}
+    refreshing=true;
+    const button=$('platformGlobalRefresh'),icon=button.innerHTML;button.disabled=true;button.setAttribute('aria-busy','true');button.textContent='...';status('Refreshing confirmed records...');
+    try {
+      await bounded(load);
+      if(!formsBound){bindForms();formsBound=true;}
+      activatePortal();
+      await Promise.all([kind==='directory'?window.SchoolShieldDashboard?.refresh():null,window.SchoolShieldPlatformNotifications?.refresh()]);
+      status('Page records refreshed at '+new Date().toLocaleTimeString('en-ZA')+'.');
+    } catch(error){
+      const failure=/timeout|timed out|aborted/i.test(error?.message||'')?'The latest records could not be refreshed in time. Retry refresh.':window.SchoolShieldPlatformError(error);
+      status(failure+' Previously displayed records and entries are retained.');
+    }
+    finally{refreshing=false;button.disabled=false;button.removeAttribute('aria-busy');button.innerHTML=icon;}
+  }
   const finishLoading=()=>{if($('platformLoading'))$('platformLoading').hidden=true;};
   const schoolUrl = id => 'super-admin-school.html?school=' + encodeURIComponent(id);
   const validId = id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
@@ -206,6 +233,7 @@
     context = await rpc('platform_admin_context');
     if (context.user_id !== data.user.id) throw Error('Platform identity verification failed.');
     verified=true;
+    if($('platformGlobalRefresh'))$('platformGlobalRefresh').onclick=refreshPage;
     $('platformLogout').hidden = false;
     $('platformLogout').onclick = () => busy($('platformLogout'),'Signing you out...',async()=>{
       if (hasDraft() && !confirm('Sign out with unsaved form entries?')) return;
@@ -214,18 +242,14 @@
       dirty = false; dirtyForms.clear(); sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');location.replace('login.html');
     });
     if (kind !== 'directory' && !validId(schoolId)) throw Error('Select a valid school from the directory.');
-    await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});
-    await load(); bindForms();
-    $('platformIdentity').textContent = context.email;
-    $('platformContent').hidden = false; $('platformSignIn').hidden = true;
-    finishLoading();status('');
-    if(kind==='directory')window.SchoolShieldDashboard?.start(client);
-    window.SchoolShieldPlatformNotifications?.start(client);
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
       if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});
+    await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});
+    await load(); bindForms();formsBound=true;
+    activatePortal();status('');
   }
-  start().catch(error => { finishLoading();status(window.SchoolShieldPlatformError(error));if($('platformSignIn'))$('platformSignIn').hidden=verified; });
+  start().catch(error => { finishLoading();status(window.SchoolShieldPlatformError(error));if($('platformSignIn'))$('platformSignIn').hidden=verified; }).finally(()=>{starting=false;if(verified&&$('platformGlobalRefresh'))$('platformGlobalRefresh').disabled=false;});
 })();

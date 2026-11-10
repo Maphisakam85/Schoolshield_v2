@@ -58,9 +58,9 @@
     await history();
   }
   window.SchoolShieldOperationsPage={
-    async load(value){ctx=value;$('schoolBack').href='super-admin-school.html?school='+encodeURIComponent(ctx.school.id);
+    async load(value){const previousSchool=ctx?.school?.id,previousAuditSchool=$('auditSchool').value;ctx=value;$('schoolBack').href='super-admin-school.html?school='+encodeURIComponent(ctx.school.id);
       const {data,error}=await ctx.client.rpc('platform_admin_directory');if(error)throw Error(message);
-      const all=new Option('All schools','');$('auditSchool').replaceChildren(all);for(const s of data.schools)$('auditSchool').add(new Option(s.name+' ('+s.code+')',s.id));$('auditSchool').value=ctx.school.id;await refresh();
+      const all=new Option('All schools','');$('auditSchool').replaceChildren(all);for(const s of data.schools)$('auditSchool').add(new Option(s.name+' ('+s.code+')',s.id));$('auditSchool').value=previousSchool===ctx.school.id?previousAuditSchool:ctx.school.id;await refresh();
       const target=new URLSearchParams(location.search).get('ticket');
       if(target){const ticket=tickets.find(t=>t.id===target&&t.school_id===ctx.school.id);if(ticket)openTicket(ticket);else ctx.status('This report is unavailable for the selected school.');}
     },

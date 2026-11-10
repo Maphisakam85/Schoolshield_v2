@@ -68,5 +68,5 @@
    load({client,context,school,status:report}).then(()=>report('Current branding loaded.')).catch(e=>report(window.SchoolShieldPlatformError(e)));
   };
  }
- window.SchoolShieldBrandingPage={load,bind};
+ window.SchoolShieldBrandingPage={load,bind,isBusy:()=>working};
 })();
