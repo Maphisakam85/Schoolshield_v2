@@ -542,13 +542,34 @@ function showRetainedSchoolDraft() {
   // Keep recovery available without interrupting every portal with a modal.
   const pending = sessionStorage.getItem(`${workspaceCacheKey()}:pending`);
   const existing = document.getElementById?.('schoolDraftStatus');
-  if (!pending) { existing?.remove(); return; }
+  if (!pending) {
+    existing?.remove();
+    sessionStorage.removeItem(`${workspaceCacheKey()}:draft-hidden`);
+    document.getElementById?.('schoolDraftReopen')?.remove();
+    return;
+  }
+  const actions = document.querySelector?.('.top-actions');
+  if (actions && !document.getElementById('schoolDraftReopen')) {
+    const reopen = document.createElement('button');
+    reopen.id = 'schoolDraftReopen'; reopen.className = 'btn small'; reopen.type = 'button';
+    reopen.textContent = 'Unsaved draft';
+    reopen.onclick = () => {
+      sessionStorage.removeItem(`${workspaceCacheKey()}:draft-hidden`);
+      showRetainedSchoolDraft();
+    };
+    actions.prepend(reopen);
+  }
+  if (sessionStorage.getItem(`${workspaceCacheKey()}:draft-hidden`)) { existing?.remove(); return; }
   if (existing || !document.body) return;
   const notice = document.createElement('aside');
   notice.id = 'schoolDraftStatus';
   notice.setAttribute('role', 'status');
   notice.style.cssText = 'padding:10px 16px;background:#fff8e6;color:#253d46;border-bottom:1px solid #e5d6ae;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
-  notice.innerHTML = '<span>An earlier workspace draft is still unsynced. Retry or download it.</span><button class="btn small" type="button" data-draft-retry>Retry changes</button><button class="btn small" type="button" data-draft-download>Download draft</button>';
+  notice.innerHTML = '<span>Unsaved changes</span><button class="btn small" type="button" data-draft-retry>Retry changes</button><button class="btn small" type="button" data-draft-download>Download draft</button><button class="btn small" type="button" data-draft-dismiss title="Hide this banner without deleting your changes">Dismiss</button>';
+  notice.querySelector('[data-draft-dismiss]').onclick = () => {
+    sessionStorage.setItem(`${workspaceCacheKey()}:draft-hidden`, '1');
+    notice.remove();
+  };
   notice.querySelector('[data-draft-retry]').onclick = retrySchoolDraft;
   notice.querySelector('[data-draft-download]').onclick = () => downloadTextFile('schoolshield-unsynced-draft.json', sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || '{}');
   document.body.prepend(notice);
@@ -1325,13 +1346,9 @@ function nav() {
     }).join("")
   );
 }
-function schoolModeNotice() {
-  if (CHAT_PAGES.includes(page())) return "";
-  const mode = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").schoolMode;
-  return mode === "demo" || mode === "qa" ? `<div class="notice" role="status"><b>${escapeHtml(mode === "demo" ? "DEMO SCHOOL" : "QA SCHOOL")}</b><p>This school contains demonstration or test data. Live schools use separate records.</p></div>` : "";
-}
+function schoolModeNotice() { return ""; }
 function shell(body, title) {
-  const chatMode = CHAT_PAGES.includes(page()) && ["demo","qa"].includes(JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").schoolMode);
+  const chatMode = ["demo","qa"].includes(JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}").schoolMode);
   title = CHAT_PAGES.includes(page()) ? "Chats" : title;
   if (chatLabel(page())) document.title = 'SchoolShield - ' + title;
   const r = role();
@@ -4655,11 +4672,10 @@ function deferredChatAlerts(){try{return JSON.parse(sessionStorage.getItem('scho
 function reviewAlertLater(id){const ids=deferredChatAlerts();if(!ids.includes(id))ids.push(id);sessionStorage.setItem('schoolshield:later:'+currentProfileId(),JSON.stringify(ids));document.querySelector('.chat-alert-row')?.remove();}
 function alertToast() {
   const latest = notificationsForRole().find(
-    (notice) => !notice.read && ["Critical", "High"].includes(notice.priority) && (!CHAT_PAGES.includes(page()) || !deferredChatAlerts().includes(notice.id)),
+    (notice) => !notice.read && ["Critical", "High"].includes(notice.priority) && !deferredChatAlerts().includes(notice.id),
   );
   if (!latest) return "";
-  if (CHAT_PAGES.includes(page())) return `<div class="chat-alert-row"><button class="incident-toast chat-alert-compact" data-action="view-notification" data-notification="${escapeHtml(latest.id)}" title="${escapeHtml(latest.description)}"><span aria-hidden="true">!</span><b>${escapeHtml(latest.title)}</b><span class="chat-alert-action">View alert</span></button><button type="button" class="chat-review-later" data-action="review-alert-later" data-notification="${escapeHtml(latest.id)}" title="Hide this banner for this session; keep the notification unread">Review later</button></div>`;
-  return `<button class="incident-toast" style="width:100%;border:0;background:#fff0f1;color:#18323a;display:flex;align-items:center;gap:11px;padding:10px 38px;text-align:left;cursor:pointer;border-bottom:1px solid #f3c9ce" data-action="view-notification" data-notification="${escapeHtml(latest.id)}"><span style="width:23px;height:23px;border-radius:50%;background:#d83d49;color:#fff;display:grid;place-items:center;font-weight:800">!</span><div><b>${escapeHtml(latest.title)}</b><small style="display:block;margin-top:2px">${escapeHtml(latest.description)}</small></div><em style="margin-left:auto;color:#d83d49;font-size:9px;font-style:normal;font-weight:800">View alert →</em></button>`;
+  return `<div class="chat-alert-row"><button class="incident-toast chat-alert-compact" data-action="view-notification" data-notification="${escapeHtml(latest.id)}" title="${escapeHtml(latest.description)}"><span aria-hidden="true">!</span><b>${escapeHtml(latest.title)}</b><span class="chat-alert-action">View alert</span></button><button type="button" class="chat-review-later" data-action="review-alert-later" data-notification="${escapeHtml(latest.id)}" title="Hide this banner for this session; keep the notification unread">Review later</button></div>`;
 }
 function relatedLearnerRecord(record) {
   if (role() === "teacher") {
@@ -7007,6 +7023,7 @@ function bind() {
   bindLearnerSubjectTeachers();
   if (page()==="notifications") {bindNotificationFilters(document);window.SchoolShieldPush?.bind();}
   initWorkspaceChrome();
+  showRetainedSchoolDraft();
   window.SchoolShieldChatNavigation?.bind();
   window.SchoolShieldBranding?.apply();
   updateTeachingAssignmentBadge();

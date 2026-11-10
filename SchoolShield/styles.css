@@ -2686,6 +2686,50 @@ textarea[aria-invalid="true"] {
     border-radius: 12px
 }
 
+.chat-mode-badge {
+    display: inline-block;
+    padding: 4px 7px;
+    margin-left: 8px;
+    border-radius: 6px;
+    background: #fff3e8;
+    color: #9b461b;
+    font-size: 11px;
+    font-weight: 500;
+    vertical-align: middle
+}
+
+.chat-alert-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 24px;
+    background: #fff0f1;
+    border-bottom: 1px solid #f3c9ce
+}
+
+.chat-alert-compact {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+    gap: 10px;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #9f2430;
+    text-align: left;
+    cursor: pointer
+}
+
+.chat-alert-compact b { overflow-wrap: anywhere; font-size: 13px }
+.chat-alert-action { margin-left: auto; white-space: nowrap; font-size: 11px }
+.chat-review-later { border: 0; background: transparent; color: #9f2430; cursor: pointer; white-space: nowrap; padding: 6px; text-decoration: underline }
+
+@media(max-width:600px) {
+    .chat-alert-row { padding: 7px 12px; gap: 6px }
+    .chat-alert-action { display: none }
+}
+
 .panic-alert strong {
     color: #991b1b
 }

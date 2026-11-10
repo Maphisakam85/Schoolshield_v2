@@ -8,6 +8,12 @@
       notice.setAttribute('aria-live','polite'); document.body.appendChild(notice);
     }
     clearTimeout(timer); notice.hidden = false; notice.dataset.state = state;
+    // Draft recovery already displays its own progress and error details.
+    // Keep one status surface instead of stacking an identical toast over it.
+    if (window.schoolshieldDraftRetrying || document.getElementById('schoolDraftStatus')) {
+      notice.hidden = true;
+      return;
+    }
     notice.textContent = ({saving:'Saving changes…',saved:'Saved successfully',failed:'Save failed. Check the form and retry.',offline:'Offline — changes have not been confirmed.'})[state] || state;
     if (state === 'saved') timer = setTimeout(()=>{notice.hidden=true;},5000);
   };
