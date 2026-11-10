@@ -2,7 +2,13 @@
 (() => {
  const $=id=>document.getElementById(id),side=$('platformSidebar');if(!side)return;
  document.body.classList.add('platform-shell');
- let compact=sessionStorage.getItem('platform-nav-compact')==='true',mobileOpen=false;
+ let compact=sessionStorage.getItem('platform-nav-compact')==='true',mobileOpen=false,schoolMenuId=null;
+ const schoolMenu=$('platformSchoolNav');
+ schoolMenu.addEventListener('toggle',()=>{if(schoolMenuId)sessionStorage.setItem('platform-school-menu:'+schoolMenuId,String(schoolMenu.open));});
+ schoolMenu.querySelector('summary').addEventListener('click',event=>{
+  if(!mobile()&&compact){event.preventDefault();compact=false;sessionStorage.setItem('platform-nav-compact','false');draw();schoolMenu.open=true;}
+  else if(schoolMenuId)sessionStorage.setItem('platform-school-menu:'+schoolMenuId,String(!schoolMenu.open));
+ });
  const mobile=()=>innerWidth<=700;
  const width=()=>Math.max(220,Math.min(400,Math.floor(innerWidth*.4),Number(sessionStorage.getItem('platform-nav-width'))||240));
  function draw(){
@@ -27,7 +33,10 @@
  window.addEventListener('online',connection);window.addEventListener('offline',connection);window.addEventListener('resize',()=>{mobileOpen=false;draw();});
  window.addEventListener('platform-ready',event=>{
   const school=event.detail?.school;
-  if(school){$('platformSchoolNav').hidden=false;$('platformNavSchool').textContent=school.name+' ('+school.code+')';
+  if(school){
+   if(schoolMenuId!==school.id){schoolMenuId=school.id;schoolMenu.open=sessionStorage.getItem('platform-school-menu:'+school.id)!=='false';}
+   schoolMenu.hidden=false;$('platformNavSchool').textContent=school.name+' ('+school.code+')';
+   schoolMenu.querySelector('summary').setAttribute('aria-label','School menu: '+school.name+' ('+school.code+')');
    for(const link of side.querySelectorAll('[data-platform-nav]'))if(link.dataset.platformScope==='school'||link.dataset.platformNav==='audit')link.href='super-admin-'+link.dataset.platformNav+'.html?school='+encodeURIComponent(school.id);
   }
   for(const link of side.querySelectorAll('[data-platform-nav]'))if(link.dataset.platformNav===document.body.dataset.platformPage)link.setAttribute('aria-current','page');

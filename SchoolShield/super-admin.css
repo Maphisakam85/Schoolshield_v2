@@ -12,6 +12,16 @@
 .platform-sidebar nav a>span:first-child svg{display:block;margin:auto}
 .platform-sidebar nav a:hover{background:#15515a}.platform-sidebar nav a[aria-current=page]{background:#0c7666;color:white;border-left:3px solid #58d9b5}
 .platform-sidebar nav p{font-size:12px;color:#a8cbc7;overflow-wrap:anywhere;padding:12px 10px 0}
+#platformSchoolNav{margin-top:18px}
+#platformSchoolNav>summary{display:flex;align-items:center;gap:10px;list-style:none;cursor:pointer;padding:10px;color:#a8cbc7;border-radius:8px;font-size:12px;line-height:1.4}
+#platformSchoolNav>summary::-webkit-details-marker{display:none}
+#platformSchoolNav>summary:hover{background:#15515a;color:white}
+#platformSchoolNav>summary>svg{flex-shrink:0}
+#platformSchoolNav>summary .platform-nav-label{min-width:0;overflow-wrap:anywhere}
+.platform-school-chevron{margin-left:auto;transition:transform .15s}
+#platformSchoolNav[open]>summary .platform-school-chevron{transform:rotate(180deg)}
+.platform-nav-compact #platformSchoolNav>summary{justify-content:center;padding:10px 0}
+.platform-nav-compact .platform-school-chevron{display:none}
 .platform-nav-compact .platform-nav-label,.platform-nav-compact .platform-side-brand>span{display:none}
 .platform-nav-compact .platform-sidebar{padding:24px 10px 16px}.platform-nav-compact .platform-sidebar nav a{justify-content:center;padding:10px 3px}
 .platform-nav-resize{position:absolute;top:0;bottom:0;right:0;width:7px;cursor:col-resize;touch-action:none}
