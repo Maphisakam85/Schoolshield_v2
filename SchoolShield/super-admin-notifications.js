@@ -15,7 +15,7 @@
    for(const item of data.items){
     if(!/^[0-9a-f-]{36}$/i.test(item.id)||!/^[0-9a-f-]{36}$/i.test(item.school_id))continue;
     const node=$('platformProblemItem').content.cloneNode(true),link=node.querySelector('a');
-    link.href='super-admin-operations.html?school='+encodeURIComponent(item.school_id)+'&ticket='+encodeURIComponent(item.id);
+    link.href='super-admin-support.html?school='+encodeURIComponent(item.school_id)+'&ticket='+encodeURIComponent(item.id);
     node.querySelector('[data-problem-school]').textContent=item.school_name+' ('+item.school_code+')';
     node.querySelector('[data-problem-title]').textContent=item.title;
     node.querySelector('[data-problem-status]').textContent=item.priority+' · '+item.status;

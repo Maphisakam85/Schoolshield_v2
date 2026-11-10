@@ -36,7 +36,7 @@ const A='00000000-0000-4000-8000-000000000001',B='00000000-0000-4000-8000-000000
    return r.fulfill({contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':name.endsWith('.html')?'text/html':'image/png',body:fs.readFileSync(file)});
   });
   const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('https://platform.example.test/super-admin.html');await page.waitForSelector('#platformContent:not([hidden])');
+  await page.goto('https://platform.example.test/super-admin-directory.html');await page.waitForSelector('#platformContent:not([hidden])');
   assert.equal(await page.evaluate(()=>clientOptions.auth.storageKey),'schoolshield-platform-auth');
   assert.equal(await page.locator('#schoolRows tr').count(),2);assert.equal(await page.locator('#schoolRows img').count(),0);assert.equal(await page.evaluate(()=>window.injected),undefined);
   await page.fill('#platformSearch','qa-alpha');assert.equal(await page.locator('#schoolRows tr').count(),1);
@@ -50,7 +50,7 @@ const A='00000000-0000-4000-8000-000000000001',B='00000000-0000-4000-8000-000000
   assert.equal(await page.evaluate(()=>fixtureSchools.find(s=>s.code==='QA-BETA').physical_address),undefined);
   await page.evaluate(()=>{window.failSave=true;window.pauseSave=false;});await page.fill('[name=name]','Retained failed edit');await page.fill('[name=reason]','QA failed save retained');await page.locator('#schoolForm [type=submit]').click();await page.waitForFunction(()=>document.getElementById('platformStatus').textContent.includes('could not be confirmed'));assert.equal(await page.inputValue('[name=name]'),'Retained failed edit');
   await page.evaluate(()=>{window.confirm=()=>true;});page.on('dialog',d=>d.accept());await page.goto('https://platform.example.test/super-admin-school.html?school='+B);await page.waitForSelector('#platformContent:not([hidden])');assert.equal(await page.textContent('#selectedSchoolCode'),'QA-BETA');assert.equal(await page.inputValue('[name=physical_address]'),'');
-  await page.evaluate(()=>sessionStorage.setItem('denyPlatform','1'));await page.goto('https://platform.example.test/super-admin.html');await page.waitForFunction(()=>document.getElementById('platformStatus').textContent.includes('could not be verified'));assert.equal(await page.locator('#platformContent').isVisible(),false);assert.equal(await page.evaluate(()=>calls.some(c=>c.name==='platform_admin_directory')),false);
+  await page.evaluate(()=>sessionStorage.setItem('denyPlatform','1'));await page.goto('https://platform.example.test/super-admin-directory.html');await page.waitForFunction(()=>document.getElementById('platformStatus').textContent.includes('could not be verified'));assert.equal(await page.locator('#platformContent').isVisible(),false);assert.equal(await page.evaluate(()=>calls.some(c=>c.name==='platform_admin_directory')),false);
   assert.deepEqual(errors,[]);await context.close();
  }
  console.log('PASS platform portal desktop/mobile: role denial, separate session, search, canonical school switching, read-only code, safe text, duplicate prevention and failed-save retention.');

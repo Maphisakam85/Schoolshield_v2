@@ -13,7 +13,7 @@
   }
   async function busy(button, task) {
     if(button.disabled)return; const label=button.textContent;button.disabled=true;button.textContent='Working...';button.setAttribute('aria-busy','true');
-    try { await task(); } catch {const ref=$('supportDialog').open?ticketOp?.id:accessOp?.id;const safe=message+(ref?' Operation reference: '+ref:'');ctx.status(safe);if($('supportDialog').open)$('ticketStatus').textContent=safe;}
+    try { await task(); } catch {const ref=$('supportDialog')?.open?ticketOp?.id:accessOp?.id;const safe=message+(ref?' Operation reference: '+ref:'');ctx.status(safe);if($('supportDialog')?.open)$('ticketStatus').textContent=safe;}
     finally {button.disabled=button.id==='auditPrevious'?offset===0:button.id==='auditNext'?!hasMore:false;button.textContent=label;button.removeAttribute('aria-busy');}
   }
   function row(template, item) {
@@ -40,41 +40,44 @@
     try {
       const f=$('auditFilters').elements;
       const data=await rpc('platform_admin_audit_history',{p_school:$('auditSchool').value||null,p_search:f.search.value,p_action:f.action.value,p_from:f.from.value||null,p_to:f.to.value||null,p_offset:offset});
-      $('historyRows').replaceChildren();for(const event of data.events.slice(0,100))$('historyRows').append(row('historyRow',{...event,school:[event.school_name,event.school_code].filter(Boolean).join(' / '),actor:event.actor_id||('Database operator: '+event.database_actor)}));
+      $('historyRows').replaceChildren();for(const event of data.events.slice(0,100)){const item=row('historyRow',{...event,school:[event.school_name,event.school_code].filter(Boolean).join(' / '),actor:event.actor_id||('Database operator: '+event.database_actor)});const open=item.querySelector('[data-audit-report]');if(open&&['school_problem_reported','support_created','support_updated'].includes(event.action)&&event.school_id&&event.target_id){open.hidden=false;open.onclick=()=>location.assign('super-admin-support.html?school='+encodeURIComponent(event.school_id)+'&ticket='+encodeURIComponent(event.target_id));}$('historyRows').append(item);}
       $('historyEmpty').hidden=data.events.length>0;
       hasMore=data.events.length>100;$('auditPrevious').disabled=offset===0;$('auditNext').disabled=!hasMore;
     } finally {filtering=false;}
   }
   async function refresh() {
-    const [a,s]=await Promise.all([rpc('platform_admin_school_access',{p_school:ctx.school.id}),rpc('platform_admin_support',{p_school:ctx.school.id})]);
-    if(a?.school_id!==ctx.school.id||s?.school_id!==ctx.school.id)throw Error(message);
-    tickets=s.tickets;
-    if (!window.SchoolShieldPlatformDrafts?.has('accessForm')) {
-      access=a;const f=$('accessForm').elements;f.status.value=a.status;f.announcements.checked=a.features.announcements;f.appointments.checked=a.features.appointments;f.reason.value='';f.confirm.checked=false;accessOp=null;
+    if($('accessForm')){
+      const a=await rpc('platform_admin_school_access',{p_school:ctx.school.id});if(a?.school_id!==ctx.school.id)throw Error(message);
+      if(!window.SchoolShieldPlatformDrafts?.has('accessForm')){access=a;const f=$('accessForm').elements;f.status.value=a.status;f.announcements.checked=a.features.announcements;f.appointments.checked=a.features.appointments;f.reason.value='';f.confirm.checked=false;accessOp=null;}
+      $('dataMode').textContent='Data mode: '+ctx.school.data_mode+' (independent of lifecycle status).';
     }
-    $('dataMode').textContent='Data mode: '+ctx.school.data_mode+' (independent of lifecycle status).';renderTickets();$('diagnosticRows').replaceChildren();
-    for(const d of [...(s.diagnostics.invitations||[]),...s.diagnostics.account_operations,...s.diagnostics.provisioning.map(x=>({...x,action:'School provisioning'}))])$('diagnosticRows').append(row('diagnosticRow',d));
-    $('diagnosticEmpty').hidden=$('diagnosticRows').children.length>0;
-    await history();
+    if($('supportRows')||$('diagnosticRows')){
+      const data=await rpc('platform_admin_support',{p_school:ctx.school.id});if(data?.school_id!==ctx.school.id)throw Error(message);tickets=data.tickets;
+      if($('supportRows'))renderTickets();
+      if($('diagnosticRows')){$('diagnosticRows').replaceChildren();for(const d of [...(data.diagnostics.invitations||[]),...data.diagnostics.account_operations,...data.diagnostics.provisioning.map(x=>({...x,action:'School provisioning'}))])$('diagnosticRows').append(row('diagnosticRow',d));$('diagnosticEmpty').hidden=$('diagnosticRows').children.length>0;}
+    }
+    if($('auditFilters'))await history();
   }
   window.SchoolShieldOperationsPage={
-    async load(value){const previousSchool=ctx?.school?.id,previousAuditSchool=$('auditSchool').value;ctx=value;$('schoolBack').href='super-admin-school.html?school='+encodeURIComponent(ctx.school.id);
-      const {data,error}=await ctx.client.rpc('platform_admin_directory');if(error)throw Error(message);
-      const all=new Option('All schools','');$('auditSchool').replaceChildren(all);for(const s of data.schools)$('auditSchool').add(new Option(s.name+' ('+s.code+')',s.id));$('auditSchool').value=previousSchool===ctx.school.id?previousAuditSchool:ctx.school.id;await refresh();
-      const target=new URLSearchParams(location.search).get('ticket');
-      if(target){const ticket=tickets.find(t=>t.id===target&&t.school_id===ctx.school.id);if(ticket)openTicket(ticket);else ctx.status('This report is unavailable for the selected school.');}
+    async load(value){const previousSchool=ctx?.school?.id,previousAuditSchool=$('auditSchool')?.value;ctx=value;
+      if($('schoolBack')&&ctx.school)$('schoolBack').href='super-admin-school.html?school='+encodeURIComponent(ctx.school.id);
+      if($('auditSchool')){const data=await rpc('platform_admin_directory');$('auditSchool').replaceChildren(new Option('All schools',''));for(const school of data.schools)$('auditSchool').add(new Option(school.name+' ('+school.code+')',school.id));$('auditSchool').value=previousAuditSchool!==undefined&&previousSchool===ctx.school?.id?previousAuditSchool:ctx.school?.id||'';}
+      await refresh();const target=new URLSearchParams(location.search).get('ticket');
+      if(target&&$('supportRows')){const ticket=tickets.find(t=>t.id===target&&t.school_id===ctx.school.id);if(ticket)openTicket(ticket);else ctx.status('This report is unavailable for the selected school.');}
     },
     bind(){
-      $('supportSearch').oninput=renderTickets;$('newTicket').onclick=()=>openTicket();$('closeTicket').onclick=()=>{if(window.SchoolShieldPlatformDrafts?.discard('supportForm')!==false)$('supportDialog').close();};
+      if($('supportSearch')){ $('supportSearch').oninput=renderTickets;$('newTicket').onclick=()=>openTicket();$('closeTicket').onclick=()=>{if(window.SchoolShieldPlatformDrafts?.discard('supportForm')!==false)$('supportDialog').close();};
       $('supportDialog').addEventListener('cancel',e=>{e.preventDefault();$('closeTicket').click();});
-      $('operationsRefresh').onclick=()=>busy($('operationsRefresh'),async()=>{if(window.SchoolShieldPlatformDrafts?.discard('accessForm')===false)return;await refresh();ctx.status('Confirmed access, support and history loaded.');});
-      $('accessForm').onsubmit=e=>{e.preventDefault();const f=e.currentTarget.elements;const values={p_school:ctx.school.id,p_revision:access.revision,p_status:f.status.value,p_features:{announcements:f.announcements.checked,appointments:f.appointments.checked},p_reason:f.reason.value,p_confirm:f.confirm.checked};
+      }
+      if($('operationsRefresh'))$('operationsRefresh').onclick=()=>busy($('operationsRefresh'),async()=>{if(window.SchoolShieldPlatformDrafts?.discard('accessForm')===false)return;await refresh();ctx.status('Confirmed access controls loaded.');});
+      if($('accessForm'))$('accessForm').onsubmit=e=>{e.preventDefault();const f=e.currentTarget.elements;const values={p_school:ctx.school.id,p_revision:access.revision,p_status:f.status.value,p_features:{announcements:f.announcements.checked,appointments:f.appointments.checked},p_reason:f.reason.value,p_confirm:f.confirm.checked};
         const signature=JSON.stringify(values);if(accessOp?.signature!==signature)accessOp={signature,id:crypto.randomUUID()};
         busy(e.currentTarget.querySelector('[type=submit]'),async()=>{await rpc('platform_admin_set_school_access',{...values,p_operation:accessOp.id});window.SchoolShieldPlatformDrafts?.clear('accessForm');try{await refresh();ctx.status('Access controls saved and audited.');}catch{ctx.status('Access controls saved and audited. Refresh to load confirmed records.');}});};
-      $('supportForm').onsubmit=e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));if(editing.origin==='School-reported')for(const key of ['title','description','category','priority'])fields[key]=editing[key];const signature=JSON.stringify(fields);if(ticketOp?.signature!==signature)ticketOp={signature,id:crypto.randomUUID()};
+      if($('supportForm'))$('supportForm').onsubmit=e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));if(editing.origin==='School-reported')for(const key of ['title','description','category','priority'])fields[key]=editing[key];const signature=JSON.stringify(fields);if(ticketOp?.signature!==signature)ticketOp={signature,id:crypto.randomUUID()};
         busy(e.currentTarget.querySelector('[type=submit]'),async()=>{const saved=await rpc('platform_admin_save_support',{p_school:ctx.school.id,p_id:editing.id,p_revision:editing.revision,p_fields:fields,p_operation:ticketOp.id});if(saved.school_id!==ctx.school.id)throw Error(message);window.SchoolShieldPlatformDrafts?.clear('supportForm');$('supportDialog').close();window.dispatchEvent(new Event('platform-support-updated'));try{await refresh();ctx.status('Ticket saved and audited. No message sent.');}catch{ctx.status('Ticket saved and audited. Refresh to load confirmed records. No message sent.');}});};
-      $('auditFilters').onsubmit=e=>{e.preventDefault();offset=0;busy(e.currentTarget.querySelector('button'),history);};
+      if($('auditFilters')){ $('auditFilters').onsubmit=e=>{e.preventDefault();offset=0;busy(e.currentTarget.querySelector('button'),history);};
       $('auditPrevious').onclick=()=>{offset=Math.max(0,offset-100);busy($('auditPrevious'),history);};$('auditNext').onclick=()=>{offset+=100;busy($('auditNext'),history);};
+      }
     }
   };
 })();

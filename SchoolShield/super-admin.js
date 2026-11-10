@@ -35,7 +35,7 @@
     $('platformIdentity').textContent=context.email;
     $('platformContent').hidden=false;$('platformSignIn').hidden=true;finishLoading();
     window.dispatchEvent(new CustomEvent('platform-ready',{detail:{school}}));
-    if(!liveStarted){liveStarted=true;if(kind==='directory')window.SchoolShieldDashboard?.start(client);window.SchoolShieldPlatformNotifications?.start(client);}
+    if(!liveStarted){liveStarted=true;if(['overview','reports'].includes(kind))window.SchoolShieldDashboard?.start(client);window.SchoolShieldPlatformNotifications?.start(client);}
   }
   async function refreshPage() {
     if(!verified||starting||refreshing)return;
@@ -50,7 +50,7 @@
       await bounded(load);
       if(!formsBound){bindForms();formsBound=true;}
       activatePortal();
-      await Promise.all([kind==='directory'?window.SchoolShieldDashboard?.refresh():null,window.SchoolShieldPlatformNotifications?.refresh()]);
+      await Promise.all([['overview','reports'].includes(kind)?window.SchoolShieldDashboard?.refresh():null,window.SchoolShieldPlatformNotifications?.refresh()]);
       status('Page records refreshed at '+new Date().toLocaleTimeString('en-ZA')+'.');
     } catch(error){
       const failure=/timeout|timed out|aborted/i.test(error?.message||'')?'The latest records could not be refreshed in time. Retry refresh.':window.SchoolShieldPlatformError(error);
@@ -81,6 +81,7 @@
     finally { button.disabled = false; button.textContent = text; button.removeAttribute('aria-busy'); }
   }
   function auditRows(rows) {
+    if(!$('auditRows'))return;
     $('auditRows').replaceChildren();
     for (const item of rows) {
       const row = $('auditRow').content.cloneNode(true);
@@ -92,7 +93,7 @@
       const reportEvent=['school_problem_reported','support_created','support_updated'].includes(item.action);
       if(reportEvent&&validId(item.target_id)&&validId(item.school_id||schoolId)){
         const button=row.querySelector('[data-audit-detail]');button.hidden=false;button.textContent='Open report';
-        button.onclick=()=>location.assign('super-admin-operations.html?school='+encodeURIComponent(item.school_id||schoolId)+'&ticket='+encodeURIComponent(item.target_id));
+        button.onclick=()=>location.assign('super-admin-support.html?school='+encodeURIComponent(item.school_id||schoolId)+'&ticket='+encodeURIComponent(item.target_id));
         const reason=row.querySelector('[data-cell="reason"]');if(reason)reason.textContent='Support report — open to view details and resolve.';
         $('auditRows').append(row);continue;
       }
@@ -116,6 +117,8 @@
     $('schoolEmpty').hidden = found.length > 0;
   }
   async function load() {
+    if(['overview','reports'].includes(kind))return;
+    if(kind==='audit'&&!schoolId){await window.SchoolShieldOperationsPage.load({client,context,school:null,status});return;}
     if (kind === 'directory') {
       const data = await rpc('platform_admin_directory'); records = data.schools; drawSchools(); auditRows(data.audit);
     } else {
@@ -127,12 +130,16 @@
       $('selectedSchoolId').textContent = school.id;
       if ($('selectedSchoolMode')) $('selectedSchoolMode').textContent = school.data_mode;
       document.title = 'SchoolShield | ' + school.name + ' (' + school.code + ')';
-      if (kind === 'operations') { await window.SchoolShieldOperationsPage.load({client,context,school,status}); return; }
+      if($('auditSchoolHeading'))$('auditSchoolHeading').hidden=false;
+      if (['access','support','diagnostics','audit','operations'].includes(kind)) { await window.SchoolShieldOperationsPage.load({client,context,school,status}); return; }
+      if($('auditSchoolHeading'))$('auditSchoolHeading').hidden=false;
+      document.querySelectorAll('[data-school-management]').forEach(a=>a.href=schoolUrl(school.id));
+      if(kind==='colours'){await window.SchoolShieldThemePage.load({client,school,status});return;}
       if (kind === 'branding') { await window.SchoolShieldBrandingPage.load({client,context,school,status}); return; }
       if (kind === 'accounts') { await window.SchoolShieldAccountsPage.load({client,context,school,status}); return; }
       document.querySelectorAll('[data-school-branding]').forEach(a=>a.href='super-admin-branding.html?school='+encodeURIComponent(school.id));
       document.querySelectorAll('[data-school-accounts]').forEach(a=>a.href='super-admin-accounts.html?school='+encodeURIComponent(school.id));
-      document.querySelectorAll('[data-school-operations]').forEach(a=>a.href='super-admin-operations.html?school='+encodeURIComponent(school.id));
+      document.querySelectorAll('[data-school-operations]').forEach(a=>a.href='super-admin-access.html?school='+encodeURIComponent(school.id));
       for (const key of ['name','code','emis_number','physical_address','telephone','email','designated_contact']) $('schoolForm').elements[key].value = school[key] || '';
       $('schoolForm').elements.reason.value = '';
       $('schoolProvisionStatus').textContent = provision ? 'Provisioning: ' + provision.status + (provision.last_error ? ' — ' + provision.last_error : '') : '';
@@ -155,7 +162,9 @@
     return result;
   }
   function bindForms() {
-    if (kind === 'operations') { window.SchoolShieldOperationsPage.bind(); return; }
+    if(['overview','reports'].includes(kind))return;
+    if(kind==='colours'){window.SchoolShieldThemePage.bind();return;}
+    if (['access','support','diagnostics','audit','operations'].includes(kind)) { window.SchoolShieldOperationsPage.bind(); return; }
     if (kind === 'branding') { window.SchoolShieldBrandingPage.bind(); return; }
     if (kind === 'accounts') { window.SchoolShieldAccountsPage.bind(); return; }
     document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => {
@@ -241,7 +250,7 @@
       window.SchoolShieldPlatformNotifications?.stop();
       dirty = false; dirtyForms.clear(); sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');location.replace('login.html');
     });
-    if (kind !== 'directory' && !validId(schoolId)) throw Error('Select a valid school from the directory.');
+    if (!['directory','overview','reports'].includes(kind) && !(kind==='audit'&&!schoolId) && !validId(schoolId)) throw Error('Select a valid school from the directory.');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
       if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);

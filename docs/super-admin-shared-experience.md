@@ -1,3 +1,5 @@
+> Page layout update: see [Focused Super Admin pages](super-admin-focused-pages.md) for the current routes and separated screens.
+
 # Super Admin shared portal experience — 2026-11-10
 
 Reviewed the authenticated school portal's shared interface and compared it with all five authenticated Super Admin pages. This transfers administrative usability patterns while keeping the owner portal separate from school roles and academic records.

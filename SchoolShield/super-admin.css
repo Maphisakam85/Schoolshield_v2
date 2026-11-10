@@ -47,6 +47,9 @@
 @media(max-width:900px){.platform-owner-email{max-width:150px}.platform-header-actions{gap:8px}}
 @media(max-width:680px){.platform-header-actions{width:100%;justify-content:space-between}.platform-owner{padding-left:10px}.platform-owner-email{display:none}.platform-brand strong{font-size:18px}}
 .platform-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px}
+.platform-more-metrics{margin-top:18px}.platform-more-metrics>summary{cursor:pointer;padding:10px 0;font-weight:600}
+.platform-overview>.platform-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.platform-overview>.platform-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .platform-kpi{border:1px solid var(--line);border-radius:10px;background:#f7fbf9;padding:16px;display:grid;gap:7px;min-width:0}
 .platform-kpi>strong{font-size:28px;line-height:1.2;color:#087550}.platform-kpi>span{font-weight:600}.platform-kpi>small{color:var(--muted)}
 .ticket-full-details{border:1px solid var(--line);border-radius:10px;padding:14px;margin:16px 0}.ticket-full-details summary{cursor:pointer;font-weight:700}

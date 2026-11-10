@@ -28,7 +28,7 @@
  window.addEventListener('platform-ready',event=>{
   const school=event.detail?.school;
   if(school){$('platformSchoolNav').hidden=false;$('platformNavSchool').textContent=school.name+' ('+school.code+')';
-   for(const link of side.querySelectorAll('[data-platform-nav]'))if(link.dataset.platformNav!=='directory')link.href='super-admin-'+link.dataset.platformNav+'.html?school='+encodeURIComponent(school.id);
+   for(const link of side.querySelectorAll('[data-platform-nav]'))if(link.dataset.platformScope==='school'||link.dataset.platformNav==='audit')link.href='super-admin-'+link.dataset.platformNav+'.html?school='+encodeURIComponent(school.id);
   }
   for(const link of side.querySelectorAll('[data-platform-nav]'))if(link.dataset.platformNav===document.body.dataset.platformPage)link.setAttribute('aria-current','page');
  });
