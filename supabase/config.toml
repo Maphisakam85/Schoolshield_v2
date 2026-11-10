@@ -1,13 +1,5 @@
 project_id = "schoolshield"
 
-[auth.email.template.invite]
-subject = "SchoolShield | Your school account invitation"
-content_path = "./supabase/templates/invite.html"
-
-[auth.email.template.recovery]
-subject = "SchoolShield | Secure password setup or reset"
-content_path = "./supabase/templates/recovery.html"
-
 [functions.approve-account]
 # This function verifies the Auth token and school approval permissions itself.
 verify_jwt = false

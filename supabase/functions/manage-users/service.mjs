@@ -83,16 +83,10 @@ export async function manageUser({admin, actorClient, actor, body, env}) {
       const authUser=checked(await admin.auth.admin.getUserById(op.target_id)).user;
       const type=resetting || authUser.email_confirmed_at?'recovery':'invite';
       if(delivery==='email') {
-        // Descriptive mail context is derived from the committed profile and
-        // canonical school, never from browser-supplied labels or role metadata.
-        // These display-only fields do not participate in authorisation.
-        const mailContext={display_name:profile.display_name,school_name:school.name,school_code:school.code,
-          school_role:({principal:'Principal',deputy:'Deputy Principal',clerk:'School Clerk',teacher:'Teacher',parent:'Parent / Guardian',sgb:'SGB Member',security:'Security Officer'})[profile.role] || 'School member'};
-        if(type==='invite') checked(await admin.auth.admin.inviteUserByEmail(profile.email,{redirectTo:redirect,data:mailContext}));
-        else {
-          checked(await admin.auth.admin.updateUserById(op.target_id,{user_metadata:{...authUser.user_metadata,...mailContext}}));
-          checked(await admin.auth.resetPasswordForEmail(profile.email,{redirectTo:redirect}));
-        }
+        // Preserve the established Supabase Auth mail flow. No SMTP-specific
+        // preflight or profile metadata mutation is required to request mail.
+        if(type==='invite') checked(await admin.auth.admin.inviteUserByEmail(profile.email,{redirectTo:redirect,data:{display_name:profile.display_name}}));
+        else checked(await admin.auth.resetPasswordForEmail(profile.email,{redirectTo:redirect}));
       } else {
         const generated=checked(await admin.auth.admin.generateLink({type,email:profile.email,options:{redirectTo:redirect}}));
         if(generated.user?.id!==op.target_id || !generated.properties?.hashed_token) throw new Error('Could not generate the account setup link');
