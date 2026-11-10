@@ -379,24 +379,26 @@ const NAV_GROUPS = [
 
 /* -------------------------------- icons ---------------------------------- */
 const ICON = {
-  grid: "▦",
-  lead: "♛",
-  users: "◉",
-  alert: "⚠",
-  bell: "🔔",
-  student: "🎓",
-  parent: "👪",
-  staff: "👤",
-  shield: "🛡",
-  report: "📊",
-  settings: "⚙",
-  megaphone: "📣",
-  medical: "✚",
-  calendar: "▣",
-  folder: "🗂",
-  record: "📄",
-  scores: "▥",
-  chat: "💬",
+  "grid": "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+  "lead": "M4 21h16 M5 21V11h5v10 M10 21V5h5v16 M15 21v-7h4v7",
+  "users": "M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8 M20 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
+  "alert": "M12 3L2 21h20z M12 9v5 M12 17h.01",
+  "bell": "M18 8a6 6 0 00-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4",
+  "student": "M2 9l10-5 10 5-10 5z M6 11v6c4 3 8 3 12 0v-6 M22 9v7",
+  "parent": "M5 8a3 3 0 106 0 3 3 0 00-6 0 M14 10a3 3 0 106 0 3 3 0 00-6 0 M2 21v-2a5 5 0 0110 0v2 M14 21v-2a5 5 0 016-4",
+  "staff": "M12 11a4 4 0 100-8 4 4 0 000 8 M4 21v-2a6 6 0 016-6h4a6 6 0 016 6v2",
+  "shield": "M12 3l8 4v5c0 5-8 9-8 9s-8-4-8-9V7z M9 12l2 2 4-4",
+  "report": "M4 3h16v18H4z M8 7h8 M8 11h8 M8 15h5",
+  "settings": "M12 8a4 4 0 100 8 4 4 0 000-8 M10 2h4l1 4 4-1 2 4-3 3 3 3-2 4-4-1-1 4h-4l-1-4-4 1-2-4 3-3-3-3 2-4 4 1z",
+  "megaphone": "M3 10v4h5l11 5V5L8 10z M8 14l2 7H6l-2-7 M22 9v6",
+  "medical": "M9 3h6v6h6v6h-6v6H9v-6H3V9h6z",
+  "calendar": "M3 5h18v16H3z M7 3v4 M17 3v4 M3 10h18 M7 14h2 M15 14h2 M7 18h2",
+  "folder": "M3 7V4h6l2 3h10v14H3z",
+  "record": "M5 3h10l4 4v14H5z M14 3v5h5 M8 12h8 M8 16h6",
+  "scores": "M4 21h17 M7 17v-5 M12 17V7 M17 17V3",
+  "chat": "M4 4h16v13H8l-4 4z M8 8h8 M8 12h5",
+  "menu": "M4 6h16 M4 12h16 M4 18h16",
+  "refresh": "M20 7v5h-5 M20 12a8 8 0 10-2 5 M20 7l-3-3"
 };
 /* -------------------------- workspace data source ------------------------- */
 // Operational data is loaded from and saved to Supabase. The empty shape only
@@ -1254,8 +1256,10 @@ function attendanceRegisterFor(classId, date) {
   );
 }
 function icon(key) {
-  return `<span class="icon">${escapeHtml(ICON[key] || "•")}</span>`;
+  const path = typeof ICON[key] === 'string' ? ICON[key] : ICON.grid;
+  return `<span class="icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" focusable="false"><path d="${escapeHtml(path)}"/></svg></span>`;
 }
+
 function badge(value) {
   const danger = ["Critical", "High", "Open", "At Risk", "Fail"];
   const warn = [
@@ -1358,10 +1362,10 @@ function shell(body, title) {
       : isLeadership()
         ? "Class-level oversight"
         : "Role-based access";
-  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(ROLE_NAMES[r])}</b><small>${escapeHtml(scope)}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${escapeHtml(title)}${chatMode ? ' <span class="chat-mode-badge" title="This school contains demonstration or test data">Demo / QA school</span>' : ""}</h2></div><div class="top-actions"><button class="icon-btn notification-toggle" id="globalBell" title="Open notifications" aria-label="Open notifications">🔔</button><div class="profile"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(userName())}</b><small>${escapeHtml(SCHOOL.name)}</small></div></div></div></header>${alertToast()}<section class="content">${schoolModeNotice()}${body}</section></main></div>`;
+  return `<div class="app-shell"><aside class="sidebar"><div class="brand"><img src="assets/schoolshield-logo.png" alt="SchoolShield"><div><strong>SchoolShield</strong><small>School safety platform</small></div></div><div class="menu-title">Workspace</div><nav>${nav()}</nav><div class="sidebar-bottom"><div class="role-card"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(ROLE_NAMES[r])}</b><small>${escapeHtml(scope)}</small></div></div><button class="logout" id="logout">↪ <span>Sign out</span></button></div></aside><main class="main"><header class="topbar"><div><div class="eyebrow">SchoolShield</div><h2>${escapeHtml(title)}${chatMode ? ' <span class="chat-mode-badge" title="This school contains demonstration or test data">Demo / QA school</span>' : ""}</h2></div><div class="top-actions"><button class="icon-btn notification-toggle" id="globalBell" title="Open notifications" aria-label="Open notifications">${icon("bell")}</button><div class="profile"><div class="avatar">${escapeHtml(ROLE_NAMES[r].slice(0, 2).toUpperCase())}</div><div><b>${escapeHtml(userName())}</b><small>${escapeHtml(SCHOOL.name)}</small></div></div></div></header>${alertToast()}<section class="content">${schoolModeNotice()}${body}</section></main></div>`;
 }
 function stat(label, value, sub) {
-  return `<div class="stat-card"><div class="stat-icon">▦</div><div><div class="stat-value">${escapeHtml(value)}</div><div class="stat-label">${escapeHtml(label)}</div><small>${escapeHtml(sub)}</small></div></div>`;
+  return `<div class="stat-card"><div class="stat-icon">${icon("grid")}</div><div><div class="stat-value">${escapeHtml(value)}</div><div class="stat-label">${escapeHtml(label)}</div><small>${escapeHtml(sub)}</small></div></div>`;
 }
 function table(headers, rows, empty = "No records found") {
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.join("") : `<tr><td colspan="${escapeHtml(headers.length)}" class="empty">${escapeHtml(empty)}</td></tr>`}</tbody></table></div>`;
@@ -6870,7 +6874,7 @@ function initWorkspaceChrome() {
     refresh.className = "icon-btn";
     refresh.title = "Refresh school data";
     refresh.setAttribute("aria-label", "Refresh school data");
-    refresh.textContent = "↻";
+    refresh.innerHTML = icon("refresh");
     refresh.onclick = refreshWorkspaceManually;
     topActions.prepend(refresh);
   }
@@ -6964,7 +6968,7 @@ function initWorkspaceChrome() {
     toggle.className = "icon-btn";
     toggle.title = "Toggle navigation";
     toggle.setAttribute("aria-label", "Toggle navigation");
-    toggle.textContent = "☰";
+    toggle.innerHTML = icon("menu");
     const titleArea = $(".topbar > div:first-child");
     if (titleArea) {
       titleArea.prepend(toggle);
