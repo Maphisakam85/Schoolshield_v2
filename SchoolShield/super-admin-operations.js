@@ -28,6 +28,10 @@
   function openTicket(ticket) {
     editing=ticket||{id:crypto.randomUUID(),revision:0};ticketOp=null;$('supportForm').reset();
     if(ticket)for(const key of ['title','category','priority','status','description','internal_notes'])$('supportForm').elements[key].value=ticket[key];
+    const reported=ticket?.origin==='School-reported';
+    for(const key of ['title','description'])$('supportForm').elements[key].readOnly=reported;
+    for(const key of ['category','priority'])$('supportForm').elements[key].disabled=reported;
+    $('ticketPolicy').textContent=reported?'The original school report is read-only. You can update its status and internal resolution notes.':'Owner-created ticket: details, status and internal notes can be edited.';
     $('ticketFullTitle').textContent=ticket?.title||'New owner-created ticket';$('ticketFullDescription').textContent=ticket?.description||'Enter the problem description below.';$('ticketMetadata').textContent=ticket?[ticket.origin,ticket.priority,ticket.status,'Created: '+date(ticket.created_at),'Updated: '+date(ticket.updated_at)].filter(Boolean).join(' · '):'';
     $('ticketSchool').textContent=ctx.school.name+' ('+ctx.school.code+')';$('ticketStatus').textContent='';$('supportDialog').showModal();
   }
@@ -67,7 +71,7 @@
       $('accessForm').onsubmit=e=>{e.preventDefault();const f=e.currentTarget.elements;const values={p_school:ctx.school.id,p_revision:access.revision,p_status:f.status.value,p_features:{announcements:f.announcements.checked,appointments:f.appointments.checked},p_reason:f.reason.value,p_confirm:f.confirm.checked};
         const signature=JSON.stringify(values);if(accessOp?.signature!==signature)accessOp={signature,id:crypto.randomUUID()};
         busy(e.currentTarget.querySelector('[type=submit]'),async()=>{await rpc('platform_admin_set_school_access',{...values,p_operation:accessOp.id});window.SchoolShieldPlatformDrafts?.clear('accessForm');try{await refresh();ctx.status('Access controls saved and audited.');}catch{ctx.status('Access controls saved and audited. Refresh to load confirmed records.');}});};
-      $('supportForm').onsubmit=e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));const signature=JSON.stringify(fields);if(ticketOp?.signature!==signature)ticketOp={signature,id:crypto.randomUUID()};
+      $('supportForm').onsubmit=e=>{e.preventDefault();const fields=Object.fromEntries(new FormData(e.currentTarget));if(editing.origin==='School-reported')for(const key of ['title','description','category','priority'])fields[key]=editing[key];const signature=JSON.stringify(fields);if(ticketOp?.signature!==signature)ticketOp={signature,id:crypto.randomUUID()};
         busy(e.currentTarget.querySelector('[type=submit]'),async()=>{const saved=await rpc('platform_admin_save_support',{p_school:ctx.school.id,p_id:editing.id,p_revision:editing.revision,p_fields:fields,p_operation:ticketOp.id});if(saved.school_id!==ctx.school.id)throw Error(message);window.SchoolShieldPlatformDrafts?.clear('supportForm');$('supportDialog').close();window.dispatchEvent(new Event('platform-support-updated'));try{await refresh();ctx.status('Ticket saved and audited. No message sent.');}catch{ctx.status('Ticket saved and audited. Refresh to load confirmed records. No message sent.');}});};
       $('auditFilters').onsubmit=e=>{e.preventDefault();offset=0;busy(e.currentTarget.querySelector('button'),history);};
       $('auditPrevious').onclick=()=>{offset=Math.max(0,offset-100);busy($('auditPrevious'),history);};$('auditNext').onclick=()=>{offset+=100;busy($('auditNext'),history);};
