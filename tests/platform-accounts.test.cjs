@@ -37,3 +37,13 @@ test('partial account invitation failure resumes the same Auth UUID without crea
  const options={admin,actorId:actor,body:{school_id:school,operation_id:operation,action:'create',delivery:'email',confirmed:true,reason:'QA partial invitation recovery',fields:{first_name:'QA',last_name:'Teacher',email:'teacher@fictional.example.test',phone:'0821234567',role:'teacher',account_status:'Active'}},env:name=>name==='SCHOOLSHIELD_ACCOUNT_SETUP_URL'?'https://school.example.test/account-setup.html':undefined};
  await assert.rejects(managePlatformAccount(options),/incomplete/);const original=user.id;const result=await managePlatformAccount(options);assert.equal(result.user_id,original);assert.equal(creates,1);assert.equal(mailAttempts,2);assert.equal(op.status,'Completed');
 });
+
+test('platform email failures distinguish provider throttling from missing redirect configuration',()=>{
+ const source=fs.readFileSync('SchoolShield/super-admin.js','utf8'),sandbox=vm.createContext({window:{}});
+ vm.runInContext(source.slice(source.indexOf('window.SchoolShieldPlatformError ='),source.indexOf('  const hasDraft')),sandbox);
+ const message=sandbox.window.SchoolShieldPlatformError;
+ assert.match(message(Error('Request incomplete: email rate limit exceeded')),/temporarily limited email sending/);
+ assert.match(message(Error('Configure SCHOOLSHIELD_PASSWORD_RESET_URL as the HTTPS login.html recovery route.')),/Password-reset redirect is not configured/);
+ assert.match(message(Error('Configure SCHOOLSHIELD_ACCOUNT_SETUP_URL')),/Account invitation redirect is not configured/);
+ assert.doesNotMatch(message(Error('email rate limit exceeded private-provider-data')),/private-provider-data/);
+});

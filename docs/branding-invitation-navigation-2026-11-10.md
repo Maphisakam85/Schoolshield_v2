@@ -24,3 +24,6 @@ Read-only live config pull reported no enabled custom SMTP section. The temporar
 
 ## Supabase email-flow restoration
 At the owner�s request, the account email branch now uses the previous inviteUserByEmail payload (display_name only) and resetPasswordForEmail directly. Removed the extra pre-reset profile metadata write and the unapplied custom Auth email template blocks from local config. No live Auth/SMTP settings or templates were changed. Platform authorization, invitation auditing, secure URLs, idempotency and partial-failure recovery remain. Live delivery is not claimed without a real mail test.
+
+## Confirmed reset/invitation failures
+Read-only lookup of operation 469e0d2f-1fa5-45d1-be22-55a5f1e45c17 returned no reservation. Secret-name inspection confirmed SCHOOLSHIELD_PASSWORD_RESET_URL was absent; set it to https://schoolshieldv2.vercel.app/login.html without sending mail or changing an account. The latest failed invitation operation stored exactly "email rate limit exceeded". The frontend now identifies that provider throttle instead of the generic backend error and directs the operator to wait before resuming the original operation. No automatic retry, provider change, SMTP requirement or bypass was added. Actual delivery after the provider limit clears remains unverified.

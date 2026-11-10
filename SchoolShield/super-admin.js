@@ -7,6 +7,9 @@
   const dirtyForms = new Set();
   window.SchoolShieldPlatformError = error => {
     const value = String(error?.message || error || '');
+    if (/email.*rate.?limit|over_email_send_rate_limit|too many.*email/i.test(value)) return 'Supabase has temporarily limited email sending. Wait before resuming the original request. No email delivery was confirmed.';
+    if (/SCHOOLSHIELD_PASSWORD_RESET_URL/i.test(value)) return 'Password-reset redirect is not configured on the server. The platform owner must configure the deployed login.html recovery URL.';
+    if (/SCHOOLSHIELD_ACCOUNT_SETUP_URL/i.test(value)) return 'Account invitation redirect is not configured on the server. The platform owner must configure the deployed account-setup.html URL.';
     if (/schema cache|could not find.*function/i.test(value)) return 'Required backend migration is unavailable. Ask the platform owner to apply the portal migrations and reload the API schema.';
     if (/timeout|timed out|aborted/i.test(value)) return 'The server did not confirm the save in time. Your entries are retained; retry the same operation.';
     if (/valid colours|operation and reason/i.test(value)) return 'Choose valid colours and enter a reason of 5-500 characters.';
