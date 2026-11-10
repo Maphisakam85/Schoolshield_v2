@@ -616,6 +616,7 @@ async function retrySchoolDraft() {
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
+  window.schoolshieldLastRefreshError = '';
   let featuresChanged = false;
   if (window.schoolshieldWorkspaceSaveQueue)
     await window.schoolshieldWorkspaceSaveQueue;
@@ -623,7 +624,10 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   const session = JSON.parse(
     sessionStorage.getItem("schoolshieldSession") || "{}",
   );
-  if (!client || !session.schoolId) return false;
+  if (!client || !session.schoolId) {
+    window.schoolshieldLastRefreshError = 'Your school session is not available. Sign in again.';
+    return false;
+  }
   if (client.auth?.getSession) {
     const { data: own, error } = await client.from("profiles")
       .select("role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,enabled_features)")
@@ -650,6 +654,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     const previousError = window.schoolshieldParentWorkspaceError;
     const previousLinked = window.schoolshieldParentLearnerLinked;
     const fail = (message) => {
+      window.schoolshieldLastRefreshError = message;
       window.schoolshieldParentWorkspaceError = message;
       if (renderAfterRefresh && previousError !== message) render();
       return false;
@@ -677,6 +682,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
   const { data, error } = await client.rpc('read_school_dataset');
   if (error || !data?.payload) {
     window.schoolshieldLastSyncError = error?.message || 'School dataset is not available.';
+    window.schoolshieldLastRefreshError = window.schoolshieldLastSyncError;
     return false;
   }
   reconcileSchoolDraft(data.payload);
@@ -734,14 +740,23 @@ function startWorkspaceAutoRefresh() {
 }
 
 async function refreshWorkspaceManually() {
-  const changed = await refreshCloudWorkspace(true);
-  const message = window.schoolshieldLastSyncError
-    ? `The latest data could not be loaded: ${window.schoolshieldLastSyncError}`
+  let changed = false;
+  try {
+    changed = await refreshCloudWorkspace(true);
+  } catch (error) {
+    window.schoolshieldLastRefreshError = error.message || 'Check your connection and retry.';
+  }
+  const refreshError = window.schoolshieldLastRefreshError;
+  const pendingDraft = sessionStorage.getItem(`${workspaceCacheKey()}:pending`);
+  const message = refreshError
+    ? `The latest data could not be loaded: ${refreshError}`
+    : pendingDraft
+      ? 'The latest school data was checked. Your unsaved changes are still retained in this tab and have not been overwritten. Use Retry changes to save them, or Download draft to keep a copy.'
     : changed
       ? "The latest school data has been loaded."
       : "This workspace is already up to date.";
   modal(
-    window.schoolshieldLastSyncError ? "Refresh failed" : "Workspace refreshed",
+    refreshError ? "Refresh failed" : pendingDraft ? "Unsaved changes retained" : "Workspace refreshed",
     `<p>${escapeHtml(message)}</p><div class="modal-foot"><button class="btn primary" data-action="close-modal">Done</button></div>`,
   );
 }

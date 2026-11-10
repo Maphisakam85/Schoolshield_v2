@@ -90,3 +90,28 @@ test('retry failures retain the draft and always release Saving state',async()=>
  const pending=JSON.stringify({before:{visitors:[]},after:{visitors:[{id:'V'}]}});stored.set(ctx.workspaceCacheKey()+':pending',pending);
  await ctx.retrySchoolDraft();assert.equal(button.disabled,false);assert.equal(button.textContent,'Retry changes');assert.equal(ctx.window.schoolshieldDraftRetrying,false);assert.equal(stored.get(ctx.workspaceCacheKey()+':pending'),pending);assert.match(message.textContent,/upstream request timeout/);assert.deepEqual(messages,['Draft not saved']);
 });
+
+test('successful refresh with a pending draft is not reported as a failed read',async()=>{
+ const {ctx,stored}=harness(),messages=[];ctx.modal=(...args)=>messages.push(args);
+ const pending=JSON.stringify({before:{visitors:[]},after:{visitors:[{id:'V',name:'Unsaved'}]}});
+ stored.set(ctx.workspaceCacheKey()+':pending',pending);
+ ctx.window.schoolshieldSupabase={rpc:async()=>({data:{payload:{visitors:[]}}})};
+ await ctx.refreshWorkspaceManually();
+ assert.equal(messages[0][0],'Unsaved changes retained');assert.match(messages[0][1],/latest school data was checked/);
+ assert.equal(stored.get(ctx.workspaceCacheKey()+':pending'),pending);assert.equal(ctx.window.schoolshieldLastRefreshError,'');
+});
+
+test('manual refresh reports real request failures and preserves pending drafts',async()=>{
+ for(const throws of [false,true]){
+ const {ctx,stored}=harness(),messages=[];ctx.modal=(...args)=>messages.push(args);
+ const pending=JSON.stringify({before:{visitors:[]},after:{visitors:[{id:'V'}]}});stored.set(ctx.workspaceCacheKey()+':pending',pending);
+ ctx.window.schoolshieldSupabase={rpc:async()=>{if(throws)throw Error('Network unavailable');return {error:{message:'Network unavailable'}};}};
+ await ctx.refreshWorkspaceManually();assert.equal(messages[0][0],'Refresh failed');assert.match(messages[0][1],/Network unavailable/);assert.equal(stored.get(ctx.workspaceCacheKey()+':pending'),pending);
+ }
+});
+
+test('successful manual refresh does not repeat an earlier save error',async()=>{
+ const {ctx}=harness(),messages=[];ctx.modal=(...args)=>messages.push(args);ctx.render=()=>{};ctx.window.schoolshieldLastSyncError='Earlier timeout';
+ ctx.window.schoolshieldSupabase={rpc:async()=>({data:{payload:{visitors:[]}}})};
+ await ctx.refreshWorkspaceManually();assert.equal(messages[0][0],'Workspace refreshed');assert.doesNotMatch(messages[0][1],/Earlier timeout|could not be loaded/);
+});
