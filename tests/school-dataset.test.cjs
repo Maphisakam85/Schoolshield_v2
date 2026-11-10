@@ -115,3 +115,11 @@ test('successful manual refresh does not repeat an earlier save error',async()=>
  ctx.window.schoolshieldSupabase={rpc:async()=>({data:{payload:{visitors:[]}}})};
  await ctx.refreshWorkspaceManually();assert.equal(messages[0][0],'Workspace refreshed');assert.doesNotMatch(messages[0][1],/Earlier timeout|could not be loaded/);
 });
+
+test('draft verification timeouts identify the read phase without claiming another save was sent',async()=>{
+ const {ctx}=harness();ctx.setTimeout=setTimeout;ctx.clearTimeout=clearTimeout;let calls=0;
+ ctx.window.schoolshieldSupabase={rpc:()=>{calls++;return new Promise(()=>{});}};
+ await assert.rejects(ctx.schoolDraftRequest('read_school_dataset',{},5),/checking the latest school records.*not resubmitted/);
+ assert.equal(calls,1);assert.equal(ctx.window.schoolshieldDraftDiagnostic.operation,'draft-verification');assert.equal(ctx.window.schoolshieldDraftDiagnostic.outcome,'failed');assert.ok(ctx.window.schoolshieldDraftDiagnostic.elapsedMs>=0);
+ assert.deepEqual(Object.keys(ctx.window.schoolshieldDraftDiagnostic).sort(),['elapsedMs','operation','outcome','startedAt']);
+});

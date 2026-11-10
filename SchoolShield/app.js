@@ -565,12 +565,26 @@ function reconcileSchoolDraft(payload) {
 }
 async function schoolDraftRequest(name, args = {}, timeoutMs = 15000) {
   let timer;
+  const reading = name === 'read_school_dataset';
+  const started = Date.now();
+  const diagnostic = { operation: reading ? 'draft-verification' : 'draft-save', startedAt: new Date(started).toISOString(), outcome: 'pending' };
+  window.schoolshieldDraftDiagnostic = diagnostic;
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       Promise.resolve().then(() => window.schoolshieldSupabase.rpc(name, args)),
-      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('The server did not respond in time. The save is unconfirmed. Check your connection and retry; your draft is retained.')), timeoutMs); }),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(reading
+        ? 'The server did not respond in time while checking the latest school records. Your draft was not resubmitted. Check your connection and retry.'
+        : 'The server did not respond in time while saving. The save is unconfirmed. Check your connection and retry.')), timeoutMs); }),
     ]);
-  } finally { clearTimeout(timer); }
+    diagnostic.outcome = result?.error ? 'rejected' : 'responded';
+    return result;
+  } catch (error) {
+    diagnostic.outcome = 'failed';
+    throw error;
+  } finally {
+    diagnostic.elapsedMs = Date.now() - started;
+    clearTimeout(timer);
+  }
 }
 async function retrySchoolDraft() {
   if (window.schoolshieldDraftRetrying) return;
