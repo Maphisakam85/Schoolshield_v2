@@ -43,3 +43,19 @@ Verification: full unit build 195 passed, 0 failed, 1 optional codec test skippe
 mocked desktop/mobile browser checks for owner settings, accounts/invitations,
 branding, navigation, sidebar and teacher target/review flows; draft banner bounds
 at 1920, 1366, 390 and 320 pixels. No live password changes, invitations or SOS.
+
+## Recipient selection and sidebar follow-up
+
+Bulk invitations now provide Remove beside each selected recipient. Removal only
+excludes the recipient from that batch; it does not delete or deactivate accounts.
+Repeated API rows are deduplicated by account UUID. Different selected accounts
+sharing an email address block sending until the recipient selection is resolved.
+The live MMU-001 aggregate check found seven accounts and zero repeated IDs,
+email addresses or display names. No accounts were merged or deleted.
+
+School sidebars use distinct group icons rather than borrowing the first page's
+icon. A collapsed group opens a labelled flyout without widening the sidebar.
+Escape/outside click dismiss it, and the desktop collapsed/expanded preference
+persists across page changes and redraws. Mobile keeps the existing drawer.
+Browser tests cover all seven roles at desktop, intermediate and mobile widths,
+including recipient exclusion and duplicate-email blocking with mocked sending.

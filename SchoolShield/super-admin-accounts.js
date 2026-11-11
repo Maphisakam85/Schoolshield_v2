@@ -4,7 +4,7 @@
  async function load(options){
   ({client,context,school,status:report}=options);
   const {data,error}=await client.rpc('platform_admin_accounts',{p_school:school.id});if(error)throw error;if(data.school_id!==school.id)throw Error('Accounts do not match the selected school.');
-  users=data.users;operations=data.operations||[];
+  users=[...new Map(data.users.map(user=>[user.id,user])).values()];operations=data.operations||[];
   document.querySelector('[data-school-management]').href='super-admin-school.html?school='+encodeURIComponent(school.id);draw();
  }
  function draw(){
@@ -57,6 +57,18 @@
  }
  function bind(){
   let batch=[];
+  function drawBatch(){
+   $('bulkInviteScope').textContent=school.name+' ('+school.code+') - '+batch.length+' selected accounts';
+   $('bulkInviteRecipients').replaceChildren();
+   for(const item of batch){const li=document.createElement('li'),text=document.createElement('span'),remove=document.createElement('button');
+    text.textContent=item.user.display_name+' - '+item.user.email;remove.type='button';remove.className='btn small';remove.textContent='Remove';remove.setAttribute('aria-label','Remove '+item.user.display_name+' from this invitation batch');
+    remove.onclick=()=>{if(working)return;batch=batch.filter(entry=>entry!==item);drawBatch();};li.append(text,remove);$('bulkInviteRecipients').append(li);
+   }
+   const emails=batch.map(item=>(item.user.email||'').trim().toLowerCase());
+   const duplicate=new Set(emails).size!==emails.length;
+   $('bulkInviteSubmit').disabled=!batch.length||duplicate;
+   $('bulkInviteStatus').textContent=duplicate?'Some selected accounts share an email address. Remove the extra recipients before sending.':'';
+  }
   const eligible=user=>user.account_status==='Active'&&!user.onboarding_completed_at&&!user.pending_operation&&(!user.invitation?.status||/^(failed|not sent|link generated)$/i.test(user.invitation.status));
   $('sendAllInvitations').onclick=async()=>{
    if(working)return;
@@ -65,8 +77,7 @@
    finally{working=false;$('sendAllInvitations').disabled=false;}
    batch=users.filter(eligible).map(user=>({user,operation:crypto.randomUUID(),done:false}));
    $('bulkInviteForm').reset();$('bulkInviteStatus').textContent='';$('bulkInviteSubmit').disabled=!batch.length;
-   $('bulkInviteScope').textContent=school.name+' ('+school.code+') - '+batch.length+' eligible accounts';
-   $('bulkInviteRecipients').replaceChildren();for(const item of batch){const li=document.createElement('li');li.textContent=item.user.display_name+' - '+item.user.email;$('bulkInviteRecipients').append(li);}
+   drawBatch();
    $('bulkInviteDialog').showModal();
   };
   $('bulkInviteClose').onclick=()=>{if(!working)$('bulkInviteDialog').close();};

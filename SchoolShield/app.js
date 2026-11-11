@@ -1342,13 +1342,14 @@ function nav() {
       if (!links.length) return "";
       const isCurrentGroup = links.some(([id]) => page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page())));
       const open = isCurrentGroup;
-      return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary title="${escapeHtml(group.label)}" aria-label="${escapeHtml(group.label)}"><span class="nav-group-icon" aria-hidden="true">${icon(links[0][3])}</span><span class="nav-group-label">${escapeHtml(group.label)}</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary>${links
+      const groupIcon=({'Overview':'lead','People':'users','Learning':'student','Safety & wellbeing':'shield','Communication':'chat','Administration':'settings'})[group.label];
+      return `<details class="nav-group" name="schoolshield-navigation" ${escapeHtml(open ? "open" : "")}><summary title="${escapeHtml(group.label)}" aria-label="${escapeHtml(group.label)}"><span class="nav-group-icon" aria-hidden="true">${icon(groupIcon)}</span><span class="nav-group-label">${escapeHtml(group.label)}</span><span class="nav-group-chevron" aria-hidden="true">⌄</span></summary><div class="nav-group-items">${links
         .map(([id, originalLabel, url, ic]) => {
           const label = CHAT_PAGES.includes(id) ? "Chats" : originalLabel;
           const hasUpdates = CHAT_PAGES.includes(id) ? CHAT_PAGES.some(channel => allowed(channel) && navHasNewUpdates(channel)) : navHasNewUpdates(id);
           return `<a href="${escapeHtml(url)}" class="nav-item ${escapeHtml((page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page()))) ? "active" : "")} ${escapeHtml(hasUpdates ? "has-updates" : "")}" title="${escapeHtml(hasUpdates ? label + ": new updates" : label)}" aria-label="${escapeHtml(hasUpdates ? label + ", new updates" : label)}">${icon(ic)}<span>${escapeHtml(label)}</span>${hasUpdates ? '<span class="nav-update" aria-label="New updates"></span>' : ""}</a>`;
         })
-        .join("")}</details>`;
+        .join("")}</div></details>`;
     }).join("")
   );
 }
@@ -6832,7 +6833,7 @@ async function rejectAccountRequest(id) {
 
 function initSidebarAccordion(sidebar) {
   const groups = () => Array.from(sidebar.querySelectorAll('details.nav-group'));
-  const closeOthers = keep => groups().forEach(group => { if (group !== keep && group.open) group.open = false; });
+  const closeOthers = keep => groups().forEach(group => { if (group !== keep) {group.open = false;delete group.dataset.railOpen;} });
   const normalise = preferred => {
     const opened = groups().filter(group => group.open);
     if (opened.length > 1) closeOthers(preferred?.open ? preferred : opened.find(group => group.querySelector('.nav-item.active')) || opened[0]);
@@ -6848,11 +6849,14 @@ function initSidebarAccordion(sidebar) {
     if (!group?.matches('details.nav-group') || !sidebar.contains(group)) return;
     event.preventDefault();
     const rail=sidebar.classList.contains('rail');
-    const opening = rail || !group.open;
-    if(rail)sidebar.__expandNavigation?.();
+    const opening = rail ? group.dataset.railOpen!=='true' : !group.open;
     closeOthers(group);
     group.open = opening;
+    if(rail){group.dataset.railOpen=String(opening);const rect=summary.getBoundingClientRect(),height=Math.min(innerHeight-32,group.querySelectorAll('.nav-item').length*48+16);group.style.setProperty('--rail-menu-top',Math.max(16,Math.min(rect.top,innerHeight-height-16))+'px');}
   }, true);
+  sidebar.addEventListener('keydown',event=>{if(event.key==='Escape'&&sidebar.classList.contains('rail')){const group=groups().find(g=>g.dataset.railOpen==='true');if(group){event.stopImmediatePropagation();closeOthers(null);group.querySelector('summary').focus();}}},true);
+  sidebar.querySelector('nav')?.addEventListener('scroll',()=>{if(sidebar.classList.contains('rail'))closeOthers(null);},{passive:true});
+  if(!window.__schoolshieldRailDismiss){window.__schoolshieldRailDismiss=true;document.addEventListener('click',event=>{const side=document.querySelector('.sidebar.rail');if(side&&!side.contains(event.target))side.querySelectorAll('[data-rail-open]').forEach(group=>{delete group.dataset.railOpen;group.open=false;});});}
   sidebar.addEventListener('toggle', event => {
     if (event.target.matches('details.nav-group') && event.target.open) closeOthers(event.target);
   }, true);
@@ -6907,6 +6911,8 @@ function initWorkspaceChrome() {
       return;
     }
     const rail = compact;
+    sessionStorage.setItem('schoolshieldSidebarCompact',String(rail));
+    sidebar.querySelectorAll('[data-rail-open]').forEach(group=>delete group.dataset.railOpen);
     sidebar.classList.toggle("rail",rail);
     $("#sidebarToggle")?.setAttribute("aria-expanded",String(!rail));
     sidebar.inert = false;
@@ -6987,7 +6993,8 @@ function initWorkspaceChrome() {
   } else if (sidebar.dataset.compact === "true") {
     setSidebarState(true);
   } else {
-    setSidebarState(innerWidth <= 980);
+    const saved=sessionStorage.getItem('schoolshieldSidebarCompact');
+    setSidebarState(saved===null?innerWidth <= 980:saved==='true');
   }
   if (!window.__schoolshieldResponsiveChrome) {
     window.__schoolshieldResponsiveChrome = true;

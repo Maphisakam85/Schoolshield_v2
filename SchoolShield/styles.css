@@ -1810,6 +1810,12 @@ td small {
 .sidebar.rail .icon{flex-shrink:0;font-size:15px}
 .sidebar.rail .role-card{justify-content:center;padding-inline:0}
 .sidebar.rail .logout{width:100%;text-align:center}
+.sidebar.rail .nav-group>.nav-group-items{display:none}
+.sidebar.rail .nav-group[data-rail-open=true]>.nav-group-items{display:block;position:fixed;left:70px;top:var(--rail-menu-top,80px);width:250px;max-width:calc(100vw - 82px);max-height:calc(100dvh - 32px);overflow:auto;padding:8px;background:var(--navy);border:1px solid #ffffff33;border-radius:0 10px 10px 0;box-shadow:6px 8px 22px #082c3633;z-index:45}
+.sidebar.rail .nav-group-items .nav-item{justify-content:flex-start;gap:12px;font-size:13px}
+.sidebar.rail .nav-group-items .nav-item>span:not(.icon):not(.nav-update){display:inline!important}
+.sidebar.rail .nav-group[data-rail-open=true]>summary{background:#15515a;color:#fff}
+.sidebar.rail .nav-group:has(.nav-item.active)>summary{background:#0c7666;color:#fff}
 
 /* Required operational fields are marked consistently in modal and page forms. */
 .required-mark {
