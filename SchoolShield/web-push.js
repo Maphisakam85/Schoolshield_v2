@@ -1,10 +1,13 @@
 ﻿/* Explicit opt-in; this module never asks for permission on page load. */
 (function(root){
  let busy=false;
- const status=text=>{const n=document.getElementById('pushStatus');if(n)n.textContent=text;};
+ const status=text=>{const n=document.getElementById('pushStatus');if(n)n.textContent=text;const summary=document.getElementById('pushSummary');if(summary)summary.textContent=text;};
  const supported=()=>root.isSecureContext&&'serviceWorker'in navigator&&'PushManager'in root&&'Notification'in root;
  const client=()=>root.schoolshieldSupabase;
  const owner=()=>JSON.parse(sessionStorage.getItem('schoolshieldSession')||'{}').userId;
+ const choiceKey=()=>'schoolshieldPushPreferencesClosed:'+owner();
+ function preferences(open){const content=document.getElementById('pushPreferences'),button=document.getElementById('openPushPreferences'),summary=document.getElementById('pushSummary');if(content)content.hidden=!open;if(summary)summary.hidden=open;if(button)button.setAttribute?.('aria-expanded',String(open));}
+ function finishChoice(){localStorage.setItem(choiceKey(),'1');preferences(false);}
  async function subscription(){const reg=await navigator.serviceWorker.getRegistration(new URL('.',location.href));return {reg,sub:await reg?.pushManager.getSubscription()};}
  function keyBytes(key){const value=atob(key.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(key.length/4)*4,'='));return Uint8Array.from(value,c=>c.charCodeAt(0));}
  async function enable(){if(busy)return;const key=root.SCHOOLSHIELD_SUPABASE_CONFIG?.webPushPublicKey;
@@ -17,7 +20,7 @@
    sub=await reg.pushManager.getSubscription();const previous=localStorage.getItem('schoolshieldPushOwner');if(sub&&previous&&previous!==owner()){await sub.unsubscribe();sub=null;}
    if(!sub){sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:keyBytes(key)});created=true;}
    const {error}=await client().rpc('register_web_push',{p_subscription:sub.toJSON()});if(error)throw Error(error.code==='PGRST202'?'Push setup is not installed yet. Ask your administrator to apply the push migration.':'Could not save notification preferences. Please retry.');
-   localStorage.setItem('schoolshieldPushOwner',owner());status('Notifications enabled on this device.');document.getElementById('disablePush').disabled=false;
+   localStorage.setItem('schoolshieldPushOwner',owner());status('Notifications enabled on this device.');document.getElementById('disablePush').disabled=false;finishChoice();
   }catch(error){if(created&&sub)await sub.unsubscribe().catch(()=>{});status(error.message||'Could not enable notifications.');}
   finally{busy=false;button.disabled=false;button.textContent='Enable notifications';}
  }
@@ -26,7 +29,9 @@
   if(serverError)throw Error('Notifications are disabled on this device. Server cleanup will finish when the expired subscription is processed.');
  }
  async function bind(){if(document.body.dataset.page!=='notifications')return;let panel=document.getElementById('pushSettings');if(!panel){const template=document.getElementById('pushSettingsTemplate');if(!template)return;document.querySelector('.content').prepend(template.content.cloneNode(true));panel=document.getElementById('pushSettings');}
-  document.getElementById('enablePush').onclick=enable;document.getElementById('disablePush').onclick=async()=>{if(busy)return;busy=true;const b=document.getElementById('disablePush');b.disabled=true;try{await stop();status('Notifications disabled on this device.');}catch(error){status(error.message);}finally{busy=false;b.disabled=false;}};
+  document.getElementById('openPushPreferences').onclick=()=>{preferences(true);document.getElementById('enablePush').focus?.();};
+  document.getElementById('dismissPushPreferences').onclick=()=>{if(!busy)finishChoice();};preferences(!localStorage.getItem(choiceKey()));
+  document.getElementById('enablePush').onclick=enable;document.getElementById('disablePush').onclick=async()=>{if(busy)return;busy=true;const b=document.getElementById('disablePush');b.disabled=true;try{await stop();status('Notifications disabled on this device.');finishChoice();}catch(error){status(error.message);}finally{busy=false;b.disabled=false;}};
   if(!supported()){status('This browser cannot receive push notifications. On iPhone/iPad, use the Home Screen app.');document.getElementById('enablePush').disabled=true;return;}
   try{const {sub}=await subscription();status(sub&&localStorage.getItem('schoolshieldPushOwner')===owner()?'Notifications enabled on this device.':root.SCHOOLSHIELD_SUPABASE_CONFIG?.webPushPublicKey?'Enable notifications to receive alerts when SchoolShield is closed.':'Outside-app notifications are not configured yet.');document.getElementById('disablePush').disabled=!sub;}catch{status('Could not check this device. Try enabling notifications again.');}
  }

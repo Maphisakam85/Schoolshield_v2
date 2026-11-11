@@ -114,6 +114,7 @@ body[data-platform-page] [role=status]{overflow-wrap:anywhere;min-height:24px}
 .logo-crop-controls input{width:100%;min-width:0}
 #logoActionStatus:not(:empty){padding:10px 12px;background:#eff8f4;border:1px solid #b8dfd2;border-radius:8px;overflow-wrap:anywhere}
 body[data-platform-page] :is(button,a,input,select,textarea):focus-visible{outline:3px solid #08786a;outline-offset:3px}
+body[data-platform-page] :is(.input,.select,.textarea):focus-visible{outline:2px solid var(--green);outline-offset:1px}
 
 body[data-platform-page="login"] .auth-brand small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
 .platform-signin-form{display:grid;gap:18px;margin-top:28px}

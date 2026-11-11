@@ -1364,6 +1364,18 @@ td small {
     min-height: 90px
 }
 
+form label:has(>.input,>.select,>.textarea){display:flex;flex-direction:column;gap:7px;margin-block:12px}
+.form-grid label:has(>.input,>.select,>.textarea){margin-block:0}
+.input:focus-visible,.select:focus-visible,.textarea:focus-visible{border-color:var(--green);outline:2px solid var(--green);outline-offset:1px}
+.panel-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-left:auto}
+.panel-head>:is(h1,h2,h3){margin:0;margin-right:auto}
+.guidance-control{display:inline-flex;vertical-align:middle;margin:4px 0}
+.guidance-toggle{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--line);border-radius:50%;background:#f7faf9;color:var(--text);font-weight:700;font-size:13px;cursor:pointer}
+.guidance-content[popover]{position:fixed;inset:auto;margin:0;width:min(360px,calc(100vw - 24px));max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:14px;background:white;color:var(--text);font-size:13px;line-height:1.5;box-shadow:0 8px 24px #082c3626}
+#pushSettings:has(#pushPreferences[hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:12px 16px}
+#pushSettings:has(#pushPreferences[hidden]) .panel-head{flex:1;margin:0;min-width:230px}
+#pushSummary{margin:0;font-size:12px;color:var(--muted)}
+
 .panel-foot,
 .modal-foot {
     display: flex;
@@ -1816,6 +1828,26 @@ td small {
 .sidebar.rail .nav-group-items .nav-item>span:not(.icon):not(.nav-update){display:inline!important}
 .sidebar.rail .nav-group[data-rail-open=true]>summary{background:#15515a;color:#fff}
 .sidebar.rail .nav-group:has(.nav-item.active)>summary{background:#0c7666;color:#fff}
+/* Isolate page tooltips and controls below the navigation flyouts. */
+.sidebar{z-index:10}
+.main{isolation:isolate}
+
+/* Saved school branding covers navigation and workspace surfaces alike. */
+[data-school-theme=true] .sidebar{color:var(--school-nav-ink)}
+[data-school-theme=true] .sidebar :is(.brand strong,.nav-item,.logout){color:var(--school-nav-ink)}
+[data-school-theme=true] .sidebar :is(.brand small,.menu-title,.nav-group summary,.role-card small){color:var(--school-nav-muted)}
+[data-school-theme=true] .sidebar :is(.nav-item.active,.nav-group:has(.nav-item.active)>summary){background:var(--green);color:var(--school-primary-ink);box-shadow:inset 3px 0 var(--green2)}
+[data-school-theme=true] .sidebar .nav-group[data-rail-open=true]>summary{background:var(--navy2);color:var(--school-nav-ink)}
+[data-school-theme=true] .sidebar .nav-group-items{color:var(--school-nav-ink)}
+[data-school-theme=true] .sidebar :is(.nav-item:not(.active):hover,.nav-group summary:hover){background:var(--navy2);color:var(--school-nav-ink)}
+[data-school-theme=true] .sidebar .role-card b{color:var(--school-nav-ink)}
+[data-school-theme=true] .hero{background:linear-gradient(120deg,var(--navy),var(--navy2));color:var(--school-nav-ink);border-inline-start:4px solid var(--green)}
+[data-school-theme=true] .hero :is(p,.pill,.btn.ghost){color:inherit}
+[data-school-theme=true] .hero .btn.ghost{border-color:currentColor}
+[data-school-theme=true] .btn.primary{color:var(--school-primary-ink)}
+[data-school-theme=true] .text-link{color:var(--school-link)}
+[data-school-theme=true] .quick:focus-visible{outline-color:var(--green)}
+[data-school-theme=true] .quick:active{background:var(--mint)}
 
 /* Required operational fields are marked consistently in modal and page forms. */
 .required-mark {

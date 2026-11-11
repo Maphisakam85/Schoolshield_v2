@@ -59,3 +59,34 @@ Escape/outside click dismiss it, and the desktop collapsed/expanded preference
 persists across page changes and redraws. Mobile keeps the existing drawer.
 Browser tests cover all seven roles at desktop, intermediate and mobile widths,
 including recipient exclusion and duplicate-email blocking with mocked sending.
+
+## Theme, register view and presentation follow-up
+
+Saved custom colours now also cover active navigation, hero panels, hover states
+and readable foregrounds. Alert/status colours stay semantic. Page controls are
+isolated below the sidebar so they cannot paint over its flyouts. Navigation
+groups with one available page are direct links, retaining active/unread states.
+
+Saved daily attendance rows provide View alongside Edit/Delete. View displays
+only saved entries, including entries whose learner is no longer in the current
+roster, and checks that the class is assigned to the signed-in teacher. It has no
+editable fields and makes no persistence request.
+
+The shared portal presentation helper groups panel-header actions on the right.
+Long optional introduction/header guidance and explicitly marked account guidance
+use an information control supporting hover, focus and tap. Errors, status text,
+confirmations and required input labels remain visible. Browsers without native
+popover support keep the original guidance visible. Form labels have consistent
+spacing and restrained focus outlines.
+
+Successful device-notification enable/disable collapses its setup controls to a
+compact status row. Notification preferences reopens them. Done can also dismiss
+the controls; the choice is remembered on the device per signed-in account. Failed
+setup remains visible and is never presented as enabled. No real push permission
+or subscription was requested during browser QA (the API/browser boundaries were
+mocked).
+
+Verification: 195 unit tests passed, zero failed, one optional test skipped.
+Browser checks passed for all seven sidebar roles, custom/light themes, flyout
+stacking, read-only attendance, optional guidance, header action grouping, field
+spacing and device-preference reopen/persistence at desktop/mobile widths.

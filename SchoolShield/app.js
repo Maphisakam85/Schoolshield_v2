@@ -1340,6 +1340,11 @@ function nav() {
         .filter((item) => item && allowed(item[0]))
         .filter(item => !CHAT_PAGES.includes(item[0]) || item[0] === NAV.find(n => CHAT_PAGES.includes(n[0]) && allowed(n[0]))?.[0]);
       if (!links.length) return "";
+      if(links.length===1){
+        const [id,originalLabel,url,ic]=links[0],chat=CHAT_PAGES.includes(id),label=chat?'Chats':originalLabel;
+        const active=page()===id||(chat&&CHAT_PAGES.includes(page())),updates=chat?CHAT_PAGES.some(channel=>allowed(channel)&&navHasNewUpdates(channel)):navHasNewUpdates(id);
+        return `<a href="${escapeHtml(url)}" class="nav-item nav-direct ${active?'active':''} ${updates?'has-updates':''}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">${icon(ic)}<span>${escapeHtml(label)}</span>${updates?'<span class="nav-update" aria-label="New updates"></span>':''}</a>`;
+      }
       const isCurrentGroup = links.some(([id]) => page() === id || (CHAT_PAGES.includes(id) && CHAT_PAGES.includes(page())));
       const open = isCurrentGroup;
       const groupIcon=({'Overview':'lead','People':'users','Learning':'student','Safety & wellbeing':'shield','Communication':'chat','Administration':'settings'})[group.label];
@@ -2475,7 +2480,7 @@ function attendanceOverview() {
     Object.entries(grouped)
       .map(
         ([start, registers]) =>
-          `<section class="attendance-history-week"><div class="panel-head"><div><h3>Week of ${escapeHtml(start)}</h3><p>${escapeHtml(registers.length)} of 5 weekday registers captured</p></div></div>${registers.map((register) => `<div class="report-row"><span><b>${escapeHtml(register.date)}</b><small>${escapeHtml(register.teacher)} - saved ${escapeHtml(register.capturedOn)}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(register.date)}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">Delete</button></span></div>`).join("")}</section>`,
+          `<section class="attendance-history-week"><div class="panel-head"><div><h3>Week of ${escapeHtml(start)}</h3><p>${escapeHtml(registers.length)} of 5 weekday registers captured</p></div></div>${registers.map((register) => `<div class="report-row"><span><b>${escapeHtml(register.date)}</b><small>${escapeHtml(register.teacher)} - saved ${escapeHtml(register.capturedOn)}</small></span><span class="action-row"><button class="btn small" data-action="view-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">View</button><a class="btn small" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(register.date)}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">Delete</button></span></div>`).join("")}</section>`,
       )
       .join("") ||
     '<p class="muted">No attendance has been captured for this class yet.</p>';
@@ -2493,7 +2498,7 @@ function attendanceOverview() {
     "Attendance Register",
     "Teacher workspace",
     "Record attendance one day at a time and review completed registers by week.",
-    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(schoolClass?.grade || "Class")} - ${escapeHtml(classId)}</h3><p>Week beginning ${escapeHtml(weekStart)}</p></div><a class="btn primary" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(today)}">+ New attendance</a></div><div class="attendance-week-bar">${progress}</div><div class="panel-foot"><span class="muted">${escapeHtml(savedThisWeek)} of 5 school days completed this week.</span>${weeklyAction}</div></section><section class="panel"><div class="panel-head"><div><h3>Past attendance registers</h3><p>Registers are organised by week. You can edit or delete any saved day.</p></div></div>${pastWeeks}</section>`,
+    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(schoolClass?.grade || "Class")} - ${escapeHtml(classId)}</h3><p>Week beginning ${escapeHtml(weekStart)}</p></div><a class="btn primary" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(today)}">+ New attendance</a></div><div class="attendance-week-bar">${progress}</div><div class="panel-foot"><span class="muted">${escapeHtml(savedThisWeek)} of 5 school days completed this week.</span>${weeklyAction}</div></section><section class="panel"><div class="panel-head"><div><h3>Past attendance registers</h3><p>Registers are organised by week. View, edit or delete any saved day.</p></div></div>${pastWeeks}</section>`,
   );
 }
 function dailyAttendanceRegister() {
@@ -2541,7 +2546,7 @@ function dailyAttendanceRegister() {
       .sort((a, b) => b.date.localeCompare(a.date))
       .map(
         (register) =>
-          `<div class="report-row"><span><b>${escapeHtml(register.date)}</b><small>${escapeHtml(register.teacher)} - saved ${escapeHtml(register.capturedOn)}</small></span><span class="action-row"><a class="btn small" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(register.date)}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">Delete</button></span></div>`,
+          `<div class="report-row"><span><b>${escapeHtml(register.date)}</b><small>${escapeHtml(register.teacher)} - saved ${escapeHtml(register.capturedOn)}</small></span><span class="action-row"><button class="btn small" data-action="view-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">View</button><a class="btn small" href="attendance-register.html?class=${escapeHtml(classId)}&date=${escapeHtml(register.date)}">Edit</a><button class="btn small" data-action="delete-daily-attendance" data-class="${escapeHtml(classId)}" data-date="${escapeHtml(register.date)}">Delete</button></span></div>`,
       )
       .join("") ||
     '<p class="muted">No daily attendance has been submitted for this class.</p>';
@@ -2553,7 +2558,7 @@ function dailyAttendanceRegister() {
     "Attendance Register",
     "Teacher workspace",
     "Capture one day at a time. Each saved day immediately updates learner and weekly attendance.",
-    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(schoolClass?.grade || "Class")} - ${escapeHtml(classId)} daily register</h3><p>${escapeHtml(existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day.")}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${escapeHtml(date)}" max="${escapeHtml(todayIso())}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${escapeHtml(classId)}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${escapeHtml(classId)}">${escapeHtml(existing ? "Save changes & close" : "Submit attendance & close")}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>Edit or delete a previously saved day.</p></div></div>${past}</section>`,
+    `<div class="action-row" style="flex-wrap:wrap;margin-bottom:16px">${classPicker}</div><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(schoolClass?.grade || "Class")} - ${escapeHtml(classId)} daily register</h3><p>${escapeHtml(existing ? `Editing the register saved by ${existing.teacher}.` : "Every learner is listed below. Mark each learner, then submit the day.")}</p></div></div><div class="form-grid"><label>Date<input class="input" id="attendanceDate" type="date" value="${escapeHtml(date)}" max="${escapeHtml(todayIso())}"></label></div><div class="panel-foot"><button class="btn" data-action="open-attendance-day" data-class="${escapeHtml(classId)}">Open selected date</button></div>${table(["Learner", "Attendance status"], learnerRows)}<div class="panel-foot"><span class="muted">Submitting closes this register and returns you to your dashboard.</span><button class="btn primary" data-action="save-daily-attendance" data-class="${escapeHtml(classId)}">${escapeHtml(existing ? "Save changes & close" : "Submit attendance & close")}</button></div></section><section class="panel"><div class="panel-head"><div><h3>Weekly completion</h3><p>Daily records are rolled up automatically.</p></div></div>${weeklyPrompt}</section><section class="panel"><div class="panel-head"><div><h3>Past daily attendance</h3><p>View, edit or delete a previously saved day.</p></div></div>${past}</section>`,
   );
 }
 function saveDailyAttendance(classId) {
@@ -2589,6 +2594,14 @@ function saveDailyAttendance(classId) {
     refreshClassAttendance(state, classId);
   });
   go("attendance-register.html?class=" + classId);
+}
+function viewDailyAttendance(classId,date){
+  if(!allowed('attendance-register')||!teacherClasses(userName()).some(item=>item.id===classId))return;
+  const register=attendanceRegisterFor(classId,date);
+  if(!register){modal('Attendance register unavailable','<p>This saved register is no longer available. Refresh the list.</p>');return;}
+  const learners=new Map((getState().learners||[]).map(learner=>[learner.id,learner]));
+  const rows=Object.entries(register.entries||{}).map(([id,status])=>`<tr><td>${escapeHtml(learners.get(id)?.name||id)}<small>${escapeHtml(id)}</small></td><td>${escapeHtml(status)}</td></tr>`);
+  modal('Attendance register - '+date,`<p><b>${escapeHtml(classId)}</b> &middot; ${escapeHtml(date)}</p><p>Saved by ${escapeHtml(register.teacher||'Not recorded')} &middot; ${escapeHtml(register.capturedOn||'Save time not recorded')}</p><p>Read-only saved register &middot; ${rows.length} recorded entries.</p>${table(['Learner','Saved attendance status'],rows,'No saved entries.')}<div class="modal-foot"><button class="btn" data-action="close-modal">Close</button></div>`);
 }
 function deleteDailyAttendance(classId, date) {
   if (!confirm(`Delete the attendance register for ${date}?`)) return;
@@ -4539,6 +4552,7 @@ function action(type, el) {
       `attendance-register.html?class=${classId}&date=${inputValue("attendanceDate") || localDateIso()}`,
     );
   else if (type === "save-daily-attendance") saveDailyAttendance(classId);
+  else if (type === "view-daily-attendance") viewDailyAttendance(classId, el.dataset.date);
   else if (type === "delete-daily-attendance") deleteDailyAttendance(classId, el.dataset.date);
   else if (type === "submit-daily-week") submitDailyWeek(classId, el.dataset.week);
   else if (type === "save-weekly-attendance") saveWeeklyAttendance(classId, el.dataset.week);
