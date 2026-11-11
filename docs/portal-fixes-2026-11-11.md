@@ -105,3 +105,18 @@ the related heading where there are no actions. They no longer occupy a separate
 description row. Desktop/mobile browser checks passed for these placements,
 dialog opening/closing, setup changes and the bell deep link; push unit tests
 passed. No real device subscription or notification send occurred in QA.
+
+## Consistent control grouping
+
+The shared presentation helper now groups actions in panel headers, page
+introductions, toolbars and form/modal footers. Existing action wrappers and
+button nodes are reused so event handlers and form association are retained.
+Toolbar filters have their own adjacent group; context and validation text stay
+visible. On narrow screens groups wrap in reading order with consistent gaps.
+Information icons in an action group wrap with the adjacent action rather than
+forming an isolated row.
+
+Browser checks passed at 1366, 390 and 320 pixels for wrapping, retained handlers,
+unchanged form values and repeat enhancement without duplicate groups. Account,
+invitation, guidance and notification-dialog workflows also passed their scoped
+desktop/mobile checks. No backend or data changes were required.
