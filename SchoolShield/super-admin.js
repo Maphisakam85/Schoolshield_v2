@@ -256,6 +256,7 @@
     if (!['directory','overview','reports','settings'].includes(kind) && !(kind==='audit'&&!schoolId) && !validId(schoolId)) throw Error('Select a valid school from the directory.');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
+      if(form?.id==='themeForm'&&window.SchoolShieldThemePage?.hasChanges?.()===false){dirtyForms.delete(form.id);return;}
       if (['brandingForm','themeForm','accountForm','accessForm','supportForm','ownerProfileForm','ownerPasswordForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});

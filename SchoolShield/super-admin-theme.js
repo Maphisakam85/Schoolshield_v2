@@ -1,7 +1,9 @@
 (() => {
  const $=id=>document.getElementById(id);let client,school,status,current,operation=null,saving=false;
  function values(){return {primary_color:$('themePrimary').value.toUpperCase(),navigation_color:$('themeNavigation').value.toUpperCase()};}
- function preview(){const theme=values();window.SchoolShieldTheme.apply($('themePreview'),theme);$('themePrimaryHex').textContent=theme.primary_color;$('themeNavigationHex').textContent=theme.navigation_color;}
+ function hasChanges(){const theme=values();return Boolean(current&&(theme.primary_color!==current.primary_color.toUpperCase()||theme.navigation_color!==current.navigation_color.toUpperCase()));}
+ function updateSave(){const button=$('themeForm').querySelector('[type=submit]');button.hidden=!hasChanges();button.disabled=saving||!hasChanges();}
+ function preview(){const theme=values();window.SchoolShieldTheme.apply($('themePreview'),theme);$('themePrimaryHex').textContent=theme.primary_color;$('themeNavigationHex').textContent=theme.navigation_color;updateSave();}
  async function load(options){
   ({client,school,status}=options);
   const {data,error}=await client.rpc('platform_admin_theme',{p_school:school.id});if(error)throw error;
@@ -22,7 +24,7 @@
   for(const id of ['themePrimary','themeNavigation'])$(id).oninput=()=>{$('themePreset').value='custom';preview();};
   $('themeReload').onclick=async()=>{if(saving||window.SchoolShieldPlatformDrafts?.discard('themeForm')===false)return;try{await load({client,school,status});$('themeReason').value='';status('Saved school colours loaded.');}catch(error){status(window.SchoolShieldPlatformError(error));}};
   $('themeForm').onsubmit=async event=>{
-   event.preventDefault();if(saving||!$('themeForm').reportValidity())return;
+   event.preventDefault();if(saving||!hasChanges()||!$('themeForm').reportValidity())return;
    const fields=values(),reason=$('themeReason').value.trim();if(reason.length<5){status('Enter a reason of at least 5 characters.');return;}
    if(!current){status('Load saved colours before saving.');return;}
    const signature=JSON.stringify({...fields,reason,revision:current.revision});if(operation?.signature!==signature)operation={id:crypto.randomUUID(),signature};
@@ -33,8 +35,8 @@
     current=data;operation=null;$('themeReason').value='';$('themeRevision').textContent='Saved colours · revision '+data.revision;
     window.SchoolShieldPlatformDrafts?.clear('themeForm');status('School colours saved. They apply across this school’s portal on refresh.');
    }catch(error){const code=/^(PGRST[0-9]+|[0-9A-Z]{5})$/.test(error?.code||'')?' Code: '+error.code+'.':'';status(window.SchoolShieldPlatformError(error)+' Your colour selection is retained.'+code+' Reference: '+(operation?.id||'unavailable'));}
-   finally{saving=false;controls.forEach(el=>el.disabled=false);}
+   finally{saving=false;controls.forEach(el=>el.disabled=false);updateSave();}
   };
  }
- window.SchoolShieldThemePage={load,bind,isBusy:()=>saving};
+ window.SchoolShieldThemePage={load,bind,hasChanges,isBusy:()=>saving};
 })();

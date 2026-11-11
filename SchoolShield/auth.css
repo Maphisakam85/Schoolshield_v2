@@ -6,6 +6,15 @@
     color: #18323a
 }
 
+[data-school-theme=true] .auth-story{background:var(--navy);color:var(--school-nav-ink)}
+[data-school-theme=true] .auth-story :is(span,p){color:var(--school-nav-ink)}
+[data-school-theme=true] .auth .btn.primary{background:var(--green);border-color:var(--green);color:var(--school-primary-ink)}
+[data-school-theme=true] .auth .btn.primary:hover{background:var(--green2)}
+[data-school-theme=true] .auth-tabs{background:var(--mint);border-color:var(--green)}
+[data-school-theme=true] .auth-tabs .btn:not(.primary){color:var(--school-link)}
+[data-school-theme=true] .auth .input:focus{border-color:var(--green);outline:2px solid var(--mint)}
+[data-school-theme=true] .auth #showForgotPassword{color:var(--school-link)}
+
 .auth-layout {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);

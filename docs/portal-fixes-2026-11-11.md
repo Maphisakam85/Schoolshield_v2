@@ -120,3 +120,26 @@ Browser checks passed at 1366, 390 and 320 pixels for wrapping, retained handler
 unchanged form values and repeat enhancement without duplicate groups. Account,
 invitation, guidance and notification-dialog workflows also passed their scoped
 desktop/mobile checks. No backend or data changes were required.
+
+## Access-code colour preview
+
+The login page previews a registered school's saved palette after a complete
+access code is entered. School selection on Create account also previews it.
+Incomplete/unknown codes, cleared/reset forms and platform-owner identifiers use
+the default theme. Preview requests are debounced; late responses from a previous
+code cannot overwrite the current school's colours. Failures never block login.
+No credentials, school records or permission checks are changed by this preview.
+
+Migration `20261111120000_login_school_palette.sql` was applied using the linked
+Supabase migration runner. Its narrowly scoped anonymous RPC returns only primary
+and navigation colour strings. School tables and theme settings remain private;
+the local PostgreSQL test verified anonymous table reads/writes are denied.
+The live anonymous RPC returned the saved burgundy colours for LLT-002 and null
+for an unknown code. Browser checks passed at desktop/mobile widths for palette
+switching, stale responses, fallbacks, form resets and signup/sign-in transitions.
+Full build: 196 passed, zero failed, one optional test skipped.
+
+### Colour save state follow-up
+- The colour Save button stays hidden until the palette differs from the saved colours. Successful saves and cancelling/reverting edits hide it again; failed saves retain the retry action. Editing only the reason does not count as a palette change.
+- Light navigation palettes now use readable foreground text on the login story.
+- Desktop/mobile branding browser checks passed, covering clean/save/cancel/failure states; access-code preview checks passed at desktop/mobile widths. JavaScript syntax and whitespace checks passed.
