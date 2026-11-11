@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.cjs",
-    "test": "node --test tests/chat.test.cjs tests/portal-scope.test.cjs"
+    "test": "node --test tests/chat.test.cjs tests/portal-scope.test.cjs",
+    "test:consistency": "node scripts/test-consistency.cjs"
   },
   "dependencies": {
     "@vercel/speed-insights": "^1.1.0"

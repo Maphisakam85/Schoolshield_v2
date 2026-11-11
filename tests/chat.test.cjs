@@ -114,6 +114,7 @@ function sendHarness({ reject = false } = {}) {
     } },
     $: selector => selector === '#chatInput' ? input : button,
     role: () => 'teacher',
+    workspaceCacheKey: () => 'school:T',
     getState: () => ({ parentChat: [{ learnerId: 'L1' }] }),
     learnerById: id => ({ id }),
     refreshCloudWorkspace: async () => { refreshed = true; },

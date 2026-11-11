@@ -178,7 +178,11 @@ function activeSchool() {
 }
 let SCHOOL = activeSchool();
 
-const TERM = "Term 2";
+function reportingTerm(classId) {
+  const state=getState();
+  const labels=[...new Set((state.reports||[]).filter(r=>!classId||r.class===classId).map(r=>r.term).filter(term=>/^Term [1-4]$/.test(term)))];
+  return labels.length===1?labels[0]:'Academic';
+}
 
 /* ------------------------------ permissions ------------------------------
  * Leadership deliberately does NOT carry "student-records" (the flat editable
@@ -449,7 +453,7 @@ function emptyWorkspace() {
 /* ------------------------------ state layer ------------------------------ */
 function workspaceCacheKey() {
   const session = JSON.parse(sessionStorage.getItem("schoolshieldSession") || "{}");
-  return `schoolshield:${session.schoolCode || SCHOOL.code}:${session.userId || "signed-out"}`;
+  return `schoolshield:${session.schoolId || session.schoolCode || SCHOOL.code}:${session.userId || "signed-out"}:${session.role || "unverified"}`;
 }
 
 function getState() {
@@ -472,6 +476,8 @@ function getState() {
 }
 
 function save(state) {
+  // An earlier read must not replace a newer in-flight/confirmed mutation.
+  window.schoolshieldWorkspaceReadGeneration = (window.schoolshieldWorkspaceReadGeneration || 0) + 1;
   const cacheKey = workspaceCacheKey();
   const retained = JSON.parse(sessionStorage.getItem(`${cacheKey}:pending`) || 'null');
   let before = retained?.before || window.schoolshieldWorkspaceLocalSnapshot || window.schoolshieldWorkspaceConfirmed;
@@ -655,10 +661,14 @@ async function retrySchoolDraft() {
 }
 
 async function refreshCloudWorkspace(renderAfterRefresh = false) {
+  const request = window.schoolshieldWorkspaceReadGeneration = (window.schoolshieldWorkspaceReadGeneration || 0) + 1;
+  let identity = sessionStorage.getItem('schoolshieldSession');
+  const isCurrent = () => request === window.schoolshieldWorkspaceReadGeneration && sessionStorage.getItem('schoolshieldSession') === identity;
   window.schoolshieldLastRefreshError = '';
   let featuresChanged = false;
   if (window.schoolshieldWorkspaceSaveQueue)
     await window.schoolshieldWorkspaceSaveQueue;
+  if (!isCurrent()) return false;
   const client = window.schoolshieldSupabase;
   const session = JSON.parse(
     sessionStorage.getItem("schoolshieldSession") || "{}",
@@ -671,6 +681,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     const { data: own, error } = await client.from("profiles")
       .select("role,display_name,account_status,requires_setup,onboarding_completed_at,school:schools(id,enabled_features)")
       .eq("id", session.userId).maybeSingle();
+    if (!isCurrent()) return false;
     if (error) throw new Error("Could not verify your account. Check your connection.");
     if (!own || own.account_status === "Inactive" || (own.requires_setup && !own.onboarding_completed_at)) {
       window.SchoolShieldBranding?.clear();
@@ -680,15 +691,27 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
       return false;
     }
     const accessSchool = Array.isArray(own.school) ? own.school[0] : own.school;
+    if (accessSchool?.id !== session.schoolId || own.role !== session.role) {
+      // Permission/tenant changes need a new bootstrap, never the old cache.
+      window.SchoolShieldBranding?.clear();
+      window.schoolshieldWorkspaceConfirmed = null;
+      window.schoolshieldWorkspaceLocalSnapshot = null;
+      sessionStorage.removeItem(workspaceCacheKey());
+      sessionStorage.removeItem('schoolshieldSession');
+      location.replace('login.html');
+      return false;
+    }
     if (accessSchool?.id === session.schoolId) {
       featuresChanged = JSON.stringify(window.schoolshieldFeatureAccess) !== JSON.stringify(accessSchool.enabled_features);
       window.schoolshieldFeatureAccess = accessSchool.enabled_features;
     }
     session.role = own.role;
     session.displayName = own.display_name;
-    sessionStorage.setItem("schoolshieldSession", JSON.stringify(session));
+    identity = JSON.stringify(session);
+    sessionStorage.setItem('schoolshieldSession', identity);
   }
   await window.SchoolShieldBranding?.refresh();
+  if (!isCurrent()) return false;
   if (session.role === "parent") {
     const previousError = window.schoolshieldParentWorkspaceError;
     const previousLinked = window.schoolshieldParentLearnerLinked;
@@ -702,9 +725,11 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     try {
       response = await window.schoolshieldFunctionRequest("parent-workspace");
     } catch (error) {
+      if (!isCurrent()) return false;
       return fail(error.message || "Check your connection and try again.");
     }
     const data = await response.json().catch(() => ({}));
+    if (!isCurrent()) return false;
     if (!response.ok || !data?.payload) {
       return fail(data?.error || `Request failed (${response.status})`);
     }
@@ -719,6 +744,7 @@ async function refreshCloudWorkspace(renderAfterRefresh = false) {
     return changed;
   }
   const { data, error } = await client.rpc('read_school_dataset');
+  if (!isCurrent()) return false;
   if (error || !data?.payload) {
     window.schoolshieldLastSyncError = error?.message || 'School dataset is not available.';
     window.schoolshieldLastRefreshError = window.schoolshieldLastSyncError;
@@ -755,6 +781,7 @@ function startWorkspaceAutoRefresh() {
   if (window.schoolshieldAutoRefreshStarted) return;
   window.schoolshieldAutoRefreshStarted = true;
   let pending = null;
+  let stopped = false;
   const refresh = () => {
     if (document.visibilityState === "hidden") return Promise.resolve();
     if (!pending) {
@@ -766,6 +793,7 @@ function startWorkspaceAutoRefresh() {
     return pending;
   };
   const schedule = () => {
+    if (stopped) return;
     window.schoolshieldWorkspaceRefreshTimer = setTimeout(async () => {
       await refresh();
       schedule();
@@ -775,6 +803,16 @@ function startWorkspaceAutoRefresh() {
   window.addEventListener("online", refresh);
   document.addEventListener("visibilitychange", refresh);
   window.schoolshieldRequestWorkspaceRefresh = refresh;
+  window.schoolshieldStopWorkspaceRefresh = () => {
+    stopped = true;
+    clearTimeout(window.schoolshieldWorkspaceRefreshTimer);
+    window.removeEventListener('focus', refresh);
+    window.removeEventListener('online', refresh);
+    document.removeEventListener('visibilitychange', refresh);
+    window.schoolshieldAutoRefreshStarted = false;
+    window.schoolshieldRequestWorkspaceRefresh = null;
+    window.schoolshieldWorkspaceReadGeneration = (window.schoolshieldWorkspaceReadGeneration || 0) + 1;
+  };
   schedule();
 }
 
@@ -830,6 +868,24 @@ function startWorkspaceRealtime() {
       if (window.schoolshieldRealtimeHealthy) window.schoolshieldRequestWorkspaceRefresh?.();
     });
   window.schoolshieldWorkspaceChannel = channel;
+}
+
+function bindWorkspaceLifecycle() {
+  if (window.schoolshieldWorkspaceLifecycleBound) return;
+  window.schoolshieldWorkspaceLifecycleBound = true;
+  window.addEventListener('pagehide', () => {
+    window.schoolshieldStopWorkspaceRefresh?.();
+    const channel = window.schoolshieldWorkspaceChannel;
+    window.schoolshieldWorkspaceChannel = null;
+    window.schoolshieldRealtimeHealthy = false;
+    if (channel) Promise.resolve(window.schoolshieldSupabase?.removeChannel(channel)).catch(() => {});
+  });
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    startWorkspaceAutoRefresh();
+    startWorkspaceRealtime();
+    window.schoolshieldRequestWorkspaceRefresh?.();
+  });
 }
 
 async function connectCloudWorkspace() {
@@ -971,6 +1027,8 @@ function mean(values) {
 
 /* Attendance, class average and pass rate for one class. */
 function classStats(classId) {
+  const shared = classById(classId)?.learningSummary;
+  if (shared) return { ...shared };
   const list = learnersInClass(classId);
   const attendance = Math.round(mean(list.map((l) => l.attendance)));
   const courseAverage = Math.round(mean(list.map((l) => l.average)));
@@ -1250,7 +1308,7 @@ function audienceOptions() {
 function daysAbsent(learner) {
   return Number.isFinite(learner.absentDays)
     ? learner.absentDays
-    : Math.round(((100 - learner.attendance) / 100) * 60);
+    : "Not recorded";
 }
 function attendanceRegisterFor(classId, date) {
   return (getState().attendanceRegisters || []).find(
@@ -1574,7 +1632,7 @@ function parentDashboard() {
   const alerts = notificationsForRole();
   const published = publishedReportsForClass(child.class, child.id);
   return shell(
-    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>${escapeHtml(localTimeGreeting())}, Parent / Guardian</h1><p>Everything here relates to ${escapeHtml(child.name)} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${escapeHtml(initials(child.name))}</div><div><h2>${escapeHtml(child.name)}</h2><p>${escapeHtml(child.grade)} · ${escapeHtml(child.class)} · Class teacher: ${escapeHtml(teacherForClass(child.class))}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Term to date")}${stat("Overall average", child.average + "%", "Current academic average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(child.name)}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${escapeHtml(teacherForClass(child.class))}</small></span><span class="row-metrics"><b>${escapeHtml(child.attendance)}%</b><small>attendance</small></span><span class="row-metrics"><b>${escapeHtml(child.average)}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${escapeHtml(TERM)} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${escapeHtml(child.class)}" data-learner="${escapeHtml(child.id)}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${escapeHtml(notice.title)}</b><small>${escapeHtml(notice.description)}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
+    `<div class="hero"><div><span class="pill">Your child & school updates</span><h1>${escapeHtml(localTimeGreeting())}, Parent / Guardian</h1><p>Everything here relates to ${escapeHtml(child.name)} or a school notice specifically shared with families.</p></div><div class="hero-actions"><button class="btn ghost" data-nav="notifications">View family alerts</button></div></div><section class="profile-card"><div class="student-avatar">${escapeHtml(initials(child.name))}</div><div><h2>${escapeHtml(child.name)}</h2><p>${escapeHtml(child.grade)} · ${escapeHtml(child.class)} · Class teacher: ${escapeHtml(teacherForClass(child.class))}</p></div><span>${badge(standingFor(child))}</span></section><div class="stats-grid">${stat("Attendance", child.attendance + "%", "Recorded registers")}${stat("Overall average", child.average + "%", "Recorded assessment average")}${stat("Class average", childClass.courseAverage + "%", child.class + " only")}${stat("Family alerts", alerts.filter((notice) => !notice.read).length, "Shared with parents")}</div><section class="panel"><div class="panel-head"><div><h3>Quick access</h3><p>Tools for your registered child.</p></div></div><div class="quick-grid">${quickForRole("parent")}</div></section><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>${escapeHtml(child.name)}'s learning summary</h3><p>Personal attendance and academic information</p></div><a class="text-link" href="student-record.html">Open learner record →</a></div><div class="report-row"><span><b>Class teacher</b><small>${escapeHtml(teacherForClass(child.class))}</small></span><span class="row-metrics"><b>${escapeHtml(child.attendance)}%</b><small>attendance</small></span><span class="row-metrics"><b>${escapeHtml(child.average)}%</b><small>average</small></span></div>${published.length ? `<div class="report-row"><span><b>Published ${escapeHtml(reportingTerm())} report</b><small>Ready to view or download</small></span><button class="btn small" data-action="download-report" data-class="${escapeHtml(child.class)}" data-learner="${escapeHtml(child.id)}">Download</button></div>` : '<p class="muted">Your child’s term report will appear here after it is finalised and released.</p>'}</section><section class="panel"><div class="panel-head"><div><h3>Family notifications</h3><p>Child-specific and school notices shared with parents</p></div><a class="text-link" href="notifications.html">View all →</a></div>${alerts.map((notice) => `<div class="report-row"><span><b>${escapeHtml(notice.title)}</b><small>${escapeHtml(notice.description)}</small></span>${badge(notice.priority)}</div>`).join("") || '<p class="muted">No family notifications.</p>'}</section></div>`,
     "Dashboard",
   );
 }
@@ -1798,7 +1856,7 @@ function classRecordsClass(classId) {
   );
   const reportRow =
     canSeeReport && report
-      ? `<div class="report-row"><span><b>${escapeHtml(TERM)} learner report</b><small>${escapeHtml(flowStep(report.status).hint)}</small></span>${statusBadge(report.status)}</div>`
+      ? `<div class="report-row"><span><b>${escapeHtml(reportingTerm())} learner report</b><small>${escapeHtml(flowStep(report.status).hint)}</small></span>${statusBadge(report.status)}</div>`
       : "";
   return generic(
     `${c.grade} · ${c.id}`,
@@ -1829,7 +1887,7 @@ function classRecordsLearner(classId, learnerId) {
 function learnerHistoryPeriods(learner) {
   const num = value => Number(String(value ?? '').match(/\d+/)?.[0]);
   const grade = num(learner.grade), year = Number(learner.academicYear || new Date().getFullYear());
-  const term = num(learner.currentTerm || TERM);
+  const term = num(learner.currentTerm || reportingTerm());
   const date = learner.registeredAt || learner.registrationDate || learner.enrollmentDate || '';
   const firstYear = Number(learner.registrationYear || String(date).slice(0,4)) || null;
   const firstGrade = num(learner.registrationGrade), firstTerm = num(learner.registrationTerm);
@@ -1979,7 +2037,7 @@ function studentReportsTeacher() {
       action = `<a class="btn small primary" href="student-reports.html?class=${escapeHtml(c.id)}">Release individual reports</a>`;
     else if (status === "published")
       action = `<button class="btn small" data-action="download-report" data-class="${escapeHtml(c.id)}">Download</button>`;
-    return `<tr><td><b>${escapeHtml(c.grade)} · ${escapeHtml(c.id)}</b><small>${escapeHtml(st.learners)} learners</small></td><td>${escapeHtml(TERM)}</td><td>${statusBadge(status)}</td><td>${escapeHtml(report && report.compiledOn ? report.compiledOn : "—")}</td><td>${action}</td></tr>`;
+    return `<tr><td><b>${escapeHtml(c.grade)} · ${escapeHtml(c.id)}</b><small>${escapeHtml(st.learners)} learners</small></td><td>${escapeHtml(reportingTerm())}</td><td>${statusBadge(status)}</td><td>${escapeHtml(report && report.compiledOn ? report.compiledOn : "—")}</td><td>${action}</td></tr>`;
   });
   const steps = REPORT_FLOW.map(
     (s, i) =>
@@ -1989,7 +2047,7 @@ function studentReportsTeacher() {
     "Student Reports",
     "Teacher workspace",
     "Submit your class marks to the clerk, then review, finalise and release the compiled report to parents.",
-    `<div class="stats-grid">${stat("My classes", mine.length, "Assigned to you")}${stat("Awaiting marks", countStatus(mine, "awaiting-marks"), "Capture & submit")}${stat("With me to finalise", countStatus(mine, "compiled"), "Sent back by the clerk")}${stat("Published", countStatus(mine, "published"), "Visible to parents")}</div><section class="panel"><div class="panel-head"><div><h3>Report workflow</h3><p>Teacher marks → clerk compiles → teacher finalises → parents receive</p></div></div><div class="flow-strip">${steps}</div></section><section class="panel"><div class="panel-head"><div><h3>My class reports — ${escapeHtml(TERM)}</h3><p>Each class moves through the pipeline independently</p></div></div>${table(["Class", "Term", "Status", "Compiled on", "Action"], rows, "You have no classes assigned")}</section>`,
+    `<div class="stats-grid">${stat("My classes", mine.length, "Assigned to you")}${stat("Awaiting marks", countStatus(mine, "awaiting-marks"), "Capture & submit")}${stat("With me to finalise", countStatus(mine, "compiled"), "Sent back by the clerk")}${stat("Published", countStatus(mine, "published"), "Visible to parents")}</div><section class="panel"><div class="panel-head"><div><h3>Report workflow</h3><p>Teacher marks → clerk compiles → teacher finalises → parents receive</p></div></div><div class="flow-strip">${steps}</div></section><section class="panel"><div class="panel-head"><div><h3>My class reports — ${escapeHtml(reportingTerm())}</h3><p>Each class moves through the pipeline independently</p></div></div>${table(["Class", "Term", "Status", "Compiled on", "Action"], rows, "You have no classes assigned")}</section>`,
   );
 }
 
@@ -2063,7 +2121,7 @@ function studentReportsClerk() {
     "Report Compilation",
     "Clerk workspace",
     "Compile learner reports from the marks teachers submit, then send each compiled report back to the teacher for review.",
-    `<div class="stats-grid">${stat("Classes", all.length, "On register")}${stat("Requests", requests.length, "From leadership")}${stat("Ready to compile", ready, "Marks received")}${stat("Published", countStatus(all, "published"), "Released to parents")}</div>${requests.length ? `<section class="panel"><div class="panel-head"><div><h3>Leadership report requests</h3><p>Requested class reports to monitor</p></div></div>${table(["Class", "Requested by", "Date", ""], requestRows)}</section>` : ""}<section class="panel"><div class="panel-head"><div><h3>Compilation queue — ${escapeHtml(TERM)}</h3><p>Marks submitted by teachers arrive here</p></div></div>${table(["Class", "Marks submitted", "Status", "Action"], rows)}</section><section class="panel"><div class="panel-head"><div><h3>About this workflow</h3></div></div><p class="muted">Teachers submit class marks from Test Scores. The clerk compiles the individual learner reports and returns them to the teacher. The teacher finalises the report and releases it to parents, who can then view and download it under their child's record.</p></section>`,
+    `<div class="stats-grid">${stat("Classes", all.length, "On register")}${stat("Requests", requests.length, "From leadership")}${stat("Ready to compile", ready, "Marks received")}${stat("Published", countStatus(all, "published"), "Released to parents")}</div>${requests.length ? `<section class="panel"><div class="panel-head"><div><h3>Leadership report requests</h3><p>Requested class reports to monitor</p></div></div>${table(["Class", "Requested by", "Date", ""], requestRows)}</section>` : ""}<section class="panel"><div class="panel-head"><div><h3>Compilation queue — ${escapeHtml(reportingTerm())}</h3><p>Marks submitted by teachers arrive here</p></div></div>${table(["Class", "Marks submitted", "Status", "Action"], rows)}</section><section class="panel"><div class="panel-head"><div><h3>About this workflow</h3></div></div><p class="muted">Teachers submit class marks from Test Scores. The clerk compiles the individual learner reports and returns them to the teacher. The teacher finalises the report and releases it to parents, who can then view and download it under their child's record.</p></section>`,
   );
 }
 
@@ -2329,7 +2387,7 @@ function attendanceRegister() {
       "A class must be assigned before you can capture daily attendance.",
       '<section class="panel"><p class="muted">No class assigned.</p></section>',
     );
-  const weekStart = param("week") || "2026-09-14";
+  const weekStart = param("week") || weekStartFor(todayIso());
   const weekDays = [
     "Monday",
     "Tuesday",
@@ -2416,31 +2474,6 @@ function schoolDaysForWeek(weekStart) {
   return Array.from({ length: 5 }, (_, index) =>
     localDateIso(new Date(start.getFullYear(),start.getMonth(),start.getDate()+index)),
   );
-}
-function refreshClassAttendance(state, classId) {
-  const registers = (state.attendanceRegisters || []).filter(
-    (item) => item.class === classId,
-  );
-  state.learners
-    .filter((learner) => learner.class === classId)
-    .forEach((learner) => {
-      const absences = registers.reduce(
-        (total, register) =>
-          total +
-          (["Absent", "Sick", "Excused"].includes(
-            register.entries?.[learner.id],
-          )
-            ? 1
-            : 0),
-        0,
-      );
-      learner.absentDays = (learner.initialAbsentDays || 0) + absences;
-      const totalDays = (learner.attendanceDays || 60) + registers.length;
-      learner.attendance = Math.max(
-        0,
-        Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
-      );
-    });
 }
 function attendanceOverview() {
   const mine = teacherClasses(userName());
@@ -2591,7 +2624,6 @@ function saveDailyAttendance(classId) {
     };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
-    refreshClassAttendance(state, classId);
   });
   go("attendance-register.html?class=" + classId);
 }
@@ -2613,7 +2645,6 @@ function deleteDailyAttendance(classId, date) {
     state.attendanceWeeks = (state.attendanceWeeks || []).filter(
       (week) => !(week.class === classId && week.weekStart === weekStart),
     );
-    refreshClassAttendance(state, classId);
   });
   render();
 }
@@ -3476,6 +3507,12 @@ function reports() {
 }
 
 /* -------------------------------- leadership ----------------------------- */
+function leadershipPriorities(){
+ const state=getState();
+ const incidents=(state.incidents||[]).filter(item=>!['Resolved','Closed'].includes(item.status)).slice(0,3).map(item=>`<div><b>${escapeHtml(item.title||item.type||item.id)}</b><span>${escapeHtml(item.status||'Open')} · ${escapeHtml(item.location||'Location not recorded')}</span><button class="btn small" data-nav="incidents">Open case</button></div>`);
+ const reports=(state.reports||[]).filter(item=>['ready','compiled','finalised'].includes(item.status)).slice(0,3).map(item=>`<div><b>${escapeHtml(item.class)} · ${escapeHtml(item.term||'Academic')} report</b><span>${escapeHtml(flowStep(item.status).label)}</span><button class="btn small" data-nav="test-scores">Open</button></div>`);
+ return [...incidents,...reports].join('')||'<p class="muted">No pending incidents or report actions.</p>';
+}
 function leadership() {
   const stats = schoolStats();
   const classRows = classes().map((c) => {
@@ -3483,7 +3520,7 @@ function leadership() {
     return `<div class="report-row"><span><b>${escapeHtml(c.grade)} · ${escapeHtml(c.id)}</b><small>${escapeHtml(c.teacher)}</small></span><span class="row-metrics"><b>${escapeHtml(st.attendance)}%</b><small>attendance</small></span><span class="row-metrics"><b>${escapeHtml(st.courseAverage)}%</b><small>average</small></span><span class="row-metrics"><b>${escapeHtml(st.passRate)}%</b><small>pass rate</small></span></div>`;
   });
   return shell(
-    `<div class="page-intro"><div><span class="pill">Executive oversight</span><h1>Leadership</h1><p>School-wide academic and safety posture for the Principal and Deputy Principal.</p></div><div><button class="btn primary" data-nav="announcements">New announcement</button></div></div><div class="stats-grid">${stat("Learners", stats.learners, "Across " + classes().length + " classes")}${stat("Attendance", stats.attendance + "%", "School average")}${stat("Pass rate", stats.passRate + "%", stats.passing + " learners passing")}${stat("Open incidents", openIncidents(), "Requiring action")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Class oversight</h3><p>Every class, grouped by grade</p></div><a class="text-link" href="class-records.html">Open class records →</a></div>${classRows.join("")}</section><section class="panel"><div class="panel-head"><div><h3>Leadership priorities</h3><p>Items requiring executive attention</p></div></div><div class="priority-list"><div><b>Review critical security incident</b><span>Due today · Main Gate</span><button class="btn small" data-nav="incidents">Open case</button></div><div><b>Approve security deployment</b><span>Next shift · 14:00</span><button class="btn small" data-nav="security">Review</button></div><div><b>Release finalised term reports</b><span>Academic · ${escapeHtml(TERM)}</span><button class="btn small" data-nav="test-scores">Open</button></div></div></section></div>`,
+    `<div class="page-intro"><div><span class="pill">Executive oversight</span><h1>Leadership</h1><p>School-wide academic and safety posture for the Principal and Deputy Principal.</p></div><div><button class="btn primary" data-nav="announcements">New announcement</button></div></div><div class="stats-grid">${stat("Learners", stats.learners, "Across " + classes().length + " classes")}${stat("Attendance", stats.attendance + "%", "School average")}${stat("Pass rate", stats.passRate + "%", stats.passing + " learners passing")}${stat("Open incidents", openIncidents(), "Requiring action")}</div><div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><h3>Class oversight</h3><p>Every class, grouped by grade</p></div><a class="text-link" href="class-records.html">Open class records →</a></div>${classRows.join("")}</section><section class="panel"><div class="panel-head"><div><h3>Leadership priorities</h3><p>Items requiring executive attention</p></div></div><div class="priority-list">${leadershipPriorities()}</div></section></div>`,
     "Leadership",
   );
 }
@@ -4079,29 +4116,21 @@ function learnerSickNotices(learner) {
     (notice) => notice.learnerId === learner.id,
   );
 }
-function reportTerms() {
-  const active = Number(String(TERM).replace(/\D/g, "")) || 1;
+function reportTerms(learner) {
+  const active = Number(String(reportingTerm(learner?.class)).replace(/\D/g, "")) || Math.max(0,...(getState().assessments||[]).filter(a=>!learner||a.class===learner.class).map(a=>Number(String(a.term||'').replace(/\D/g,''))||0));
   return Array.from(
     { length: Math.min(4, active) },
     (_, index) => `Term ${index + 1}`,
   );
 }
 function reportMark(learner, subject, term) {
-  const current = assessmentsForClass(learner.class).find(
-    (assessment) => assessment.subject === subject && assessment.term === term,
-  );
-  if (current && current.scores?.[learner.id] !== undefined)
-    return current.scores[learner.id];
-  const subjectOffset =
-    Array.from(subject).reduce((total, char) => total + char.charCodeAt(0), 0) %
-    13;
-  const termOffset = Number(String(term).replace(/\D/g, "")) * 3;
-  return Math.max(
-    30,
-    Math.min(100, learner.average + subjectOffset - 7 + termOffset),
-  );
+  const year=Number(learner.academicYear||learner.academic_year||new Date().getFullYear());
+  const scores=assessmentsForClass(learner.class).filter(a=>a.subject===subject&&a.term===term&&(!a.academicYear&&!a.academic_year||Number(a.academicYear||a.academic_year)===year)).map(a=>a.scores?.[learner.id]).filter(score=>typeof score==='number'&&Number.isFinite(score)&&score>=0&&score<=100);
+  return scores.length?Math.round(mean(scores)):null;
 }
+function reportTermAverage(learner,subjects,term){const scores=subjects.map(subject=>reportMark(learner,subject,term)).filter(Number.isFinite);return scores.length?Math.round(mean(scores)):null;}
 function achievementLevel(mark) {
+  if (!Number.isFinite(mark)) return "Not enough data";
   if (mark >= 80) return 7;
   if (mark >= 70) return 6;
   if (mark >= 60) return 5;
@@ -4112,7 +4141,7 @@ function achievementLevel(mark) {
 }
 function learnerReportMarkup(learner) {
   const classInfo = classById(learner.class);
-  const terms = reportTerms();
+  const terms = reportTerms(learner);
   const gradeNumber = Number(String(learner.grade).replace(/\D/g, ""));
   const subjects =
     subjectsForGrade(gradeNumber);
@@ -4125,17 +4154,13 @@ function learnerReportMarkup(learner) {
         `<tr><td>${escapeHtml(subject)}</td>${terms
           .map((term) => {
             const mark = reportMark(learner, subject, term);
-            return `<td>${escapeHtml(mark)}</td><td>${escapeHtml(achievementLevel(mark))}</td>`;
+            return `<td>${escapeHtml(mark === null ? "Not enough data" : mark)}</td><td>${escapeHtml(achievementLevel(mark))}</td>`;
           })
           .join("")}</tr>`,
     )
     .join("");
-  const averages = terms.map((term) =>
-    Math.round(
-      mean(subjects.map((subject) => reportMark(learner, subject, term))),
-    ),
-  );
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(learner.name)} ${escapeHtml(TERM)} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div>${schoolLogoMarkup()}<div class="brand">${escapeHtml(SCHOOL.name)}</div><div class="small">Academic term report · ${escapeHtml(SCHOOL.code)}</div><div class="small">Generated ${escapeHtml(todayLabel())}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${escapeHtml(learner.name)} · ${escapeHtml(learner.id)}<br>Parent / guardian: ${escapeHtml(learner.parent)}</div><div class="box"><b>Grade / class</b><br>${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}<br>Class teacher: ${escapeHtml(classInfo.teacher)}</div><div class="box"><b>Attendance</b><br>${escapeHtml(learner.attendance)}% · ${escapeHtml(daysAbsent(learner))} days absent</div><div class="box"><b>Report period</b><br>${escapeHtml(terms.join(" · "))} · 2026<br>Status: ${escapeHtml(standingFor(learner))}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${escapeHtml(average)}</td><td>${escapeHtml(achievementLevel(average))}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${escapeHtml(learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended.")}<br><span class="small">Sick notices recorded this term: ${escapeHtml(sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None")}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
+  const averages = terms.map(term => reportTermAverage(learner,subjects,term));
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(learner.name)} ${escapeHtml(reportingTerm())} report</title><style>body{font-family:Arial,sans-serif;color:#102d35;margin:36px;line-height:1.35}.report{max-width:1000px;margin:auto;border:1px solid #b8c8cc;padding:26px}.head{display:flex;justify-content:space-between;border-bottom:3px solid #087550;padding-bottom:17px}.brand{font-size:25px;font-weight:800;color:#087550}.stamp{width:82px;height:82px;border:3px double #087550;border-radius:50%;display:grid;place-items:center;text-align:center;color:#087550;font-size:11px;font-weight:800}.small{font-size:12px;color:#52686e}.learner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #d4e0e3;padding:10px;background:#f8fbfb}table{width:100%;border-collapse:collapse;font-size:12px}th,td{border:1px solid #9eafb4;padding:7px;text-align:center}th{background:#e9f4ef}td:first-child{text-align:left;font-weight:700}.remarks{min-height:72px;border:1px solid #9eafb4;padding:12px;margin-top:15px}.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:35px;margin-top:42px}.sign div{border-top:1px solid #334; padding-top:6px;font-size:12px}@media print{body{margin:0}.report{border:0}}</style></head><body><main class="report"><div class="head"><div>${schoolLogoMarkup()}<div class="brand">${escapeHtml(SCHOOL.name)}</div><div class="small">Academic term report · ${escapeHtml(SCHOOL.code)}</div><div class="small">Generated ${escapeHtml(todayLabel())}</div></div><div class="stamp">SCHOOL<br>OFFICIAL<br>STAMP</div></div><section class="learner"><div class="box"><b>Learner</b><br>${escapeHtml(learner.name)} · ${escapeHtml(learner.id)}<br>Parent / guardian: ${escapeHtml(learner.parent)}</div><div class="box"><b>Grade / class</b><br>${escapeHtml(learner.grade)} · ${escapeHtml(learner.class)}<br>Class teacher: ${escapeHtml(classInfo.teacher)}</div><div class="box"><b>Attendance</b><br>${escapeHtml(learner.attendance)}% · ${escapeHtml(daysAbsent(learner))} days absent</div><div class="box"><b>Report period</b><br>${escapeHtml(terms.join(" · "))} · ${escapeHtml(learner.academicYear || learner.academic_year || new Date().getFullYear())}<br>Status: ${escapeHtml(standingFor(learner))}</div></section><table><thead><tr><th rowspan="2">Subject</th>${headers}</tr><tr>${subHeaders}</tr></thead><tbody>${subjectRows}<tr><td>Average</td>${averages.map((average) => `<td>${escapeHtml(average === null ? "Not enough data" : average)}</td><td>${escapeHtml(achievementLevel(average))}</td>`).join("")}</tr></tbody></table><section class="remarks"><b>General remarks</b><br>${escapeHtml(learner.average >= 50 ? "Steady progress. Continue with consistent preparation and attendance." : "Additional support and regular practice are recommended.")}<br><span class="small">Sick notices recorded this term: ${escapeHtml(sick.length ? sick.map((notice) => `${notice.date} (${notice.reason})`).join(", ") : "None")}.</span></section><section class="sign"><div>Class teacher signature</div><div>Principal signature</div><div>Parent / guardian acknowledgement</div></section><p class="small">Achievement levels: 1 = 0–29 · 2 = 30–39 · 3 = 40–49 · 4 = 50–59 · 5 = 60–69 · 6 = 70–79 · 7 = 80–100</p></main></body></html>`;
 }
 let pdfLibraryPromise;
 function loadPdfLibrary() {
@@ -4198,7 +4223,7 @@ async function downloadPdf(filename, title, lines) {
 function learnerHistoryScore(learner, grade, subject, term) {
   const scores = (getState().assessments || []).filter(a=>a.subject===subject && a.term===term &&
     (Number(String(a.grade || classById(a.class)?.grade || '').match(/\d+/)?.[0])===Number(grade)) &&
-    (!a.academicYear || Number(a.academicYear)===Number(learner.academicYear || new Date().getFullYear())))
+    (!a.academicYear&&!a.academic_year || Number(a.academicYear||a.academic_year)===Number(learner.academicYear||learner.academic_year||new Date().getFullYear())))
     .map(a=>a.scores?.[learner.id]).filter(score=>score!==null && score!==undefined && score!=='' && Number.isFinite(Number(score))).map(Number);
   return scores.length ? (scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1)+'%' : 'Not enough data';
 }
@@ -4252,7 +4277,7 @@ async function downloadReport(classId, learnerId) {
       ),
     );
     await downloadPdf(
-      `${pupil.id}-${TERM.toLowerCase().replace(/\s+/g, "-")}-report.pdf`,
+      `${pupil.id}-${reportingTerm().toLowerCase().replace(/\s+/g, "-")}-report.pdf`,
       `${report.term} learner report`,
       reportLines,
     );
@@ -4587,7 +4612,7 @@ function action(type, el) {
     });
     modal(
       "Class report requested",
-      `<p>A compiled ${escapeHtml(TERM)} report for class <b>${escapeHtml(classId)}</b> has been added to the clerk's request queue. The clerk will compile the individual learner reports and return them to the class teacher for finalisation.</p>`,
+      `<p>A compiled ${escapeHtml(reportingTerm())} report for class <b>${escapeHtml(classId)}</b> has been added to the clerk's request queue. The clerk will compile the individual learner reports and return them to the class teacher for finalisation.</p>`,
     );
   } else if (type === "compile-report") setReportStatus(classId, "compiled");
   else if (type === "review-learner-report")
@@ -5454,7 +5479,6 @@ function saveSickNotice() {
     };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
-    refreshClassAttendance(state, learnerRecord.class);
     state.notifications.unshift({
       id: crypto.randomUUID(),
       createdAt: notificationTimestamp(),
@@ -5992,28 +6016,7 @@ function saveAttendance(classId) {
     };
     if (index >= 0) state.attendanceRegisters[index] = register;
     else state.attendanceRegisters.unshift(register);
-    const classRegisters = state.attendanceRegisters.filter(
-      (item) => item.class === classId,
-    );
-    state.learners
-      .filter((learner) => learner.class === classId)
-      .forEach((learner) => {
-        const absenceCount = classRegisters.reduce(
-          (total, item) =>
-            total +
-            (["Absent", "Sick", "Excused"].includes(item.entries?.[learner.id])
-              ? 1
-              : 0),
-          0,
-        );
-        learner.absentDays = (learner.initialAbsentDays || 0) + absenceCount;
-        const totalDays =
-          (learner.attendanceDays || 60) + classRegisters.length;
-        learner.attendance = Math.max(
-          0,
-          Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
-        );
-      });
+
   });
   render();
 }
@@ -6058,30 +6061,7 @@ function saveWeeklyAttendance(classId, weekStart) {
     );
     if (weekIndex >= 0) state.attendanceWeeks[weekIndex] = summary;
     else state.attendanceWeeks.unshift(summary);
-    const classRegisters = state.attendanceRegisters.filter(
-      (item) => item.class === classId,
-    );
-    state.learners
-      .filter((learner) => learner.class === classId)
-      .forEach((learner) => {
-        const absences = classRegisters.reduce(
-          (total, register) =>
-            total +
-            (["Absent", "Excused", "Sick"].includes(
-              register.entries?.[learner.id],
-            )
-              ? 1
-              : 0),
-          0,
-        );
-        learner.absentDays = (learner.initialAbsentDays || 0) + absences;
-        const totalDays =
-          (learner.attendanceDays || 60) + classRegisters.length;
-        learner.attendance = Math.max(
-          0,
-          Math.round(((totalDays - learner.absentDays) / totalDays) * 100),
-        );
-      });
+
   });
   render();
 }
@@ -6304,7 +6284,7 @@ function addAssessment(classId = "") {
   const classOptions = classes()
     .map((schoolClass) => `<option value="${escapeHtml(schoolClass.id)}" ${escapeHtml(schoolClass.id === classId ? "selected" : "")}>${escapeHtml(schoolClass.grade)} · ${escapeHtml(schoolClass.id)} — ${escapeHtml(schoolClass.teacher)}</option>`)
     .join("");
-  modal("Add assessment", `<p class="muted">Set the assessment details first. Saving opens the full class mark sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject">${subjectsForClass(classId || classes()[0]?.id).map(name => `<option>${announcementText(name)}</option>`).join("")}</select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option>${escapeHtml(TERM)}</option><option>Term 1</option><option>Term 3</option><option>Term 4</option></select></label><label>Date<input class="input" id="assessmentDate" type="date"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`);
+  modal("Add assessment", `<p class="muted">Set the assessment details first. Saving opens the full class mark sheet.</p><div class="form-grid"><label>Class<select class="select" id="assessmentClass">${classOptions}</select></label><label>Subject<select class="select" id="assessmentSubject">${subjectsForClass(classId || classes()[0]?.id).map(name => `<option>${announcementText(name)}</option>`).join("")}</select></label><label>Assessment title<input class="input" id="assessmentTitle" placeholder="e.g. Controlled Test 1"></label><label>Assessment type<select class="select" id="assessmentType"><option>Test</option><option>Assignment</option><option>Practical</option><option>Project</option><option>Exam</option></select></label><label>Term<select class="select" id="assessmentTerm"><option value="">Select term</option>${[1,2,3,4].map(term=>`<option>Term ${term}</option>`).join("")}</select></label><label>Date<input class="input" id="assessmentDate" type="date"></label><label>Weighting (%)<input class="input" id="assessmentWeight" type="number" min="1" max="100" value="20"></label><label>Total marks<input class="input" id="assessmentTotal" type="number" min="1" value="100"></label><label class="full">Assessment instructions / notes<textarea class="textarea" id="assessmentNotes" placeholder="Optional instructions or moderation notes"></textarea></label></div><div class="modal-foot"><button class="btn primary" data-action="save-assessment">Save & capture marks</button></div>`);
   const updateSubjects = () => {
     const names = subjectsForClass(inputValue("assessmentClass"));
     document.getElementById("assessmentSubject").innerHTML = names.map(name => `<option>${announcementText(name)}</option>`).join("");
@@ -6320,7 +6300,8 @@ function saveAssessment() {
   const subject = inputValue("assessmentSubject");
   const title = inputValue("assessmentTitle");
   const date = inputValue("assessmentDate");
-  if (!requireValues([classId, subject, title, date])) return;
+  if (!requireValues([classId, subject, title, date, inputValue("assessmentTerm")])) return;
+  if (!/^Term [1-4]$/.test(inputValue("assessmentTerm"))) return;
   if (date > todayIso()) return modal("Future date not allowed", '<p class="muted">Assessment dates cannot be after today.</p>');
   const schoolClass = classById(classId);
   if (!schoolClass) return;
@@ -6334,6 +6315,7 @@ function saveAssessment() {
       title,
       type: inputValue("assessmentType"),
       term: inputValue("assessmentTerm"),
+      academic_year: Number(date.slice(0,4)),
       date,
       weighting: Number(inputValue("assessmentWeight")),
       total: Number(inputValue("assessmentTotal")),
@@ -6360,7 +6342,7 @@ function setReportStatus(classId, status) {
       state.notifications.unshift({
         id: crypto.randomUUID(),
         title: `${classId} learner reports ready for review`,
-        description: `The clerk compiled ${TERM} reports for your class. Review every learner report before release.`,
+        description: `The clerk compiled ${reportingTerm()} reports for your class. Review every learner report before release.`,
         category: "Reports",
         priority: "Medium",
         createdAt: notificationTimestamp(),
@@ -6373,8 +6355,8 @@ function setReportStatus(classId, status) {
     if (status === "published" && schoolClass)
       state.notifications.unshift({
         id: crypto.randomUUID(),
-        title: `${TERM} learner reports released`,
-        description: `Your child’s ${TERM} academic report is now available to view and download.`,
+        title: `${reportingTerm()} learner reports released`,
+        description: `Your child’s ${reportingTerm()} academic report is now available to view and download.`,
         category: "Reports",
         priority: "Medium",
         createdAt: notificationTimestamp(),
@@ -6411,7 +6393,7 @@ function releaseLearnerReport(classId, learnerId) {
     report.releasedLearners[learnerId] = localDateTime();
     state.notifications.unshift({
       id: crypto.randomUUID(),
-      title: `${TERM} report available for ${learner.name}`,
+      title: `${reportingTerm()} report available for ${learner.name}`,
       description: `${learner.name}'s reviewed term report is ready to view and download.`,
       category: "Reports",
       priority: "Medium",
@@ -6517,8 +6499,12 @@ async function sendMessage(storeKey, chatIndex = 0, sender = "me") {
       if(!child?.id)throw Error('This conversation is not linked to a learner. Refresh and select the parent again.');
       if(text.length>2000)throw Error('Keep your message under 2,000 characters.');
       if(window.schoolshieldWorkspaceSaveQueue&&await window.schoolshieldWorkspaceSaveQueue===false)throw Error('A previous save is still pending. Retry that save before sending.');
-      const response=await window.schoolshieldFunctionRequest('parent-chat',{learner_id:child.id,text});
-      const result=await response.json().catch(()=>({}));if(!response.ok)throw Error(result.error||'The message could not be saved. Please try again.');
+      const signature=JSON.stringify([currentProfileId(),workspaceCacheKey(),child.id,text]);
+      const retry=window.schoolshieldParentChatRetry?.signature===signature?window.schoolshieldParentChatRetry:{signature,id:crypto.randomUUID()};
+      window.schoolshieldParentChatRetry=retry;
+      const response=await window.schoolshieldFunctionRequest('parent-chat',{request_id:retry.id,learner_id:child.id,text});
+      const result=await response.json().catch(()=>({}));if(!response.ok||!result.ok)throw Error(result.error||'The message could not be saved. Please try again.');
+      window.schoolshieldParentChatRetry=null;
     }else{
       const signature=JSON.stringify([storeKey,chatIndex,text]);
       attempt=window.schoolshieldChatRetry?.signature===signature?window.schoolshieldChatRetry:{signature,message:{id:crypto.randomUUID(),from:sender,sender:userName(),text,date:todayLabel(),sentAt:new Date().toISOString()}};
@@ -7259,6 +7245,7 @@ async function startWorkspace() {
     startNotificationReadSync();
     startWorkspaceRealtime();
     startWorkspaceAutoRefresh();
+    bindWorkspaceLifecycle();
     if (["principal", "clerk"].includes(profile.role)) {
       const { count } = await workspaceStartupRequest(()=>client
         .from("account_request_notifications")

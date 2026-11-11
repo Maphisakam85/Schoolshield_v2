@@ -123,3 +123,48 @@ test('draft verification timeouts identify the read phase without claiming anoth
  assert.equal(calls,1);assert.equal(ctx.window.schoolshieldDraftDiagnostic.operation,'draft-verification');assert.equal(ctx.window.schoolshieldDraftDiagnostic.outcome,'failed');assert.ok(ctx.window.schoolshieldDraftDiagnostic.elapsedMs>=0);
  assert.deepEqual(Object.keys(ctx.window.schoolshieldDraftDiagnostic).sort(),['elapsedMs','operation','outcome','startedAt']);
 });
+
+test('late refresh cannot put another account data into the current school cache',async()=>{
+ const {ctx,stored}=harness();let release;ctx.window.schoolshieldSupabase={rpc:()=>new Promise(resolve=>release=resolve)};
+ const pending=ctx.refreshCloudWorkspace();await new Promise(resolve=>setImmediate(resolve));
+ stored.set('schoolshieldSession',JSON.stringify({schoolId:'OTHER',userId:'OTHER',role:'teacher'}));
+ release({data:{payload:{learners:[{id:'PRIVATE'}]}}});assert.equal(await pending,false);assert.equal(ctx.getState().learners.length,0);assert.equal(ctx.window.schoolshieldCloudWorkspaceReady,undefined);
+});
+test('out-of-order refresh replies cannot roll back a newer confirmed snapshot',async()=>{
+ const {ctx}=harness();const replies=[];ctx.window.schoolshieldSupabase={rpc:()=>new Promise(resolve=>replies.push(resolve))};
+ const old=ctx.refreshCloudWorkspace();await new Promise(resolve=>setImmediate(resolve));const latest=ctx.refreshCloudWorkspace();await new Promise(resolve=>setImmediate(resolve));
+ replies[1]({data:{payload:{learners:[{id:'NEW'}]}}});await latest;
+ replies[0]({data:{payload:{learners:[{id:'OLD'}]}}});await old;assert.equal(ctx.getState().learners[0].id,'NEW');
+});
+
+test('workspace lifecycle cleans up polling and channels and revalidates on return',async()=>{
+ const {ctx}=harness(),listeners=new Map(),timers=new Set();let channels=0,removed=0,reads=0;
+ const add=(name,fn)=>{if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);};const remove=(name,fn)=>listeners.get(name)?.delete(fn);
+ ctx.window.addEventListener=add;ctx.window.removeEventListener=remove;ctx.document.addEventListener=add;ctx.document.removeEventListener=remove;ctx.document.visibilityState='visible';
+ ctx.setTimeout=fn=>{timers.add(fn);return fn;};ctx.clearTimeout=fn=>timers.delete(fn);ctx.render=()=>{};ctx.loadTeachingAssignmentNotifications=async()=>{};
+ ctx.window.schoolshieldSupabase={rpc:async()=>{reads++;return{data:{payload:{learners:[]}}};},removeChannel:async()=>{removed++;},channel:()=>{channels++;const c={on:()=>c,subscribe:()=>c};return c;}};
+ ctx.startWorkspaceAutoRefresh();ctx.startWorkspaceRealtime();ctx.bindWorkspaceLifecycle();ctx.startWorkspaceAutoRefresh();ctx.startWorkspaceRealtime();ctx.bindWorkspaceLifecycle();assert.equal(channels,1);assert.equal(timers.size,1);
+ for(const fn of listeners.get('pagehide'))fn();assert.equal(removed,1);assert.equal(timers.size,0);assert.equal(listeners.get('online').size,0);
+ for(const fn of listeners.get('pageshow'))fn({persisted:true});await new Promise(resolve=>setImmediate(resolve));assert.equal(channels,2);assert.equal(timers.size,1);assert.equal(listeners.get('online').size,1);assert.equal(reads,1);
+});
+
+test('term reports never invent marks, levels or absence counts for missing evidence',()=>{
+ const {ctx}=harness();ctx.assessmentsForClass=()=>[{subject:'Math',term:'Term 1',academic_year:2026,scores:{L:50}},{subject:'Math',term:'Term 1',academicYear:2026,scores:{L:80}},{subject:'Math',term:'Term 1',academic_year:2025,scores:{L:10}}];
+ const learner={id:'L',class:'A',average:99,academicYear:2026};assert.equal(ctx.reportMark(learner,'Math','Term 1'),65);assert.equal(ctx.reportMark(learner,'English','Term 1'),null);assert.equal(ctx.reportTermAverage(learner,['Math','English'],'Term 1'),65);assert.equal(ctx.reportTermAverage(learner,['English'],'Term 1'),null);assert.equal(ctx.achievementLevel(null),'Not enough data');assert.equal(ctx.daysAbsent({attendance:80}),'Not recorded');
+});
+test('attendance capture mutates registers without writing protected learner summaries',()=>{
+ const {ctx}=harness(),state={learners:[{id:'L',class:'A',attendance:70,average:55}],attendanceRegisters:[]};const baseline=structuredClone(state.learners);ctx.inputValue=()=> '2026-11-11';ctx.document.querySelectorAll=()=>[{dataset:{attendance:'L'},value:'Absent'}];ctx.persist=fn=>fn(state);ctx.userName=()=> 'Teacher';ctx.localDateTime=()=> '2026-11-11';ctx.render=()=>{};ctx.saveAttendance('A');assert.equal(state.attendanceRegisters[0].entries.L,'Absent');assert.deepEqual(state.learners,baseline);
+});
+
+test('a read begun before a mutation cannot replace that mutation after confirmation',async()=>{
+ const{ctx}=harness();ctx.window.schoolshieldSupabase={rpc:async()=>({data:{payload:{visitors:[]}}})};await ctx.connectCloudWorkspace();let release;ctx.window.schoolshieldSupabase.rpc=(name,args)=>name==='read_school_dataset'?new Promise(resolve=>release=resolve):Promise.resolve({data:{payload:args.p_after}});
+ const old=ctx.refreshCloudWorkspace();await new Promise(resolve=>setImmediate(resolve));const state=ctx.getState();state.visitors.push({id:'NEW',name:'Confirmed'});assert.equal(await ctx.save(state),true);release({data:{payload:{visitors:[]}}});await old;assert.equal(ctx.getState().visitors[0].id,'NEW');
+});
+
+test('report labels and leadership priorities come from actual records',()=>{
+ const{ctx}=harness();let state={reports:[],assessments:[],incidents:[]};ctx.getState=()=>state;assert.equal(ctx.reportingTerm(),'Academic');assert.deepEqual(Array.from(ctx.reportTerms()),[]);assert.match(ctx.leadershipPriorities(),/No pending/);state.reports=[{class:'A',term:'Term 3',status:'compiled'}];state.incidents=[{id:'I',title:'Real recorded issue',location:'Gate B',status:'Open'}];assert.equal(ctx.reportingTerm('A'),'Term 3');assert.match(ctx.leadershipPriorities(),/Real recorded issue/);assert.doesNotMatch(ctx.leadershipPriorities(),/Main Gate|14:00|Due today/);
+});
+
+test('role changes cannot reopen a former privileged snapshot or pending draft',async()=>{
+ const{ctx,stored}=harness();const original=ctx.workspaceCacheKey();stored.set(original,JSON.stringify({learners:[{id:'PRIVATE'}]}));stored.set(original+':pending',JSON.stringify({before:{},after:{learners:[{id:'PRIVATE'}]}}));stored.set('schoolshieldSession',JSON.stringify({schoolId:'S',schoolCode:'S',userId:'T',role:'security'}));assert.notEqual(ctx.workspaceCacheKey(),original);assert.equal(ctx.getState().learners.length,0);assert.equal(stored.has(original+':pending'),true);
+});

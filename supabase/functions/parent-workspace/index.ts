@@ -1,3 +1,4 @@
+import { parentPayload } from './projection.mjs';
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const cors = {
@@ -17,44 +18,6 @@ function secretKey() {
   return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 }
 
-function parentPayload(raw: Record<string, any>, learnerIds: Set<string>) {
-  const learners = (raw.learners || []).filter((learner: any) => learnerIds.has(learner.id));
-  const classIds = new Set(learners.map((learner: any) => learner.class));
-  const familyAnnouncement = (announcement: any) => {
-    const audience = announcement.audienceId;
-    if (!audience) return /parent|family|whole.school/i.test(String(announcement.audience || ""));
-    if (["whole-school", "all-parents"].includes(audience)) return true;
-    if (audience === "my-classes-parents") return (announcement.classIds || []).some((id: string) => classIds.has(id));
-    if (audience.startsWith("class-")) return classIds.has(audience.slice(6));
-    if (audience.startsWith("grade-")) return learners.some((learner: any) => String(learner.grade).replace(/\s+/g, "-") === audience.slice(6));
-    return false;
-  };
-  const onlyLearnerScores = (scores: Record<string, unknown> = {}) => Object.fromEntries(
-    Object.entries(scores).filter(([id]) => learnerIds.has(id)),
-  );
-  const reports = (raw.reports || []).filter((report: any) => classIds.has(report.class)).map((report: any) => ({
-    ...report,
-    releasedLearners: Object.fromEntries(Object.entries(report.releasedLearners || {}).filter(([id]) => learnerIds.has(id))),
-  }));
-
-  return {
-    __v: raw.__v || 13,
-    subjects: raw.subjects || [],
-    grades: raw.grades || [],
-    classes: (raw.classes || []).filter((schoolClass: any) => classIds.has(schoolClass.id)),
-    learners,
-    assessments: (raw.assessments || []).filter((assessment: any) => classIds.has(assessment.class)).map((assessment: any) => ({ ...assessment, scores: onlyLearnerScores(assessment.scores) })),
-    reports,
-    announcements: (raw.announcements || []).filter(familyAnnouncement),
-    visitors: [], incidents: [], staff: [], staffChangeRequests: [], security: [], appointments: [], teacherChat: [],
-    notifications: (raw.notifications || []).filter((notice: any) => notice.announcementId ? familyAnnouncement(notice) : notice.scope === "whole-school" || notice.scope === "parents" || learnerIds.has(notice.learnerId)),
-    sickNotices: (raw.sickNotices || []).filter((notice: any) => learnerIds.has(notice.learnerId)),
-    parentChat: (raw.parentChat || []).filter((conversation: any) => learnerIds.has(conversation.learnerId)),
-    attendanceRegisters: (raw.attendanceRegisters || []).filter((register: any) => classIds.has(register.class)).map((register: any) => ({ ...register, entries: onlyLearnerScores(register.entries) })),
-    attendanceWeeks: (raw.attendanceWeeks || []).filter((week: any) => classIds.has(week.class)),
-    chatExtras: [], reportRequests: [], teacherAssignments: [],
-  };
-}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -71,13 +34,14 @@ Deno.serve(async (request) => {
   const caller = createClient(Deno.env.get("SUPABASE_URL")!, secretKey()!, { global: { headers: { Authorization: "Bearer " + token } }, auth: { persistSession: false } });
   const { data: access, error: accessError } = await caller.rpc("get_my_school_access");
   if (accessError || access?.school_id !== profile.school_id) return json({ error: "School access is unavailable or suspended" }, 403);
-  const { data: links } = await admin.from("parent_learner_links").select("learner_ref").eq("school_id", profile.school_id).eq("parent_id", authData.user.id);
+  const { data: links, error: linksError } = await admin.from("parent_learner_links").select("learner_ref").eq("school_id", profile.school_id).eq("parent_id", authData.user.id);
+  if (linksError) return json({ error: "Learner links could not be verified" }, 503);
   const learnerIds = new Set((links || []).map((link) => link.learner_ref));
-  if (!learnerIds.size) return json({ payload: parentPayload({}, learnerIds), linked: false });
+  if (!learnerIds.size) return json({ payload: parentPayload({}, learnerIds, authData.user.id), linked: false });
 
   const { data: workspace, error: workspaceError } = await admin.from("school_workspaces").select("payload, updated_at").eq("school_id", profile.school_id).maybeSingle();
   if (workspaceError || !workspace?.payload) return json({ error: "School workspace is not available" }, 404);
-  const projected = parentPayload(workspace.payload as Record<string, any>, learnerIds);
+  const projected = parentPayload(workspace.payload as Record<string, any>, learnerIds, authData.user.id);
   if (!access.features.announcements) {
     projected.announcements = [];
     projected.notifications = projected.notifications.filter((n: any) => !n.announcementId && !/announcement/i.test(n.type || ""));
