@@ -13,7 +13,7 @@
 
 <body data-page="notifications">
     <div id="app"><div class="page-loading" role="status"><span class="loading-spinner" aria-hidden="true"></span><p>Loading your school workspace...</p></div></div>
-    <template id="pushSettingsTemplate"><section class="panel" id="pushSettings" aria-labelledby="pushHeading"><div class="panel-head"><h3 id="pushHeading">Device notifications</h3><button class="btn small" type="button" id="openPushPreferences" aria-controls="pushPreferences" aria-expanded="true">Notification preferences</button></div><p id="pushSummary" role="status" hidden></p><div id="pushPreferences"><p id="pushStatus" role="status" aria-live="polite">Checking this device...</p><div class="action-row"><button type="button" class="btn primary" id="enablePush">Enable notifications</button><button type="button" class="btn" id="disablePush" disabled>Disable on this device</button><button class="btn" type="button" id="dismissPushPreferences">Done</button></div></div></section></template>
+    <template id="pushSettingsTemplate"><dialog id="pushSettings" aria-labelledby="pushHeading"><div class="panel-head"><h3 id="pushHeading">Device notifications</h3><button class="btn small" type="button" id="dismissPushPreferences">Close</button></div><div id="pushPreferences"><p id="pushStatus" role="status" aria-live="polite">Checking this device...</p><div class="action-row"><button type="button" class="btn primary" id="enablePush">Enable notifications</button><button type="button" class="btn" id="disablePush" disabled>Disable on this device</button></div></div></dialog></template>
     <script src="web-push.js"></script>
     <script src="ui-feedback.js"></script>
     <script src="supabase-config.js"></script>

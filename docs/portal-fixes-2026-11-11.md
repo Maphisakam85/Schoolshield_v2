@@ -90,3 +90,18 @@ Verification: 195 unit tests passed, zero failed, one optional test skipped.
 Browser checks passed for all seven sidebar roles, custom/light themes, flyout
 stacking, read-only attendance, optional guidance, header action grouping, field
 spacing and device-preference reopen/persistence at desktop/mobile widths.
+
+## Notification and information-control placement refinement
+
+The standalone device-notification card/status row has been removed. The bell
+drawer links to Notifications with the device-settings dialog open, and the
+Notifications page groups a Device notifications button with its other actions.
+The dialog stays closed otherwise and closes after a successful enable/disable.
+Opening it never requests permission; only Enable does so. Existing per-device
+subscriptions and backend preferences are unchanged.
+
+Information controls are placed with their section's action buttons, or beside
+the related heading where there are no actions. They no longer occupy a separate
+description row. Desktop/mobile browser checks passed for these placements,
+dialog opening/closing, setup changes and the bell deep link; push unit tests
+passed. No real device subscription or notification send occurred in QA.

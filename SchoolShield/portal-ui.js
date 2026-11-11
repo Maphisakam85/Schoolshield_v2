@@ -6,11 +6,14 @@
   if(paragraph.dataset.guidanceReady||paragraph.closest('[role=alert],[role=status],.guidance-control'))return;
   paragraph.dataset.guidanceReady='true';
   const control=document.createElement('span'),button=document.createElement('button');
+  const section=paragraph.closest('.panel-head,.page-intro,section.panel,dialog');
+  const anchor=section?.querySelector('.panel-actions')||section?.querySelector('h1,h2,h3,h4');
   control.className='guidance-control';button.type='button';button.className='guidance-toggle';button.textContent='i';
   const label=paragraph.dataset.guidance||'More information';button.setAttribute('aria-label',label);
   paragraph.id='portal-guidance-'+(++nextId);paragraph.classList.add('guidance-content');paragraph.popover='auto';
   button.setAttribute('aria-describedby',paragraph.id);button.setAttribute('aria-expanded','false');
   paragraph.replaceWith(control);control.append(button,paragraph);
+  if(anchor)anchor.append(control);
   function show(){
    if(!paragraph.isConnected)return;const box=button.getBoundingClientRect();
    paragraph.style.left=Math.max(12,Math.min(box.left,innerWidth-372))+'px';

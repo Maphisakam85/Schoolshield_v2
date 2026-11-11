@@ -1372,9 +1372,10 @@ form label:has(>.input,>.select,>.textarea){display:flex;flex-direction:column;g
 .guidance-control{display:inline-flex;vertical-align:middle;margin:4px 0}
 .guidance-toggle{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;padding:0;border:1px solid var(--line);border-radius:50%;background:#f7faf9;color:var(--text);font-weight:700;font-size:13px;cursor:pointer}
 .guidance-content[popover]{position:fixed;inset:auto;margin:0;width:min(360px,calc(100vw - 24px));max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:14px;background:white;color:var(--text);font-size:13px;line-height:1.5;box-shadow:0 8px 24px #082c3626}
-#pushSettings:has(#pushPreferences[hidden]){display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:12px 16px}
-#pushSettings:has(#pushPreferences[hidden]) .panel-head{flex:1;margin:0;min-width:230px}
-#pushSummary{margin:0;font-size:12px;color:var(--muted)}
+dialog#pushSettings{width:min(540px,calc(100vw - 24px));max-height:85dvh;overflow:auto;border:1px solid var(--line);border-radius:14px;padding:20px;color:var(--text)}
+dialog#pushSettings::backdrop{background:#082c3666}
+.panel-actions .guidance-control{margin:0}
+:is(h1,h2,h3,h4)>.guidance-control{margin-left:8px}
 
 .panel-foot,
 .modal-foot {
