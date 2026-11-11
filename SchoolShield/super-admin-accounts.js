@@ -40,7 +40,7 @@
  }
  async function perform(body){
   if(working)return;working=true;$('accountSubmit').disabled=true;$('accountClose').disabled=true;$('accountFormStatus').textContent='Saving account for '+school.name+'...';
-  try{const result=await send(body);window.SchoolShieldPlatformDrafts?.clear('accountForm');$('accountResult').hidden=false;$('accountResultMessage').textContent=result.message;$('accountResultLink').value=result.setup_link||'';$('accountSubmit').hidden=true;$('accountFormStatus').textContent=result.message;
+  try{const result=await send(body);window.SchoolShieldPlatformDrafts?.clear('accountForm');$('accountResult').hidden=false;$('accountResultMessage').textContent=result.message;$('accountResultLink').value=result.setup_link||'';$('accountResultLinkLabel').hidden=!result.setup_link;$('accountSubmit').hidden=true;$('accountFormStatus').textContent='';
    try{await load({client,context,school,status:report});report(result.message);}catch{report('Account operation confirmed. Refresh to load current users.');}}
   catch(error){const safe=window.SchoolShieldPlatformError(error)+(body.action==='create'?' Any created account is retained.':' Your entries are retained.')+' Refresh and resume the original request. Operation: '+body.operation_id;$('accountFormStatus').textContent=safe;report(safe);try{await load({client,context,school,status:report});}catch{}}
   finally{working=false;$('accountSubmit').disabled=false;$('accountClose').disabled=false;}
@@ -56,6 +56,38 @@
   perform({action:op.action,operation_id:op.id,user_id:op.target_id,fields:f,revision:f.revision,account_status:f.account_status,delivery:op.fields._delivery||'email',reason:op.reason,confirmed:true});
  }
  function bind(){
+  let batch=[];
+  const eligible=user=>user.account_status==='Active'&&!user.onboarding_completed_at&&!user.pending_operation&&(!user.invitation?.status||/^(failed|not sent|link generated)$/i.test(user.invitation.status));
+  $('sendAllInvitations').onclick=async()=>{
+   if(working)return;
+   working=true;$('sendAllInvitations').disabled=true;
+   try{await load({client,context,school,status:report});}catch(error){report(window.SchoolShieldPlatformError(error));return;}
+   finally{working=false;$('sendAllInvitations').disabled=false;}
+   batch=users.filter(eligible).map(user=>({user,operation:crypto.randomUUID(),done:false}));
+   $('bulkInviteForm').reset();$('bulkInviteStatus').textContent='';$('bulkInviteSubmit').disabled=!batch.length;
+   $('bulkInviteScope').textContent=school.name+' ('+school.code+') - '+batch.length+' eligible accounts';
+   $('bulkInviteRecipients').replaceChildren();for(const item of batch){const li=document.createElement('li');li.textContent=item.user.display_name+' - '+item.user.email;$('bulkInviteRecipients').append(li);}
+   $('bulkInviteDialog').showModal();
+  };
+  $('bulkInviteClose').onclick=()=>{if(!working)$('bulkInviteDialog').close();};
+  $('bulkInviteDialog').addEventListener('cancel',event=>{event.preventDefault();$('bulkInviteClose').click();});
+  $('bulkInviteForm').onsubmit=async event=>{
+   event.preventDefault();if(working||!event.currentTarget.reportValidity())return;
+   const reason=$('bulkInviteReason').value.trim();if(reason.length<5)return;
+   working=true;$('bulkInviteSubmit').disabled=true;$('bulkInviteClose').disabled=true;
+   let failure='';
+   try{
+    for(const item of batch.filter(item=>!item.done)){
+     $('bulkInviteStatus').textContent='Requesting invitation for '+item.user.display_name+'...';
+     try{await send({action:'invite',operation_id:item.operation,user_id:item.user.id,revision:item.user.management_revision,delivery:'email',reason,confirmed:true});item.done=true;}
+     catch(error){failure=window.SchoolShieldPlatformError(error);break;}
+    }
+    const count=batch.filter(item=>item.done).length;
+    $('bulkInviteStatus').textContent=count+' of '+batch.length+' invitation requests accepted by Supabase.'+(failure?' Stopped: '+failure+' Resume pending operations before starting another batch.':' Email receipt is not confirmed.');
+    await load({client,context,school,status:report});
+   }catch{report('Refresh accounts to check the confirmed invitation statuses.');}
+   finally{working=false;$('bulkInviteClose').disabled=false;$('bulkInviteSubmit').disabled=true;}
+  };
   for(const id of ['accountSearch','accountRole','accountStatus'])$(id).oninput=draw;
   $('addSchoolAccount').onclick=()=>open('create');
   $('platformRefresh').onclick=()=>{if(!working)load({client,context,school,status:report}).then(()=>report('Accounts refreshed.')).catch(e=>report(window.SchoolShieldPlatformError(e)));};

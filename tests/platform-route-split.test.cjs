@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),vm=require('vm');
 test('focused owner pages contain only their intended forms and unique control IDs',()=>{
- const expected={overview:[],directory:['provisionForm'],reports:[],school:['schoolForm'],branding:['brandingForm'],colours:['themeForm'],accounts:['accountForm'],access:['accessForm'],support:['supportForm'],diagnostics:[],audit:['auditFilters']};
+ const expected={overview:[],directory:['provisionForm'],reports:[],school:['schoolForm'],branding:['brandingForm'],colours:['themeForm'],accounts:['accountForm','bulkInviteForm'],access:['accessForm'],support:['supportForm'],diagnostics:[],audit:['auditFilters'],settings:['ownerProfileForm','ownerPasswordForm']};
  for(const[kind,forms]of Object.entries(expected)){
   const html=fs.readFileSync('SchoolShield/super-admin'+(kind==='overview'?'':'-'+kind)+'.html','utf8');
   assert.deepEqual([...html.matchAll(/<form\b[^>]*id="([^"]+)"/g)].map(m=>m[1]).sort(),forms.sort(),kind);

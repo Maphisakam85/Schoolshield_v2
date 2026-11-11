@@ -7,6 +7,7 @@
   const dirtyForms = new Set();
   window.SchoolShieldPlatformError = error => {
     const value = String(error?.message || error || '');
+    if (/Logo upload service|Logo upload session/i.test(value)) return value;
     if (/email.*rate.?limit|over_email_send_rate_limit|too many.*email/i.test(value)) return 'Supabase has temporarily limited email sending. Wait before resuming the original request. No email delivery was confirmed.';
     if (/SCHOOLSHIELD_PASSWORD_RESET_URL/i.test(value)) return 'Password-reset redirect is not configured on the server. The platform owner must configure the deployed login.html recovery URL.';
     if (/SCHOOLSHIELD_ACCOUNT_SETUP_URL/i.test(value)) return 'Account invitation redirect is not configured on the server. The platform owner must configure the deployed account-setup.html URL.';
@@ -117,6 +118,7 @@
     $('schoolEmpty').hidden = found.length > 0;
   }
   async function load() {
+    if(kind==='settings'){await window.SchoolShieldOwnerSettings.load({client,context});return;}
     if(['overview','reports'].includes(kind))return;
     if(kind==='audit'&&!schoolId){await window.SchoolShieldOperationsPage.load({client,context,school:null,status});return;}
     if (kind === 'directory') {
@@ -162,6 +164,7 @@
     return result;
   }
   function bindForms() {
+    if(kind==='settings'){window.SchoolShieldOwnerSettings.bind();return;}
     if(['overview','reports'].includes(kind))return;
     if(kind==='colours'){window.SchoolShieldThemePage.bind();return;}
     if (['access','support','diagnostics','audit','operations'].includes(kind)) { window.SchoolShieldOperationsPage.bind(); return; }
@@ -250,10 +253,10 @@
       window.SchoolShieldPlatformNotifications?.stop();
       dirty = false; dirtyForms.clear(); sessionStorage.removeItem('schoolshieldSession');sessionStorage.removeItem('schoolshieldRole');location.replace('login.html');
     });
-    if (!['directory','overview','reports'].includes(kind) && !(kind==='audit'&&!schoolId) && !validId(schoolId)) throw Error('Select a valid school from the directory.');
+    if (!['directory','overview','reports','settings'].includes(kind) && !(kind==='audit'&&!schoolId) && !validId(schoolId)) throw Error('Select a valid school from the directory.');
     document.addEventListener('input', event => {
       const form = event.target.closest('form');
-      if (['brandingForm','themeForm','accountForm','accessForm','supportForm'].includes(form?.id)) dirtyForms.add(form.id);
+      if (['brandingForm','themeForm','accountForm','accessForm','supportForm','ownerProfileForm','ownerPasswordForm'].includes(form?.id)) dirtyForms.add(form.id);
     });
     window.addEventListener('beforeunload',event=>{if(hasDraft()){event.preventDefault();event.returnValue='';}});
     await rpc('open_platform_admin_portal',{p_operation:crypto.randomUUID()});

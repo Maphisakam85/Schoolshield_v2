@@ -27,7 +27,7 @@
  }
  function bind(){
   for(const id of ['logoZoom','logoX','logoY'])$(id).oninput=()=>{drawCrop();report('Crop preview updated. Upload and save to apply.');};
-  $('logoFit').onclick=()=>{$('logoZoom').value=1;$('logoX').value=0;$('logoY').value=0;drawCrop();report('Whole image fitted to 400 � 300 pixels.');};
+  $('logoFit').onclick=()=>{$('logoZoom').value=1;$('logoX').value=0;$('logoY').value=0;drawCrop();report('Whole image fitted to 400 x 300 pixels.');};
 
   $('cancelLogo').onclick=()=>{
    if(working||window.SchoolShieldPlatformDrafts?.discard('brandingForm')===false)return;
@@ -52,7 +52,9 @@
     const form=new FormData();for(const[k,v]of Object.entries({school_id:school.id,operation_id:operation.id,revision:branding.revision,action,reason}))form.set(k,String(v));if(action==='replace'){if(!bitmap)throw Error('Select a valid image before saving.');const blob=await new Promise(resolve=>$('logoCropCanvas').toBlob(resolve,'image/png'));if(!blob)throw Error('The cropped image could not be prepared.');form.set('file',blob,'school-logo.png');}
     const config=window.SCHOOLSHIELD_SUPABASE_CONFIG;
     const response=await fetch(config.url+'/functions/v1/school-branding',{method:'POST',headers:{apikey:config.publishableKey,Authorization:'Bearer '+own.session.access_token},body:form,signal:AbortSignal.timeout(20000)});
-    const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Branding was not confirmed.');
+    if(response.status===404)throw Error('Logo upload service is unavailable. Deploy the school-branding function.');
+    if(response.status===401)throw Error('Logo upload session was rejected. Sign in again before retrying.');
+    const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||result.message||'Branding was not confirmed.');
     if(result.branding.school_id!==school.id)throw Error('Unexpected school in save response.');
     operation=null;window.SchoolShieldPlatformDrafts?.clear('brandingForm');
     revoke();$('brandingForm').reset();$('logoPreview').hidden=true;

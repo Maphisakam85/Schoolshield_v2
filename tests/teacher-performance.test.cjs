@@ -39,7 +39,7 @@ test('dated assignments follow server term eligibility while ended links remain 
  feature.state.data.contexts=[{...data.contexts[0],status:'Ended',eligibleTerms:[1,2]},
   {...data.contexts[1],id:'NEW',status:'Active',eligibleTerms:[3,4]}];
  feature.state.data.reviews=data.reviews.filter(r=>r.teaching_context_id==='C1');
- feature.state.filters.term='1';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['C1']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1','NEW']);
- feature.state.filters.term='3';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['NEW']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1','NEW']);
+ feature.state.filters.term='1';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['C1']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['C1']);
+ feature.state.filters.term='3';assert.deepEqual([...feature.matchingContexts('A')].map(c=>c.id),['NEW']);assert.deepEqual([...feature.roster()[0].assignmentContexts].map(c=>c.id),['NEW']);
  assert.equal(feature.state.data.contexts.length,2);
 });

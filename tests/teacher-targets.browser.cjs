@@ -5,13 +5,13 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
  try {
   const page=await browser.newPage({viewport:{width:1280,height:900}});await page.setContent('<html><body><div id="app"></div></body></html>');
   await page.addScriptTag({content:fs.readFileSync('SchoolShield/app.js','utf8').replace(/startWorkspace\(\);\s*$/,'')});
-  for(const file of ['button-feedback.js','teacher-targets.js','teacher-performance.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
+  await page.addStyleTag({content:fs.readFileSync('SchoolShield/styles.css','utf8').replace(/@import[^;]+;/g,'')});for(const file of ['button-feedback.js','teacher-targets.js','teacher-performance.js','teacher-performance-dashboard.js']) await page.addScriptTag({content:fs.readFileSync('SchoolShield/'+file,'utf8')});
   await page.evaluate(()=>{
    window.currentRole='principal';window.role=()=>window.currentRole;window.generic=(title,section,description,body)=>`<h1>${title}</h1>${body}`;
    window.currentView='management';window.render=()=>{document.getElementById('app').innerHTML=window.currentView==='management'?window.SchoolShieldTeacherPerformance.view():window.SchoolShieldTeacherTargets.viewOwn();window.currentView==='management'?window.SchoolShieldTeacherPerformance.bind():window.SchoolShieldTeacherTargets.bindOwn();};
    window.directory={teachers:[{id:'A',name:'Teacher A',employeeId:'EMP1',department:'Mathematics'}],subjects:[{id:'S1',name:'Mathematics'}],classes:[{id:'CL1',class_ref:'8A',grade:'Grade 8'}],contexts:[{id:'CTX1',teacher_id:'A',subject_id:'S1',class_id:'CL1',academic_year:2026}],reviews:[]};window.savedTargets=[];
    window.schoolshieldSupabase={rpc:async(name,args)=>{
-    if(name==='sync_teacher_review_catalogue') return {data:null};if(name==='get_teacher_performance_directory') return {data:window.directory};if(name==='get_teacher_targets') return {data:structuredClone(window.savedTargets)};
+    if(name==='get_teacher_performance_overview')return {data:{teachers:[{id:'A',name:'Teacher A'}],contexts:[{id:'CTX1',teacherId:'A',subject:'Mathematics',grade:'Grade 8',class:'8A',metrics:null,review:null,targets:[],supportActions:[]}]}};if(name==='sync_teacher_review_catalogue') return {data:null};if(name==='get_teacher_performance_directory') return {data:window.directory};if(name==='get_teacher_targets') return {data:structuredClone(window.savedTargets)};
     if(name==='save_teacher_target') {
      window.lastTargetArgs=args;if(window.failTarget) return {error:{message:'Connection interrupted'}};
      await new Promise(resolve=>window.releaseTargetSave=resolve);
@@ -22,7 +22,7 @@ const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
     throw new Error('Unexpected RPC '+name);
    }};render();
   });
-  await page.waitForSelector('[data-performance-open]');await page.click('[data-performance-open="A"]');await page.waitForSelector('[data-target-new="CTX1:2"]');await page.click('[data-target-new="CTX1:2"]');
+  await page.waitForSelector('[data-performance-target-context="CTX1"]');assert.equal(await page.locator('.performance-kpis>div').count(),5);for(const group of await page.locator('details.performance-accordion').all()){await group.locator('summary').click();assert.equal(await group.evaluate(e=>e.open),false);await group.locator('summary').click();}await page.screenshot({path:process.env.TEMP+'/schoolshield-performance-overview.png',fullPage:true});await page.click('[data-performance-target-context="CTX1"]');await page.waitForSelector('[data-target-new="CTX1:2"]');await page.click('[data-target-new="CTX1:2"]');
   assert.equal(await page.locator('[data-target-field="category"] option').count(),12);assert.equal(await page.locator('[data-target-field="type"] option').count(),6);
   await page.fill('[data-target-field="description"]','Improve Mathematics while recognising baseline progress.');await page.fill('[data-target-field="baseline"]','54');await page.fill('[data-target-field="target"]','65');
   await page.selectOption('[data-target-field="source"]','current_average');await page.fill('[data-target-field="tolerance"]','5');await page.fill('[data-target-field="due"]','2026-12-01');

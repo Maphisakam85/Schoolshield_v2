@@ -544,6 +544,8 @@ function showRetainedSchoolDraft() {
   // Keep recovery available without interrupting every portal with a modal.
   const pending = sessionStorage.getItem(`${workspaceCacheKey()}:pending`);
   const existing = document.getElementById?.('schoolDraftStatus');
+  const draftHost = document.querySelector?.('.main');
+  if(existing&&draftHost&&existing.parentElement!==draftHost)draftHost.prepend(existing);
   if (!pending) {
     existing?.remove();
     sessionStorage.removeItem(`${workspaceCacheKey()}:draft-hidden`);
@@ -574,7 +576,7 @@ function showRetainedSchoolDraft() {
   };
   notice.querySelector('[data-draft-retry]').onclick = retrySchoolDraft;
   notice.querySelector('[data-draft-download]').onclick = () => downloadTextFile('schoolshield-unsynced-draft.json', sessionStorage.getItem(`${workspaceCacheKey()}:pending`) || '{}');
-  document.body.prepend(notice);
+  (document.querySelector('.main')||document.body).prepend(notice);
 }
 function reconcileSchoolDraft(payload) {
   const key = `${workspaceCacheKey()}:pending`;
@@ -1644,7 +1646,7 @@ function quickForRole(r) {
       const label = chatLabel(navItem?.[0],r) || x[0];
       const description = descriptions[x[1]] || 'Open ' + x[0] + '.';
       const tooltipId = `quick-description-${r}-${index}`;
-      return `<button class="quick" type="button" aria-label="${escapeHtml(label)}" data-quick-url="${escapeHtml(x[1])}" aria-describedby="${escapeHtml(tooltipId)}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(label)}</span><b aria-hidden="true">→</b><span class="quick-description" id="${escapeHtml(tooltipId)}" role="tooltip">${escapeHtml(description)}</span></button>`;
+      return `<button class="quick" type="button" aria-label="${escapeHtml(label)}" data-quick-url="${escapeHtml(x[1])}" aria-describedby="${escapeHtml(tooltipId)}">${navItem ? icon(navItem[3]) : "✦"}<span>${escapeHtml(label)}</span><span class="quick-description" id="${escapeHtml(tooltipId)}" role="tooltip">${escapeHtml(description)}</span></button>`;
     })
     .join("");
 }
