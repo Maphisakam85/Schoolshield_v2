@@ -1667,7 +1667,7 @@ function classCard(c, opts = {}) {
     opts.showStatus && reportForClass(c.id)
       ? statusBadge(reportForClass(c.id).status)
       : `<span class="badge neutral">${escapeHtml(st.learners)} learners</span>`;
-  return `<article class="class-card" style="border:1px solid #dce8e5;border-radius:14px;padding:17px;background:linear-gradient(145deg,#fff,#f5fbf8);box-shadow:0 7px 18px rgba(18,45,54,.05)"><div class="class-card-head" style="padding-bottom:13px;border-bottom:1px solid #e5eeeb"><div><a class="class-link" style="font-size:14px;color:#087550" href="class-records.html?class=${escapeHtml(c.id)}"><b>${escapeHtml(c.grade)} · ${escapeHtml(c.id)}</b></a><small style="display:block;margin-top:5px">${escapeHtml(c.teacher)} · ${escapeHtml(c.room)}</small></div>${status}</div><div class="class-metrics" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:15px 0"><div><small>Learners</small><b>${escapeHtml(st.learners)}</b></div><div><small>Attendance</small><b>${escapeHtml(st.attendance)}%</b>${progressBar(st.attendance)}</div><div><small>Pass rate</small><b>${escapeHtml(st.passRate)}%</b>${progressBar(st.passRate)}</div></div><div class="class-card-foot" style="display:flex;justify-content:space-between;align-items:center"><a class="table-action" href="class-records.html?class=${escapeHtml(c.id)}">Open class records →</a>${request}</div></article>`;
+  return `<article class="class-card" style="border:1px solid #dce8e5;border-radius:14px;padding:17px;background:linear-gradient(145deg,#fff,#f5fbf8);box-shadow:0 7px 18px rgba(18,45,54,.05)"><div class="class-card-head" style="padding-bottom:13px;border-bottom:1px solid #e5eeeb"><div><a class="class-link" style="font-size:14px;color:var(--school-link, #087550)" href="class-records.html?class=${escapeHtml(c.id)}"><b>${escapeHtml(c.grade)} · ${escapeHtml(c.id)}</b></a><small style="display:block;margin-top:5px">${escapeHtml(c.teacher)} · ${escapeHtml(c.room)}</small></div>${status}</div><div class="class-metrics" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:15px 0"><div><small>Learners</small><b>${escapeHtml(st.learners)}</b></div><div><small>Attendance</small><b>${escapeHtml(st.attendance)}%</b>${progressBar(st.attendance)}</div><div><small>Pass rate</small><b>${escapeHtml(st.passRate)}%</b>${progressBar(st.passRate)}</div></div><div class="class-card-foot" style="display:flex;justify-content:space-between;align-items:center"><a class="table-action" href="class-records.html?class=${escapeHtml(c.id)}">Open class records →</a>${request}</div></article>`;
 }
 function classGrid(list, opts = {}) {
   if (!list.length) return '<p class="muted">No classes to show.</p>';
@@ -2160,7 +2160,7 @@ function testScoresDetail(classId, readOnly) {
       .map((l) => {
         const score =
           a.scores && a.scores[l.id] !== undefined ? a.scores[l.id] : null;
-        return `<div class="score-line" style="display:grid;grid-template-columns:minmax(240px,1fr) 110px;align-items:center;gap:18px;padding:11px 13px;border:1px solid #e3e9eb;border-radius:9px;margin:8px 0;background:#fff"><span><b>${escapeHtml(l.name)}</b><small style="display:block;margin-top:3px">${escapeHtml(l.id)}</small></span><b style="text-align:right;color:#087550">${escapeHtml(score === null ? "Not captured" : score + "%")}</b></div>`;
+        return `<div class="score-line" style="display:grid;grid-template-columns:minmax(240px,1fr) 110px;align-items:center;gap:18px;padding:11px 13px;border:1px solid #e3e9eb;border-radius:9px;margin:8px 0;background:#fff"><span><b>${escapeHtml(l.name)}</b><small style="display:block;margin-top:3px">${escapeHtml(l.id)}</small></span><b style="text-align:right;color:var(--school-link, #087550)">${escapeHtml(score === null ? "Not captured" : score + "%")}</b></div>`;
       })
       .join("");
     return `<div class="assessment-block"><div class="assessment-head"><div><b>${escapeHtml(a.subject)} — ${escapeHtml(a.title)}</b><small>${escapeHtml(a.term)} · avg ${escapeHtml(assessmentAverage(a))}% · submitted by ${escapeHtml(a.submittedBy)}</small></div>${a.status === "submitted" ? badge("Active") : badge("Awaiting marks")}</div><div class="score-lines">${valueRows}</div></div>`;
@@ -2207,7 +2207,7 @@ function testScoresTeacher() {
     }).length;
     return `<a class="report-row" style="text-decoration:none;color:inherit" href="test-scores.html?class=${escapeHtml(classId)}&subject=${escapeHtml(encodeURIComponent(subject))}"><span><b>${escapeHtml(subject)}</b><small>${escapeHtml(items.length)} assessment${escapeHtml(items.length === 1 ? "" : "s")} · ${escapeHtml(average === null ? "No scores yet" : `average ${average}%`)}</small></span><span>${critical ? badge(`${critical} critical`) : badge("On track")}</span></a>`;
   }).join("");
-  const quickClassPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px">${mine.map((m) => `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "#087550" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "#087550" : "#fff")};color:${escapeHtml(m.id === classId ? "#fff" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`).join("")}</div>`;
+  const quickClassPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px">${mine.map((m) => `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "var(--green)" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "var(--green)" : "#fff")};color:${escapeHtml(m.id === classId ? "var(--school-primary-ink, #fff)" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`).join("")}</div>`;
   if (!selectedSubject) return generic("Test Scores", "Teacher workspace", "Choose a subject to review its assessments and learner progress.", `${quickClassPicker}<section class="panel"><div class="panel-head"><div><h3>${escapeHtml(c.grade)} · ${escapeHtml(c.id)} subjects</h3><p>Each subject opens its own assessment history. Learner marks appear only after selecting an assessment.</p></div><button class="btn primary" data-action="add-assessment" data-class="${escapeHtml(classId)}">+ New assessment score</button></div>${subjectSummary}</section>`);
   if (!param("assessment") || !assessment) {
     const assessmentRows = selectedAssessments.map((item) => {
@@ -2255,7 +2255,7 @@ function testScoresTeacher() {
   const classPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px">${mine
     .map(
       (m) =>
-        `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "#087550" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "#087550" : "#fff")};color:${escapeHtml(m.id === classId ? "#fff" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`,
+        `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "var(--green)" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "var(--green)" : "#fff")};color:${escapeHtml(m.id === classId ? "var(--school-primary-ink, #fff)" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`,
     )
     .join("")}</div>`;
   return generic(
@@ -2273,7 +2273,7 @@ function testScoresClerk() {
   const picker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px">${all
     .map(
       (m) =>
-        `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "#087550" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "#087550" : "#fff")};color:${escapeHtml(m.id === classId ? "#fff" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`,
+        `<a href="test-scores.html?class=${escapeHtml(m.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:9px 13px;border-radius:9px;border:1px solid ${escapeHtml(m.id === classId ? "var(--green)" : "#d4e0e3")};background:${escapeHtml(m.id === classId ? "var(--green)" : "#fff")};color:${escapeHtml(m.id === classId ? "var(--school-primary-ink, #fff)" : "#14343b")};font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(m.grade)} · ${escapeHtml(m.id)}</a>`,
     )
     .join("")}</div>`;
   if (!classId) {
@@ -2299,7 +2299,7 @@ function testScoresClerk() {
   )
     .map(
       (item) =>
-        `<a href="test-scores.html?class=${escapeHtml(classId)}&assessment=${escapeHtml(item.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid ${escapeHtml(item.id === assessment?.id ? "#087550" : "#d4e0e3")};background:${escapeHtml(item.id === assessment?.id ? "#e7f7ef" : "#fff")};color:#14343b;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(item.subject)} <span style="font-weight:500;margin-left:4px">· ${escapeHtml(item.title)}</span></a>`,
+        `<a href="test-scores.html?class=${escapeHtml(classId)}&assessment=${escapeHtml(item.id)}" style="display:inline-flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:999px;border:1px solid ${escapeHtml(item.id === assessment?.id ? "var(--green)" : "#d4e0e3")};background:${escapeHtml(item.id === assessment?.id ? "var(--mint)" : "#fff")};color:#14343b;font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap">${escapeHtml(item.subject)} <span style="font-weight:500;margin-left:4px">· ${escapeHtml(item.title)}</span></a>`,
     )
     .join("")}</div>`;
   const valueRows = learnersInClass(classId)
@@ -2351,7 +2351,7 @@ function attendanceRegister() {
       attendanceRegisterFor(classId, day.date)?.entries || {},
     ]),
   );
-  const classPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">${mine.map((schoolClass) => `<a href="attendance-register.html?class=${escapeHtml(schoolClass.id)}&week=${escapeHtml(weekStart)}" style="padding:9px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;border:1px solid ${escapeHtml(schoolClass.id === classId ? "#087550" : "#d4e0e3")};background:${escapeHtml(schoolClass.id === classId ? "#087550" : "#fff")};color:${escapeHtml(schoolClass.id === classId ? "#fff" : "#14343b")}">${escapeHtml(schoolClass.grade)} · ${escapeHtml(schoolClass.id)}</a>`).join("")}</div>`;
+  const classPicker = `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">${mine.map((schoolClass) => `<a href="attendance-register.html?class=${escapeHtml(schoolClass.id)}&week=${escapeHtml(weekStart)}" style="padding:9px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;border:1px solid ${escapeHtml(schoolClass.id === classId ? "var(--green)" : "#d4e0e3")};background:${escapeHtml(schoolClass.id === classId ? "var(--green)" : "#fff")};color:${escapeHtml(schoolClass.id === classId ? "var(--school-primary-ink, #fff)" : "#14343b")}">${escapeHtml(schoolClass.grade)} · ${escapeHtml(schoolClass.id)}</a>`).join("")}</div>`;
   const headers = weekDays
     .map(
       (day, index) =>

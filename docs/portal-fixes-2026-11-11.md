@@ -143,3 +143,8 @@ Full build: 196 passed, zero failed, one optional test skipped.
 - The colour Save button stays hidden until the palette differs from the saved colours. Successful saves and cancelling/reverting edits hide it again; failed saves retain the retry action. Editing only the reason does not count as a palette change.
 - Light navigation palettes now use readable foreground text on the login story.
 - Desktop/mobile branding browser checks passed, covering clean/save/cancel/failure states; access-code preview checks passed at desktop/mobile widths. JavaScript syntax and whitespace checks passed.
+
+### Remaining academic control colours
+- Replaced fixed green in Test Scores teacher/clerk class selectors, assessment selection and weekly attendance class selectors with the saved school palette. Selected class text uses the palette's readable foreground.
+- Targets/Performance tabs now use the same primary colour as navigation. Related avatars, performance links/actions and password focus controls use school colours; semantic attendance/alert/status colours remain unchanged.
+- Desktop/mobile browser checks passed at 1366px and 390px using actual Test Scores markup, burgundy/blue palette switching, unselected class styling, light-primary text contrast, flyout stacking and read-only attendance. JavaScript syntax and diff checks passed.

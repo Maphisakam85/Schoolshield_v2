@@ -1862,6 +1862,11 @@ dialog#pushSettings::backdrop{background:#082c3666}
 [data-school-theme=true] .text-link{color:var(--school-link)}
 [data-school-theme=true] .quick:focus-visible{outline-color:var(--green)}
 [data-school-theme=true] .quick:active{background:var(--mint)}
+[data-school-theme=true] :is(.avatar,.teacher-view-tabs){background:var(--mint);color:var(--school-link)}
+[data-school-theme=true] :is(.chat-contact-action,.class-link,.teacher-history>details>summary,.performance-breadcrumbs [aria-current="page"]){color:var(--school-link)}
+[data-school-theme=true] .performance-choice:is(:hover,:focus-visible){border-color:var(--green);background:var(--mint);outline-color:var(--green)}
+[data-school-theme=true] .password-toggle[aria-pressed="true"]{color:var(--school-link);background:var(--mint)}
+[data-school-theme=true] .password-toggle:focus-visible{outline-color:var(--green)}
 
 /* Required operational fields are marked consistently in modal and page forms. */
 .required-mark {
@@ -2368,13 +2373,13 @@ textarea[aria-invalid="true"] {
 }
 
 .teacher-view-tabs a[aria-current="page"] {
-    color: white;
-    background: #087b68;
+    color: var(--school-primary-ink, white);
+    background: var(--green);
     box-shadow: 0 2px 4px #173e4926;
 }
 
 .teacher-view-tabs a:focus-visible {
-    outline: 3px solid #32bfa6;
+    outline: 3px solid var(--green);
     outline-offset: 2px;
 }
 
