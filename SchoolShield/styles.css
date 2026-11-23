@@ -2740,3 +2740,50 @@ textarea[aria-invalid="true"] {
         }
     }
 }
+
+/* SchoolShield — White Emergency SOS Header Button */
+.topbar-sos-button {
+  width: 48px !important;
+  height: 42px !important;
+  min-width: 48px !important;
+  min-height: 42px !important;
+  padding: 4px !important;
+
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+
+  background: #ffffff !important;
+  border: 2px solid #dc2626 !important;
+  border-radius: 9px !important;
+
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Keep the existing animated siren unchanged */
+#securityHeaderSiren {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#securityHeaderSiren svg {
+  width: 100%;
+  height: 100%;
+}
+
+@media (max-width: 600px) {
+  .topbar-sos-button {
+    width: 40px !important;
+    height: 38px !important;
+    min-width: 40px !important;
+  }
+
+  #securityHeaderSiren {
+    width: 28px;
+    height: 28px;
+  }
+}

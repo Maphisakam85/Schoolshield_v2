@@ -1360,68 +1360,300 @@ function localTimeGreeting(now = new Date()) {
 
 // SchoolShield SOS: requires the included Supabase migration before activation.
 let schoolshieldPanicSending = false;
+
 function showPanicConfirmation() {
-  if (role() !== "security") return;
-  modal("🚨 Emergency SOS", 
+  const allowedRoles = [
+    "principal",
+    "deputy",
+    "teacher",
+    "clerk",
+    "security"
+  ];
+
+  if (!allowedRoles.includes(role())) return;
+
+  modal("🚨 Emergency SOS",
     `<p>
-    <b>Confirm a real emergency.</b> 
-    This creates a school-wide emergency record visible to the principal, deputy and security officers. It does not call police or send an SMS.
+      <b>Confirm a real emergency.</b>
+      This creates a school-wide emergency record visible to the
+      principal, deputy, teachers, clerk and security officers.
+      Authorised officers can acknowledge and resolve the alert.
+      It does not call police or send an SMS.
     </p>
+
     <div class="form-grid">
-    <label class="full">Your emergency location
-    <input class="input" id="panicLocation" maxlength="150" placeholder="e.g. Main gate" required>
-    </label>
+      <label class="full">Your emergency location
+        <input
+          class="input"
+          id="panicLocation"
+          maxlength="150"
+          placeholder="e.g. Main gate"
+          required
+        >
+      </label>
     </div>
+
     <div class="modal-foot">
-    <button type="button" class="btn ghost" data-action="close-modal">
-    Cancel
-    </button>
-    <button type="button" class="btn primary panic-confirm" data-action="confirm-panic">Confirm SOS</button></div>`);
+      <button
+        type="button"
+        class="btn ghost"
+        data-action="close-modal"
+      >
+        Cancel
+      </button>
+
+      <button
+        type="button"
+        class="btn primary panic-confirm"
+        data-action="confirm-panic"
+      >
+        Confirm SOS
+      </button>
+    </div>`
+  );
 }
+
+
 async function sendPanicAlert(button) {
-  if (role() !== "security" || schoolshieldPanicSending) return;
-  const location = document.getElementById("panicLocation")?.value.trim();
-  if (!location) { alert("Enter your emergency location."); document.getElementById("panicLocation")?.focus(); return; }
+  const allowedRoles = [
+    "principal",
+    "deputy",
+    "teacher",
+    "clerk",
+    "security"
+  ];
+
+  if (!allowedRoles.includes(role()) || schoolshieldPanicSending) return;
+
+  const locationInput = document.getElementById("panicLocation");
+  const location = locationInput?.value.trim();
+
+  if (!location) {
+    alert("Enter your emergency location.");
+    locationInput?.focus();
+    return;
+  }
+
   const client = window.schoolshieldSupabase;
-  if (!client) { alert("SOS is unavailable offline. Contact your emergency response team directly."); return; }
+
+  if (!client) {
+    alert("SOS is unavailable offline. Contact your emergency response team directly.");
+    return;
+  }
+
   schoolshieldPanicSending = true;
-  if (button) { button.disabled = true; button.textContent = "Sending SOS…"; }
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending SOS…";
+  }
+
   try {
+    // Confirm that a user is signed in.
     const { data, error: authError } = await client.auth.getUser();
-    if (authError || !data?.user) throw new Error("Sign in again to send an SOS.");
-    const { error } = await client.from("panic_alerts").insert({ location, message: "Emergency assistance required" });
+
+    if (authError || !data?.user) {
+      throw new Error("Sign in again to send an SOS.");
+    }
+
+    // Submit the SOS through the secure Supabase function.
+    const { data: alertId, error } = await client.rpc(
+      "create_schoolshield_panic_alert",
+      {
+        p_location: location,
+        p_message: "Emergency assistance required"
+      }
+    );
+
     if (error) throw error;
+
+    if (!alertId) {
+      throw new Error("Supabase did not return an SOS alert ID.");
+    }
+
     button?.closest(".modal-backdrop")?.remove();
-    alert("SOS saved to the shared emergency register. Contact responders directly as well; viewing is not guaranteed.");
+
+    alert(
+      "Your SOS has been submitted to the school's emergency register."
+    );
+
     await refreshSchoolshieldPanicAlerts();
+
   } catch (error) {
     console.error("SOS failed:", error);
-    alert("SOS was NOT confirmed as sent. Contact emergency responders directly. " + error.message);
+
+    alert(
+      "SOS was NOT confirmed as sent. Contact emergency responders directly. " +
+      (error.message || "Unknown error.")
+    );
+
   } finally {
     schoolshieldPanicSending = false;
-    if (button?.isConnected) { button.disabled = false; button.textContent = "Confirm SOS"; }
+
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.textContent = "Confirm SOS";
+    }
   }
 }
+
+
 async function refreshSchoolshieldPanicAlerts() {
   const target = document.getElementById("schoolshieldPanicAlerts");
-  if (!target || !["security", "principal", "deputy"].includes(role()) || !window.schoolshieldSupabase) return;
-  const { data, error } = await window.schoolshieldSupabase.from("panic_alerts")
-    .select("id,location,message,status,created_at,acknowledged_at")
-    .in("status", ["active", "acknowledged"]).order("created_at", { ascending: false }).limit(15);
-  if (error) { target.innerHTML = '<p class="muted" role="status">SOS alerts unavailable. Check database setup and your connection.</p>'; return; }
-  target.innerHTML = (data || []).map(a => `<section class="panic-alert" role="alert"><strong>🚨 ${escapeHtml(a.status === "active" ? "ACTIVE SOS" : "SOS ACKNOWLEDGED")}</strong><p>${escapeHtml(a.message)} — ${escapeHtml(a.location)}</p><small>${escapeHtml(new Date(a.created_at).toLocaleString())}</small>${["principal", "deputy"].includes(role()) ? `<div class="modal-foot">${a.status === "active" ? `<button class="btn small" data-action="acknowledge-panic" data-panic-id="${escapeHtml(a.id)}">Acknowledge</button>` : ""}<button class="btn small" data-action="resolve-panic" data-panic-id="${escapeHtml(a.id)}">Resolve</button></div>` : ""}</section>`).join("");
-  target.querySelectorAll("[data-action]").forEach(b => b.onclick = () => action(b.dataset.action, b));
+
+  const allowedRoles = [
+    "security",
+    "principal",
+    "deputy",
+    "teacher",
+    "clerk"
+  ];
+
+  if (
+    !target ||
+    !allowedRoles.includes(role()) ||
+    !window.schoolshieldSupabase
+  ) return;
+
+  const { data, error } = await window.schoolshieldSupabase
+    .from("panic_alerts")
+    .select(`
+      id,
+      location,
+      message,
+      status,
+      created_at,
+      acknowledged_at,
+      sender_full_name,
+      sender_email
+    `)
+    .in("status", ["active", "acknowledged"])
+    .order("created_at", { ascending: false })
+    .limit(15);
+
+  if (error) {
+    console.error("Could not retrieve SOS alerts:", error);
+    target.innerHTML =
+      '<p class="muted" role="status">SOS alerts unavailable. Check database setup and your connection.</p>';
+    return;
+  }
+
+  target.innerHTML = (data || []).map(a => {
+    const sender =
+      a.sender_full_name ||
+      a.sender_email ||
+      "School authority";
+
+    const canManageAlerts = [
+      "principal",
+      "deputy",
+      "security"
+    ].includes(role());
+
+    return `
+      <section class="panic-alert" role="alert">
+
+        <strong>
+          🚨 ${escapeHtml(
+      a.status === "active"
+        ? "ACTIVE SOS"
+        : "SOS ACKNOWLEDGED"
+    )}
+        </strong>
+
+        <p>
+          <b>Sent by:</b> ${escapeHtml(sender)}
+        </p>
+
+        <p>
+          ${escapeHtml(a.message)} —
+          ${escapeHtml(a.location)}
+        </p>
+
+        <small>
+          ${escapeHtml(new Date(a.created_at).toLocaleString())}
+        </small>
+
+        ${canManageAlerts
+        ? `
+              <div class="modal-foot">
+                ${a.status === "active"
+          ? `<button class="btn small"
+                        data-action="acknowledge-panic"
+                        data-panic-id="${escapeHtml(a.id)}">
+                        Acknowledge
+                      </button>`
+          : ""
+        }
+
+                <button class="btn small"
+                  data-action="resolve-panic"
+                  data-panic-id="${escapeHtml(a.id)}">
+                  Resolve
+                </button>
+              </div>
+            `
+        : ""
+      }
+
+      </section>
+    `;
+  }).join("");
+
+  target.querySelectorAll("[data-action]").forEach(button => {
+    button.onclick = () =>
+      action(button.dataset.action, button);
+  });
 }
+
+
 async function changeSchoolshieldPanicStatus(button, status) {
-  if (!["principal", "deputy"].includes(role()) || !window.schoolshieldSupabase) return;
-  if (!confirm(status === "resolved" ? "Confirm the emergency has been resolved?" : "Acknowledge this SOS?")) return;
+  const authorisedRoles = [
+    "principal",
+    "deputy",
+    "security"
+  ];
+
+  if (
+    !authorisedRoles.includes(role()) ||
+    !window.schoolshieldSupabase
+  ) return;
+
+  if (!["acknowledged", "resolved"].includes(status)) {
+    alert("Invalid SOS status.");
+    return;
+  }
+
+  const confirmation = status === "resolved"
+    ? "Confirm the emergency has been resolved?"
+    : "Acknowledge this SOS?";
+
+  if (!confirm(confirmation)) return;
+
   button.disabled = true;
+
   try {
-    const { error } = await window.schoolshieldSupabase.rpc("set_panic_alert_status", { p_alert_id: button.dataset.panicId, p_status: status });
+    const { error } = await window.schoolshieldSupabase.rpc(
+      "set_panic_alert_status",
+      {
+        p_alert_id: button.dataset.panicId,
+        p_status: status
+      }
+    );
+
     if (error) throw error;
+
     await refreshSchoolshieldPanicAlerts();
-  } catch (error) { alert("Could not update the SOS: " + error.message); button.disabled = false; }
+
+  } catch (error) {
+    console.error("SOS status update failed:", error);
+
+    alert("Could not update the SOS: " + error.message);
+
+    button.disabled = false;
+  }
 }
+
 // Refresh while dashboard is visible; no claim of guaranteed push or delivery.
 setInterval(() => { if (document.getElementById("schoolshieldPanicAlerts")) refreshSchoolshieldPanicAlerts(); }, 10000);
 
@@ -1486,7 +1718,7 @@ function dashboard() {
     })
     .join("");
 
- 
+
 
   const classPerformancePanel = r === "security" ? "" : `<section class="panel"><div class="panel-head"><div><h3>Class performance</h3><p>Attendance and pass rate by class</p></div><a class="text-link" href="class-records.html">All classes →</a></div>${classPanelRows || '<p class="muted">No classes assigned.</p>'}</section>`;
 
@@ -6827,6 +7059,48 @@ function initWorkspaceChrome() {
     refresh.onclick = refreshWorkspaceManually;
     topActions.prepend(refresh);
   }
+
+
+  // Emergency SOS button — All authorised authorities
+  const sosAllowedRoles = [
+    "principal",
+    "deputy",
+    "teacher",
+    "clerk",
+    "security"
+  ];
+
+  if (sosAllowedRoles.includes(role()) && !$("#securityHeaderSOS")) {
+
+    const sos = document.createElement("button");
+
+    sos.id = "securityHeaderSOS";
+    sos.type = "button";
+    sos.className = "panic-button topbar-sos-button";
+    sos.title = "Emergency SOS";
+    sos.addEventListener("click", showPanicConfirmation);
+    sos.setAttribute("aria-label", "Emergency SOS");
+
+    // Lottie siren animation container
+    const siren = document.createElement("div");
+
+    siren.id = "securityHeaderSiren";
+    siren.className = "login-siren-animation";
+    siren.setAttribute("aria-hidden", "true");
+
+    sos.appendChild(siren);
+
+    // Place SOS before Refresh
+    const refresh = $("#refreshWorkspace");
+
+    if (refresh) {
+      topActions.insertBefore(sos, refresh);
+    } else {
+      topActions.prepend(sos);
+    }
+  }
+
+
   const nav = sidebar.querySelector("nav");
   const setMobileNav = () => {
     if (!nav) return;
@@ -6916,7 +7190,27 @@ function initWorkspaceChrome() {
       "display:none;position:fixed;right:22px;top:78px;width:min(380px,calc(100vw - 24px));max-height:calc(100vh - 100px);overflow:auto;z-index:60;background:#fff;border:1px solid #dce6e8;border-radius:14px;box-shadow:0 18px 45px rgba(4,34,42,.18);padding:14px";
     document.body.appendChild(drawer);
   }
+
 }
+
+function initSecurityHeaderSiren() {
+  const sirenContainer = document.getElementById("securityHeaderSiren");
+
+  if (!sirenContainer || !window.lottie) return;
+
+  if (sirenContainer.dataset.lottieLoaded === "true") return;
+
+  sirenContainer.dataset.lottieLoaded = "true";
+
+  lottie.loadAnimation({
+    container: sirenContainer,
+    renderer: "svg",
+    loop: true,
+    autoplay: true,
+    path: "./assets/icons/schoolshield-emergency-siren.json"
+  });
+}
+
 function notificationCenterMarkup() {
   const notices = notificationsForRole();
   const deliveryNotice = (window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError) ? `<p role="alert">${announcementText(window.schoolshieldNotificationReadError || window.schoolshieldAssignmentNoticeError)}</p>` : "";
@@ -6944,6 +7238,7 @@ function bind() {
   bindLearnerSubjectTeachers();
   if (page() === "notifications") bindNotificationFilters(document);
   initWorkspaceChrome();
+  initSecurityHeaderSiren();
   window.SchoolShieldBranding?.apply();
   updateTeachingAssignmentBadge();
   if (page() === "teacher-performance") window.SchoolShieldTeacherPerformance.bind();
